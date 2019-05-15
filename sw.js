@@ -1,4 +1,4 @@
-const version = "0.0.5";
+const version = "0.0.6";
 const cacheName = `rwtxtoffline-${version}`;
 self.addEventListener('install', e => {
     e.waitUntil(
@@ -8,6 +8,7 @@ self.addEventListener('install', e => {
                     `/index.html`,
                     `/style.css`,
                     `/js/crypto-js.min.js`,
+                    `/js/enc-utf16.min.js`,
                     `/js/localforage.js`,
                     `/js/lunr.min.js`,
                     `/js/lz-string.js`,

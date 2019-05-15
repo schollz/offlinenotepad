@@ -65,6 +65,7 @@
     <script src="/js/lz-string.js"></script>
     <script src="/js/pako.min.js"></script>
     <script src="/js/crypto-js.min.js"></script>
+    <script src="/js/enc-utf16.min.js"></script>
     <script src="/js/lunr.min.js"></script>
     <script src="/js/localforage.js"></script>
     <script src="/js/showdown.min.js"></script>
@@ -130,6 +131,42 @@
         };
 
 
+        // Constructor function for Person objects
+        // a = new Document("HI");
+        Document = function (title) {
+            this.title = title;
+            this.hash = CryptoJS.SHA256(title).toString();
+            this.created = new Date();
+            this.modified = new Date();
+            this.markdown = "";
+        }
+
+
+        a = new Document("HI");
+        CY.updateDocument(a);
+
+        CY.updateDocument = function (doc) {
+            localforage.getItem('passwordcombo').then(function (passwordValue) {
+                if (passwordValue != null) {
+                    encoded = encode(JSON.stringify(doc), passwordValue);
+                    console.log(encoded);
+                    localforage.setItem(doc.hash, encoded, function () {
+                        console.log(`uploaded ${encoded.length} bytes for '${doc.title}'`)
+                    });
+                };
+            });
+        };
+
+        CY.getDocument = function (doc_hash) {
+            localforage.getItem('passwordcombo').then(function (passwordValue) {
+                if (passwordValue != null) {
+                    localforage.getItem(doc_hash).then(function (getValue) {
+                        doc = JSON.parse(decode(getValue, passwordValue));
+                        console.log(doc);
+                    });
+                };
+            });
+        };
 
         CY.contentEdited = function () {
             // console.log('edited');
@@ -225,16 +262,133 @@
                 string = LZString.decompressFromUTF16(readValue);
                 console.log("Sample is: " + string);
             });
-
         });
 
 
         ciphertext = CryptoJS.AES.encrypt(LZString.compressToBase64(str), 'secret key 123');
-
-        // Decrypt
+        console.log(ciphertext.toString().length)
         bytes = CryptoJS.AES.decrypt(ciphertext.toString(), 'secret key 123');
         plaintext = bytes.toString(CryptoJS.enc.Utf8);
         console.log(LZString.decompressFromBase64(plaintext));
+
+
+        wordArray = CryptoJS.enc.Utf16.parse(LZString.compressToUTF16(str))
+        ciphertext = CryptoJS.AES.encrypt(wordArray, 'secret key 123');
+        console.log(ciphertext.toString().length)
+        localforage.setItem("test2", ciphertext.toString(), function () {
+            localforage.getItem("test2").then(function (readValue) {
+                bytes = CryptoJS.AES.decrypt(readValue, 'secret key 123');
+                plaintext = bytes.toString(CryptoJS.enc.Utf16);
+                console.log(LZString.decompressFromUTF16(plaintext))
+            });
+        });
+
+
+
+        postData('/', {
+                t: "ping",
+            })
+            .then(data => console.log(JSON.stringify(data))) // JSON-string from `response.json()` call
+            .catch(error => console.log('error: ' + error));
+
+        function postData(url = '', data = {}) {
+            // Default options are marked with *
+            return fetch(url, {
+                    method: 'POST', // *GET, POST, PUT, DELETE, etc.
+                    mode: 'same-origin', // no-cors, cors, *same-origin
+                    cache: 'no-cache', // *default, no-cache, reload, force-cache, only-if-cached
+                    credentials: 'same-origin', // include, *same-origin, omit
+                    headers: {
+                        'Content-Type': 'application/json',
+                        // 'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    redirect: 'follow', // manual, *follow, error
+                    referrer: 'no-referrer', // no-referrer, *client
+                    body: JSON.stringify(data), // body data type must match "Content-Type" header
+                })
+                .then(response => response.json()); // parses JSON response into native Javascript objects 
+        }
+
+
+
+        localforage.keys().then(function (keys) {
+            keys.forEach(function (key) {
+                switch (key) {
+                    case "passwordcombo":
+                        return
+                    default:
+                        if (key.length == 64) {
+                            // filter hashes
+                            console.log("hash: " + key)
+                        }
+                }
+            });
+        }).catch(function (err) {
+            // This code runs if there were any errors
+            console.log(err);
+        });
+
+
+
+
+
+        var keySize = 256;
+        var ivSize = 128;
+        var iterations = 100;
+
+        // http://www.adonespitogo.com/articles/encrypting-data-with-cryptojs-aes/
+
+        function encode(msgString, pass) {
+            msg = CryptoJS.enc.Utf16.parse(LZString.compressToUTF16(msgString))
+            var salt = CryptoJS.lib.WordArray.random(128 / 8);
+
+            var key = CryptoJS.PBKDF2(pass, salt, {
+                keySize: keySize / 32,
+                iterations: iterations
+            });
+
+            var iv = CryptoJS.lib.WordArray.random(128 / 8);
+
+            var encrypted = CryptoJS.AES.encrypt(msg, key, {
+                iv: iv,
+                padding: CryptoJS.pad.Pkcs7,
+                mode: CryptoJS.mode.CBC
+
+            });
+
+            // salt, iv will be hex 32 in length
+            // append them to the ciphertext for use  in decryption
+            var transitmessage = salt.toString() + iv.toString() + encrypted.toString();
+            return transitmessage;
+        }
+
+        function decode(transitmessage, pass) {
+            if (transitmessage == null) {
+                console.log("got null transmit message")
+                return null;
+            }
+            var salt = CryptoJS.enc.Hex.parse(transitmessage.substr(0, 32));
+            var iv = CryptoJS.enc.Hex.parse(transitmessage.substr(32, 32))
+            var encrypted = transitmessage.substring(64);
+
+            var key = CryptoJS.PBKDF2(pass, salt, {
+                keySize: keySize / 32,
+                iterations: iterations
+            });
+
+            var decrypted = CryptoJS.AES.decrypt(encrypted, key, {
+                iv: iv,
+                padding: CryptoJS.pad.Pkcs7,
+                mode: CryptoJS.mode.CBC
+
+            })
+            return LZString.decompressFromUTF16(decrypted.toString(CryptoJS.enc.Utf16));
+        }
+
+        enc = encode(str, "password");
+        console.log(enc)
+        console.log(enc.length);
+        console.log(decode(enc, "password"))
     </script>
 </body>
 
