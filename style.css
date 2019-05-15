@@ -1,0 +1,480 @@
+html {
+    line-height: 1.15;
+    -webkit-text-size-adjust: 100%
+}
+
+body {
+    margin: 0
+}
+
+main {
+    display: block
+}
+
+h1 {
+    font-size: 2em;
+}
+
+hr {
+    box-sizing: content-box;
+    height: 0;
+    overflow: visible
+}
+
+pre {
+    font-family: monospace, monospace;
+    font-size: 1em
+}
+
+a {
+    background-color: transparent
+}
+
+abbr[title] {
+    border-bottom: none;
+    text-decoration: underline;
+    text-decoration: underline dotted
+}
+
+b,
+strong {
+    font-weight: bolder
+}
+
+code,
+kbd,
+samp {
+    font-family: monospace, monospace;
+    font-size: 1em
+}
+
+small {
+    font-size: 80%
+}
+
+sub,
+sup {
+    font-size: 75%;
+    line-height: 0;
+    position: relative;
+    vertical-align: baseline
+}
+
+sub {
+    bottom: -.25em
+}
+
+sup {
+    top: -.5em
+}
+
+img {
+    border-style: none
+}
+
+button,
+input,
+optgroup,
+select,
+textarea {
+    font-family: inherit;
+    font-size: 100%;
+    line-height: 1.15;
+    margin: 0
+}
+
+button,
+input {
+    overflow: visible
+}
+
+button,
+select {
+    text-transform: none
+}
+
+[type=button],
+[type=reset],
+[type=submit],
+button {
+    -webkit-appearance: button
+}
+
+[type=button]::-moz-focus-inner,
+[type=reset]::-moz-focus-inner,
+[type=submit]::-moz-focus-inner,
+button::-moz-focus-inner {
+    border-style: none;
+    padding: 0
+}
+
+[type=button]:-moz-focusring,
+[type=reset]:-moz-focusring,
+[type=submit]:-moz-focusring,
+button:-moz-focusring {
+    outline: 1px dotted ButtonText
+}
+
+fieldset {
+    padding: .35em .75em .625em
+}
+
+legend {
+    box-sizing: border-box;
+    color: inherit;
+    display: table;
+    max-width: 100%;
+    padding: 0;
+    white-space: normal
+}
+
+progress {
+    vertical-align: baseline
+}
+
+textarea {
+    overflow: auto
+}
+
+[type=checkbox],
+[type=radio] {
+    box-sizing: border-box;
+    padding: 0
+}
+
+[type=number]::-webkit-inner-spin-button,
+[type=number]::-webkit-outer-spin-button {
+    height: auto
+}
+
+[type=search] {
+    -webkit-appearance: textfield;
+    outline-offset: -2px
+}
+
+[type=search]::-webkit-search-decoration {
+    -webkit-appearance: none
+}
+
+::-webkit-file-upload-button {
+    -webkit-appearance: button;
+    font: inherit
+}
+
+details {
+    display: block
+}
+
+summary {
+    display: list-item
+}
+
+template {
+    display: none
+}
+
+[hidden] {
+    display: none
+}
+
+
+/* rwtxt */
+
+main {
+    margin: 1em auto;
+
+    max-width: 620px;
+    font-size: 1.2em;
+    font-family: "Times New Roman", Times, serif;
+
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+
+}
+
+p {
+    line-height: 1.35em;
+}
+
+li {
+    line-height: 1.4em;
+}
+
+ul,
+ol {
+    padding-left: 1.5em;
+}
+
+sup {
+    line-height: 0em;
+    font-size: 0.7em;
+}
+
+
+
+
+
+* {
+    margin: 0;
+}
+
+body {
+    margin: 1em;
+    background: rgb(253, 253, 253);
+}
+
+
+figure,
+p,
+ul,
+ol,
+pre,
+hr {
+    margin-bottom: 1.1em;
+}
+
+h1 {
+    line-height: 1.25;
+    margin-bottom: 0.4em;
+}
+
+h2,
+h3,
+h4,
+h5 {
+    line-height: 1.25;
+    margin-bottom: 0.2em;
+    margin-top: 1em;
+}
+
+h1 {
+    font-size: 1.6em;
+    letter-spacing: .004em
+}
+
+h2 {
+    font-size: 1.3em;
+    letter-spacing: .009em
+}
+
+h3 {
+    font-size: 1.2em;
+    letter-spacing: .009em
+}
+
+h4 {
+    font-weight: 600;
+    font-size: 1.1em;
+}
+
+h5 {
+    font-weight: 600;
+    font-size: 1.05em;
+}
+
+blockquote {
+    margin: 1.5em 1em;
+    font-style: italic;
+    quotes: "\201C""\201D""\2018""\2019";
+    width: 100%;
+    font-size: 0.9em;
+}
+
+a {
+    color: #0000FF;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+code {
+    background-color: rgba(27, 31, 35, .05);
+    border-radius: 3px;
+    font-size: 85%;
+    margin: 0;
+    padding: .2em .4em;
+}
+
+pre {
+    word-wrap: normal;
+    background-color: #f6f8fa;
+    border-radius: 3px;
+    font-size: 85%;
+    line-height: 1.45;
+    overflow: auto;
+    padding: 16px;
+}
+
+pre code {
+    background-color: transparent;
+    border: 0;
+    display: inline;
+    line-height: inherit;
+    margin: 0;
+    max-width: auto;
+    overflow: visible;
+    padding: 0;
+    word-wrap: normal;
+}
+
+pre>code {
+    background: transparent;
+    border: 0;
+    font-size: 100%;
+    margin: 0;
+    padding: 0;
+    white-space: pre;
+    word-break: normal;
+}
+
+
+
+
+
+
+
+img {
+    width: 100%;
+}
+
+figcaption {
+    color: #777;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+
+.list>div {
+    grid-template-columns: 1fr min-content;
+    display: grid;
+    grid-column-gap: 5px;
+    padding-top: 5px;
+}
+
+.list>div div {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.list>div div:last-child {
+    padding-right: .25em;
+    color: #888;
+    font-size: 90%;
+    padding-top: 1px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.012em;
+}
+
+.list a {
+    text-decoration: none;
+}
+
+
+
+.fr {
+    float: right;
+    position: absolute;
+    right: 2em;
+}
+
+.icons {
+    float: right;
+    position: fixed;
+    top: 1em;
+    right: 1em;
+    display: none;
+}
+
+.keeplow {
+    margin-top: auto;
+}
+
+
+
+#editlink:hover {
+    cursor: pointer;
+}
+
+.smaller {
+    font-size: 85%;
+}
+
+.grayed {
+    color: #aaa;
+    text-align: right;
+    padding-top: 3em;
+}
+
+a.grayed {
+    border-bottom: 0.5px solid #aaa;
+}
+
+.grey {
+    color: #aaa;
+}
+
+
+
+summary {
+    margin-bottom: 0.5em;
+}
+
+.writing {
+    font-family: "Times New Roman", Times, serif;
+    line-height: 1.25em;
+    font-size: 1em;
+    background: rgb(253, 253, 253);
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    border: 0;
+    border: none;
+    outline: none;
+    -webkit-box-shadow: none;
+    -moz-box-shadow: none;
+    box-shadow: none;
+    resize: none;
+    overflow: hidden;
+}
+
+/* On screens that are 992px or less, set the background color to blue */
+@media screen and (min-width: 1400px) {
+    .fr {
+        right: 18em;
+    }
+}
+
+@media screen and (max-width: 1400px) {
+    .fr {
+        right: 10em;
+    }
+}
+
+@media screen and (max-width: 992px) {
+    .fr {
+        right: 6em;
+    }
+}
+
+/* On screens that are 600px or less, set the background color to olive */
+@media screen and (max-width: 600px) {
+    .fr {
+        right: 1em;
+    }
+}
+
+@media screen and (max-device-width: 480px) {
+    main {
+        font-size: 1.15em;
+    }
+
+    .writing {
+        font-size: 1em;
+    }
+}
+
+[contenteditable]:focus {
+    outline: 0px solid transparent;
+}

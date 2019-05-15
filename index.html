@@ -1,0 +1,219 @@
+<html>
+
+<head>
+    <meta charset="utf8" />
+    <title>to-do | work</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="msapplication-TileColor" content="#375EAB">
+    <meta name="theme-color" content="#375EAB">
+    <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+
+<body>
+
+    <main>
+
+        <span class="fr fonty">
+            <a id='listlink'>List</a><br>
+            <a id='viewlink'>View</a><br>
+            <a id='editlink'>Edit</a>
+        </span>
+        <div class="fonty" id="rendered">
+
+        </div>
+
+        <textarea class="writing" id="editable" style="-webkit-user-select:text;display:none;" rows=110
+            placeholder="Click here and start writing" autofocus>
+# this is a test
+ 
+*some test*
+        </textarea>
+    </main>
+
+
+    <script src="/js/lz-string.js"></script>
+    <script src="/js/pako.min.js"></script>
+    <script src="/js/crypto-js.min.js"></script>
+    <script src="/js/lunr.min.js"></script>
+    <script src="/js/localforage.js"></script>
+    <script src="/js/showdown.min.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js', {
+                    scope: '/'
+                })
+                .then(function (registration) {
+                    console.log('Service Worker Registered');
+                });
+            navigator.serviceWorker.ready.then(function (registration) {
+                console.log('Service Worker Ready');
+            });
+        }
+    </script>
+    <script>
+        // replace all function
+        String.prototype.replaceAll = function (search, replacement) {
+            var target = this;
+            return target.replace(new RegExp(search, 'g'), replacement);
+        };
+
+
+
+        // Feel free to change the drivers order :)
+        localforage.setDriver([
+            localforage.INDEXEDDB,
+            localforage.WEBSQL,
+            localforage.LOCALSTORAGE
+        ]).then(function () {
+            var key = 'STORE_KEY';
+            // var value = 'What we save offline';
+            var value = 'asdf';
+            value[0] = 65
+            // var value = undefined;
+            var UNKNOWN_KEY = 'unknown_key';
+
+            localforage.setItem(key, value, function () {
+                console.log('Using:' + localforage.driver());
+                console.log('Saved: ' + value);
+
+                localforage.getItem(key).then(function (readValue) {
+                    console.log('Read: ', readValue);
+                });
+
+                // Since this key hasn't been set yet, we'll get a null value
+                localforage.getItem(UNKNOWN_KEY, function (err, readValue) {
+                    console.log('Result of reading ' + UNKNOWN_KEY, readValue);
+                });
+            });
+        });
+
+        var CY = {};
+        CY.debounce = function (func, wait, immediate) {
+            var timeout;
+            return function () {
+                var context = this,
+                    args = arguments;
+                var later = function () {
+                    timeout = null;
+                    if (!immediate) {
+                        func.apply(context, args);
+                    }
+                };
+                var callNow = immediate && !timeout;
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait || 200);
+                if (callNow) {
+                    func.apply(context, args);
+                }
+            };
+        };
+
+        CY.contentEdited = function () {
+            // console.log('edited');
+            var markdown = document.getElementById("editable").value.replaceAll("<br>", "\n");
+            c = new showdown.Converter()
+            document.getElementById("rendered").innerHTML = c.makeHtml(markdown);
+        };
+        document.getElementById("editable").addEventListener('input', CY.debounce(CY.contentEdited, 200));
+
+
+        CY.loadEditor = function () {
+            document.getElementById("rendered").style.display = 'none'; // needed to add brs at end
+            document.getElementById("editable").style.display = 'inline-block'; // needed to add brs at end
+            document.getElementById("editable").focus();
+            // autoExpand(document.getElementById("editable"));
+        };
+
+        CY.hideEditor = function () {
+            document.getElementById("editable").style.display = 'none'; // needed to add brs at end
+            document.getElementById("rendered").style.display = 'inline-block'; // needed to add brs at end
+        };
+
+
+        editlink = document.getElementById("editlink")
+        if (editlink != null) {
+            editlink.addEventListener("click", CY.loadEditor);
+        }
+        viewlink = document.getElementById("viewlink")
+        if (viewlink != null) {
+            viewlink.addEventListener("click", CY.hideEditor);
+        }
+
+
+
+        var documents = [{
+            "name": "Lunr",
+            "text": "Like Solr, but much smaller, and not as bright."
+        }, {
+            "name": "React",
+            "text": "A JavaScript library for building user interfaces."
+        }, {
+            "name": "Lodash",
+            "text": "A modern JavaScript utility library delivering modularity, performance & extras."
+        }]
+        var idx = lunr(function () {
+            this.ref('name')
+            this.field('text')
+
+            documents.forEach(function (doc) {
+                this.add(doc)
+            }, this)
+        })
+
+        idx.search("bright")
+
+
+
+
+
+        // Encrypt
+        var ciphertext = CryptoJS.AES.encrypt('my message', 'secret key 123');
+
+        // Decrypt
+        var bytes = CryptoJS.AES.decrypt(ciphertext.toString(), 'secret key 123');
+        var plaintext = bytes.toString(CryptoJS.enc.Utf8);
+
+
+        // compression 
+        str =
+            "😀 😁 😂 🤣 😃 😄 😅 😆 😉 😊 😋 😎 😍 The passage experienced a surge in popularity during the 1960s when Letraset used it on their dry-transfer sheets, and again during the 90s as desktop publishers bundled the text with their software. Today it's seen all around the web; on templates, websites, and stock designs. Use our generator to get your own, or read on for the authoritative history of lorem ipsum.  There are many variations of passages of Lorem Ipsum available, but the majority have suffered alteration in some form, by injected humour, or randomised words which don't look even slightly believable. If you are going to use a passage of Lorem Ipsum, you need to be sure there isn't anything embarrassing hidden in the middle of text. All the Lorem Ipsum generators on the Internet tend to repeat predefined chunks as necessary, making this the first true generator on the Internet. It uses a dictionary of over 200 Latin words, combined with a handful of model sentence structures, to generate Lorem Ipsum which looks reasonable. The generated Lorem Ipsum is therefore always free from repetition, injected humour, or non-characteristic words etc."
+        c = btoa(pako.deflate(str, {
+            to: 'string',
+            level: 6,
+        }));
+        d = pako.inflate(atob(c), {
+            to: 'string'
+        })
+        console.log(str.length)
+        console.log(c.length)
+        console.log(d);
+
+
+
+
+
+        var compressed = LZString.compressToUTF16(str);
+        console.log("Size of compressed sample is: " + compressed.length);
+        localStorage.setItem("myData", compressed);
+
+
+        localforage.setItem("test1", compressed, function () {
+            localforage.getItem("test1").then(function (readValue) {
+                string = LZString.decompressFromUTF16(readValue);
+                console.log("Sample is: " + string);
+            });
+
+        });
+
+
+        ciphertext = CryptoJS.AES.encrypt(LZString.compressToBase64(str), 'secret key 123');
+
+        // Decrypt
+        bytes = CryptoJS.AES.decrypt(ciphertext.toString(), 'secret key 123');
+        plaintext = bytes.toString(CryptoJS.enc.Utf8);
+        console.log(LZString.decompressFromBase64(plaintext));
+    </script>
+</body>
+
+</html>
