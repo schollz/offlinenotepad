@@ -56,9 +56,9 @@
 *some test*
         </textarea>
 
-        <div id='installer'>
+        <!-- <div id='installer'>
             <button class='button'>Install</button>
-        </div>
+        </div> -->
     </main>
 
 
@@ -68,7 +68,8 @@
     <script src="/js/lunr.min.js"></script>
     <script src="/js/localforage.js"></script>
     <script src="/js/showdown.min.js"></script>
-    <script>
+    <!-- <script>
+        /* code for the service worker */
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js', {
                     scope: '/'
@@ -80,8 +81,9 @@
                 console.log('Service Worker Ready');
             });
         }
-    </script>
+    </script> -->
     <script>
+        /* generic functions */
         // replace all function
         String.prototype.replaceAll = function (search, replacement) {
             var target = this;
@@ -89,32 +91,20 @@
         };
 
 
-
+        /* initiate local storage with password */
         // Feel free to change the drivers order :)
         localforage.setDriver([
             localforage.INDEXEDDB,
             localforage.WEBSQL,
             localforage.LOCALSTORAGE
         ]).then(function () {
-            var key = 'STORE_KEY';
-            // var value = 'What we save offline';
-            var value = 'asdf';
-            value[0] = 65
-            // var value = undefined;
-            var UNKNOWN_KEY = 'unknown_key';
-
-            localforage.setItem(key, value, function () {
-                console.log('Using:' + localforage.driver());
-                console.log('Saved: ' + value);
-
-                localforage.getItem(key).then(function (readValue) {
-                    console.log('Read: ', readValue);
-                });
-
-                // Since this key hasn't been set yet, we'll get a null value
-                localforage.getItem(UNKNOWN_KEY, function (err, readValue) {
-                    console.log('Result of reading ' + UNKNOWN_KEY, readValue);
-                });
+            localforage.getItem('passwordcombo').then(function (readValue) {
+                if (readValue == null) {
+                    var newPassword = prompt("Choose a passphrase for encryption:");
+                    localforage.setItem('passwordcombo', newPassword, function () {
+                        console.log("password set");
+                    });
+                }
             });
         });
 
@@ -138,6 +128,8 @@
                 }
             };
         };
+
+
 
         CY.contentEdited = function () {
             // console.log('edited');
