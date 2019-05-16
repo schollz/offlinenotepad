@@ -373,8 +373,6 @@ figcaption {
 
 .fr {
     float: right;
-    position: absolute;
-    right: 2em;
 }
 
 .icons {

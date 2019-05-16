@@ -80,7 +80,7 @@ Disallow: /`))
 	} else if r.URL.Path == "/sitemap.xml" {
 		// TODO
 	} else {
-		if r.URL.Path == "/" {
+		if r.URL.Path == "/" || r.URL.Path == "/new" {
 			r.URL.Path = "/index.html"
 		}
 		urlPath := r.URL.Path

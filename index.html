@@ -40,15 +40,32 @@
 
     <main>
 
-        <span class="fr fonty">
-            <a id='listlink'>List</a><br>
-            <a id='viewlink'>View</a><br>
+        <span class="fr fonty" style="float:right; margin-top:-1em; padding-bottom:0.5em; margin-bottom:0.5em;">
+            <a id='viewlink'>View</a>&nbsp;
             <a id='editlink'>Edit</a>
         </span>
-        <div class="fonty" id="rendered">
+        <span class="fr fonty" style="float:left; margin-top:-1em; padding-bottom:0.5em; margin-bottom:0.5em;">
+            <a id='newlink'>New</a>&nbsp;
+            <a id='listlink'>List</a>&nbsp;
+        </span>
+        <br>
 
+
+        <div id="app_postlist" class="list">
+            <div v-for="doc in sortedItems">
+                <div v-bind:id="doc.uuid" v-on:click="select($event)">{{doc.title}}</div>
+                <div>{{doc.created}}</div>
+            </div>
         </div>
 
+
+        <div class="fonty" id="app_render">
+            <h1 v-if="rawHTML">{{doc.title}}</h1>
+            <div v-html="rawHTML"></div>
+        </div>
+
+        <input id="edittitle" style="width:100%;font-size:24px;border:none;padding-bottom:0.5em;display:none;"
+            placeholder="Title">
         <textarea class="writing" id="editable" style="-webkit-user-select:text;display:none;" rows=110
             placeholder="Click here and start writing" autofocus>
 # this is a test
@@ -61,7 +78,7 @@
         </div> -->
     </main>
 
-
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
     <script src="/js/lz-string.js"></script>
     <script src="/js/pako.min.js"></script>
     <script src="/js/crypto-js.min.js"></script>
@@ -84,6 +101,51 @@
         }
     </script> -->
     <script>
+        /* globals */
+        var globalPassword = "zack";
+
+        /* vue apps */
+        var app_postlist = new Vue({
+            el: '#app_postlist',
+            data: {
+                docs: []
+            },
+            methods: {
+                select: function (event) {
+                    // hide post list and editor
+                    app_postlist.docs = [];
+                    document.getElementById("editable").style.display = 'none'; // needed to add brs at end
+                    document.getElementById("edittitle").style.display = 'none';
+
+                    document.getElementById("editlink").style.display = 'inline-block';
+                    document.getElementById("viewlink").style.display = 'inline-block';
+
+                    doc_uuid = event.currentTarget.id;
+                    if (globalPassword != null) {
+                        localforage.getItem(doc_uuid).then(function (getValue) {
+                            doc = JSON.parse(decode(getValue, globalPassword));
+                            c = new showdown.Converter()
+                            app_render.rawHTML = c.makeHtml(doc.markdown);
+                            app_render.doc = doc;
+                        });
+                    };
+                }
+            },
+            computed: {
+                sortedItems: function () {
+                    return this.docs.sort((a, b) => new Date(b.modified) - new Date(a.modified))
+                }
+            }
+        })
+
+        var app_render = new Vue({
+            el: '#app_render',
+            data: {
+                rawHTML: '<b>testing</b>',
+                doc: {},
+            }
+        })
+
         /* generic functions */
         // replace all function
         String.prototype.replaceAll = function (search, replacement) {
@@ -91,23 +153,44 @@
             return target.replace(new RegExp(search, 'g'), replacement);
         };
 
+        function create_UUID() {
+            var dt = new Date().getTime();
+            var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+                var r = (dt + Math.random() * 16) % 16 | 0;
+                dt = Math.floor(dt / 16);
+                return (c == 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+            });
+            return uuid;
+        }
 
+
+        // slugify the current text
+        function slugify(text) {
+            var lines = text.split('\n');
+            for (var i = 0; i < lines.length; i++) {
+                var slug = lines[i].toString().toLowerCase()
+                    .replace(/\s+/g, '-') // Replace spaces with -
+                    .replace(/[^\w\-]+/g, '') // Remove all non-word chars
+                    .replace(/\-\-+/g, '-') // Replace multiple - with single -
+                    .replace(/^-+/, '') // Trim - from start of text
+                    .replace(/-+$/, ''); // Trim - from end of text
+                if (slug.length > 1) {
+                    return slug;
+                }
+            }
+            return "";
+        }
+
+        /* initialize *?
         /* initiate local storage with password */
         // Feel free to change the drivers order :)
         localforage.setDriver([
             localforage.INDEXEDDB,
             localforage.WEBSQL,
             localforage.LOCALSTORAGE
-        ]).then(function () {
-            localforage.getItem('passwordcombo').then(function (readValue) {
-                if (readValue == null) {
-                    var newPassword = prompt("Choose a passphrase for encryption:");
-                    localforage.setItem('passwordcombo', newPassword, function () {
-                        console.log("password set");
-                    });
-                }
-            });
-        });
+        ])
+
+
 
         var CY = {};
         CY.debounce = function (func, wait, immediate) {
@@ -132,156 +215,139 @@
 
 
         // Constructor function for Person objects
-        // a = new Document("HI");
-        Document = function (title) {
-            this.title = title;
-            this.hash = CryptoJS.SHA256(title).toString();
+        // a = new Document();
+        Document = function () {
+            this.uuid = create_UUID();
             this.created = new Date();
             this.modified = new Date();
+            this.title = "";
             this.markdown = "";
+            this.hash = CryptoJS.SHA256(this.uuid + this.title + this.markdown).toString();
         }
 
 
-        a = new Document("HI");
-        CY.updateDocument(a);
+        // a = new Document("HI");
+        // CY.updateDocument(a);
 
         CY.updateDocument = function (doc) {
-            localforage.getItem('passwordcombo').then(function (passwordValue) {
-                if (passwordValue != null) {
-                    encoded = encode(JSON.stringify(doc), passwordValue);
-                    console.log(encoded);
-                    localforage.setItem(doc.hash, encoded, function () {
-                        console.log(`uploaded ${encoded.length} bytes for '${doc.title}'`)
-                    });
-                };
-            });
-        };
+            if (globalPassword != null) {
+                doc.hash = CryptoJS.SHA256(doc.uuid + doc.title + doc.markdown).toString();
+                encoded = encode(JSON.stringify(doc), globalPassword);
+                console.log(encoded);
+                localforage.setItem(doc.uuid, encoded, function () {
+                    console.log(
+                        `uploaded ${encoded.length} bytes for '${doc.title}' (${doc.uuid})`);
 
-        CY.getDocument = function (doc_hash) {
-            localforage.getItem('passwordcombo').then(function (passwordValue) {
-                if (passwordValue != null) {
-                    localforage.getItem(doc_hash).then(function (getValue) {
-                        doc = JSON.parse(decode(getValue, passwordValue));
-                        console.log(doc);
-                    });
-                };
-            });
+                    var newwindowname = slugify(doc.title);
+                    // console.log(newwindowname);
+                    if (newwindowname != undefined && newwindowname.length > 0 && "/" + newwindowname !=
+                        window.location
+                        .pathname) {
+                        history.replaceState({}, newwindowname, newwindowname);
+                        document.title = newwindowname + " | " + window.rwtxt.domain;
+                    }
+                });
+            };
         };
 
         CY.contentEdited = function () {
-            // console.log('edited');
-            var markdown = document.getElementById("editable").value.replaceAll("<br>", "\n");
-            c = new showdown.Converter()
-            document.getElementById("rendered").innerHTML = c.makeHtml(markdown);
+            console.log('edited');
+            app_render.doc.modified = new Date();
+            app_render.doc.markdown = document.getElementById("editable").value;
+            app_render.doc.title = document.getElementById("edittitle").value;
+            CY.updateDocument(app_render.doc);
         };
         document.getElementById("editable").addEventListener('input', CY.debounce(CY.contentEdited, 200));
+        document.getElementById("edittitle").addEventListener('input', CY.debounce(CY.contentEdited, 200));
 
+        CY.showEditor = function () {
+            app_postlist.docs = [];
+            app_render.rawHTML = "";
 
-        CY.loadEditor = function () {
-            document.getElementById("rendered").style.display = 'none'; // needed to add brs at end
+            document.getElementById("edittitle").style.display = 'inline-block';
+            document.getElementById("editlink").style.display = 'inline-block';
+            document.getElementById("viewlink").style.display = 'inline-block';
+            document.getElementById("editable").value = app_render.doc.markdown;
+            document.getElementById("edittitle").value = app_render.doc.title;
             document.getElementById("editable").style.display = 'inline-block'; // needed to add brs at end
-            document.getElementById("editable").focus();
-            // autoExpand(document.getElementById("editable"));
-        };
+            document.getElementById("edittitle").focus();
+        }
 
-        CY.hideEditor = function () {
+        CY.showView = function () {
+            // hide post list and editor
+            app_postlist.docs = [];
             document.getElementById("editable").style.display = 'none'; // needed to add brs at end
-            document.getElementById("rendered").style.display = 'inline-block'; // needed to add brs at end
-        };
+            document.getElementById("editlink").style.display = 'inline-block';
+            document.getElementById("viewlink").style.display = 'inline-block';
+            document.getElementById("edittitle").style.display = 'none';
 
-
-        editlink = document.getElementById("editlink")
-        if (editlink != null) {
-            editlink.addEventListener("click", CY.loadEditor);
-        }
-        viewlink = document.getElementById("viewlink")
-        if (viewlink != null) {
-            viewlink.addEventListener("click", CY.hideEditor);
+            // show
+            app_render.rawHTML = (new showdown.Converter()).makeHtml(app_render.doc.markdown);
         }
 
+        CY.showNew = function () {
+            app_render.doc = new Document();
 
+            CY.showEditor();
+        }
 
-        var documents = [{
-            "name": "Lunr",
-            "text": "Like Solr, but much smaller, and not as bright."
-        }, {
-            "name": "React",
-            "text": "A JavaScript library for building user interfaces."
-        }, {
-            "name": "Lodash",
-            "text": "A modern JavaScript utility library delivering modularity, performance & extras."
-        }]
-        var idx = lunr(function () {
-            this.ref('name')
-            this.field('text')
+        CY.showList = function () {
+            // hide
+            app_render.rawHTML = "";
+            document.getElementById("editable").style.display = 'none'; // needed to add brs at end
+            document.getElementById("editlink").style.display = 'none';
+            document.getElementById("viewlink").style.display = 'none';
+            document.getElementById("edittitle").style.display = 'none';
 
-            documents.forEach(function (doc) {
-                this.add(doc)
-            }, this)
-        })
-
-        idx.search("bright")
-
-
-
-
-
-        // Encrypt
-        var ciphertext = CryptoJS.AES.encrypt('my message', 'secret key 123');
-
-        // Decrypt
-        var bytes = CryptoJS.AES.decrypt(ciphertext.toString(), 'secret key 123');
-        var plaintext = bytes.toString(CryptoJS.enc.Utf8);
-
-
-        // compression 
-        str =
-            "😀 😁 😂 🤣 😃 😄 😅 😆 😉 😊 😋 😎 😍 The passage experienced a surge in popularity during the 1960s when Letraset used it on their dry-transfer sheets, and again during the 90s as desktop publishers bundled the text with their software. Today it's seen all around the web; on templates, websites, and stock designs. Use our generator to get your own, or read on for the authoritative history of lorem ipsum.  There are many variations of passages of Lorem Ipsum available, but the majority have suffered alteration in some form, by injected humour, or randomised words which don't look even slightly believable. If you are going to use a passage of Lorem Ipsum, you need to be sure there isn't anything embarrassing hidden in the middle of text. All the Lorem Ipsum generators on the Internet tend to repeat predefined chunks as necessary, making this the first true generator on the Internet. It uses a dictionary of over 200 Latin words, combined with a handful of model sentence structures, to generate Lorem Ipsum which looks reasonable. The generated Lorem Ipsum is therefore always free from repetition, injected humour, or non-characteristic words etc."
-        c = btoa(pako.deflate(str, {
-            to: 'string',
-            level: 6,
-        }));
-        d = pako.inflate(atob(c), {
-            to: 'string'
-        })
-        console.log(str.length)
-        console.log(c.length)
-        console.log(d);
-
-
-
-
-
-        var compressed = LZString.compressToUTF16(str);
-        console.log("Size of compressed sample is: " + compressed.length);
-        localStorage.setItem("myData", compressed);
-
-
-        localforage.setItem("test1", compressed, function () {
-            localforage.getItem("test1").then(function (readValue) {
-                string = LZString.decompressFromUTF16(readValue);
-                console.log("Sample is: " + string);
+            // show
+            app_postlist.docs = [];
+            localforage.keys().then(function (keys) {
+                if (globalPassword != null) {
+                    keys.forEach(function (key) {
+                        localforage.getItem(key).then(function (getValue) {
+                            decoded = decode(getValue,
+                                globalPassword);
+                            console.log(decoded);
+                            if (decoded != null) {
+                                app_postlist.docs.push(JSON.parse(decoded));
+                            }
+                        });
+                    });
+                }
+            }).catch(function (err) {
+                // This code runs if there were any errors
+                console.log(err);
             });
-        });
+        }
+        document.getElementById("editlink").addEventListener("click", CY.showEditor);
+        document.getElementById("viewlink").addEventListener("click", CY.showView);
+        document.getElementById("listlink").addEventListener("click", CY.showList);
+        document.getElementById("newlink").addEventListener("click", CY.showNew);
 
 
-        ciphertext = CryptoJS.AES.encrypt(LZString.compressToBase64(str), 'secret key 123');
-        console.log(ciphertext.toString().length)
-        bytes = CryptoJS.AES.decrypt(ciphertext.toString(), 'secret key 123');
-        plaintext = bytes.toString(CryptoJS.enc.Utf8);
-        console.log(LZString.decompressFromBase64(plaintext));
+        // TODO: indexing
 
+        // var documents = [{
+        //     "name": "Lunr",
+        //     "text": "Like Solr, but much smaller, and not as bright."
+        // }, {
+        //     "name": "React",
+        //     "text": "A JavaScript library for building user interfaces."
+        // }, {
+        //     "name": "Lodash",
+        //     "text": "A modern JavaScript utility library delivering modularity, performance & extras."
+        // }]
+        // var idx = lunr(function () {
+        //     this.ref('name')
+        //     this.field('text')
 
-        wordArray = CryptoJS.enc.Utf16.parse(LZString.compressToUTF16(str))
-        ciphertext = CryptoJS.AES.encrypt(wordArray, 'secret key 123');
-        console.log(ciphertext.toString().length)
-        localforage.setItem("test2", ciphertext.toString(), function () {
-            localforage.getItem("test2").then(function (readValue) {
-                bytes = CryptoJS.AES.decrypt(readValue, 'secret key 123');
-                plaintext = bytes.toString(CryptoJS.enc.Utf16);
-                console.log(LZString.decompressFromUTF16(plaintext))
-            });
-        });
+        //     documents.forEach(function (doc) {
+        //         this.add(doc)
+        //     }, this)
+        // })
+
+        // idx.search("bright")
+
 
 
 
@@ -309,24 +375,6 @@
                 .then(response => response.json()); // parses JSON response into native Javascript objects 
         }
 
-
-
-        localforage.keys().then(function (keys) {
-            keys.forEach(function (key) {
-                switch (key) {
-                    case "passwordcombo":
-                        return
-                    default:
-                        if (key.length == 64) {
-                            // filter hashes
-                            console.log("hash: " + key)
-                        }
-                }
-            });
-        }).catch(function (err) {
-            // This code runs if there were any errors
-            console.log(err);
-        });
 
 
 
@@ -385,11 +433,40 @@
             return LZString.decompressFromUTF16(decrypted.toString(CryptoJS.enc.Utf16));
         }
 
-        enc = encode(str, "password");
-        console.log(enc)
-        console.log(enc.length);
-        console.log(decode(enc, "password"))
+
+        window.onload = function () {
+            // TODO: check password
+            // globalPassword = prompt("Choose a passphrase for encryption:");
+            if (window.location.pathname != "/") {
+                titleToFind = window.location.pathname.substring(1, window.location.pathname.length);
+                localforage.keys().then(function (keys) {
+                    if (globalPassword != null) {
+                        keys.forEach(function (key) {
+                            localforage.getItem(key).then(function (getValue) {
+                                decoded = decode(getValue,
+                                    globalPassword);
+                                if (decoded != null) {
+                                    doc = JSON.parse(decoded)
+                                    if (slugify(doc.title) == slugify(titleToFind)) {
+                                        app_render.doc = doc;
+                                        console.log(app_render.doc);
+                                        CY.showView();
+                                    }
+                                }
+                            });
+                        });
+                    }
+                }).catch(function (err) {
+                    // This code runs if there were any errors
+                    console.log(err);
+                });
+            } else {
+                app_render.doc = new Document();
+                CY.showList();
+            }
+        }
     </script>
+
 </body>
 
 </html>
