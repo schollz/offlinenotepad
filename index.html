@@ -23,13 +23,11 @@
     <meta property='og:type' content='website'>
     <meta property='og:image' content='https://airhorner.com/images/touch/Airhorner_192.png'>
     <meta property='og:url' content='https://airhorner.com/'>
-    <meta property='og:description'
-        content='The best and easiest Air Horn web app there is. No install just use it right away in your browser!'>
+    <meta property='og:description' content='The best and easiest Air Horn web app there is. No install just use it right away in your browser!'>
     <meta name='twitter:card' content='summary'>
     <meta name='twitter:url' content='https://airhorner.com/'>
     <meta name='twitter:title' content='Air Horn'>
-    <meta name='twitter:description'
-        content='The best and easiest Air Horn web app there is. No install just use it right away in your browser!'>
+    <meta name='twitter:description' content='The best and easiest Air Horn web app there is. No install just use it right away in your browser!'>
     <meta name='twitter:image' content='https://airhorner.com/images/touch/Airhorner_192.png'>
     <meta name='twitter:creator' content='@paul_kinlan'>
     <link rel='stylesheet' href='style.css'>
@@ -37,9 +35,7 @@
 </head>
 
 <body>
-
     <main>
-
         <span class="fr fonty" style="float:right; margin-top:-1em; padding-bottom:0.5em; margin-bottom:0.5em;">
             <a id='viewlink'>View</a>&nbsp;
             <a id='editlink'>Edit</a>
@@ -49,35 +45,26 @@
             <a id='listlink'>List</a>&nbsp;
         </span>
         <br>
-
-
         <div id="app_postlist" class="list">
             <div v-for="doc in sortedItems">
                 <div v-bind:id="doc.uuid" v-on:click="select($event)">{{doc.title}}</div>
                 <div>{{doc.created}}</div>
             </div>
         </div>
-
-
         <div class="fonty" id="app_render">
             <h1 v-if="rawHTML">{{doc.title}}</h1>
             <div v-html="rawHTML"></div>
         </div>
-
-        <input id="edittitle" style="width:100%;font-size:24px;border:none;padding-bottom:0.5em;display:none;"
-            placeholder="Title">
-        <textarea class="writing" id="editable" style="-webkit-user-select:text;display:none;" rows=110
-            placeholder="Click here and start writing" autofocus>
+        <input id="edittitle" style="width:100%;font-size:24px;border:none;padding-bottom:0.5em;display:none;" placeholder="Title">
+        <textarea class="writing" id="editable" style="-webkit-user-select:text;display:none;" rows=110 placeholder="Click here and start writing" autofocus>
 # this is a test
  
 *some test*
         </textarea>
-
         <!-- <div id='installer'>
             <button class='button'>Install</button>
         </div> -->
     </main>
-
     <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
     <script src="/js/lz-string.js"></script>
     <script src="/js/pako.min.js"></script>
@@ -101,428 +88,428 @@
         }
     </script> -->
     <script>
-        /* globals */
-        var globalPassword = "zack";
+    /* globals */
+    var globalPassword = "zack";
 
-        /* websockets */
-        
+    /* websockets */
 
-var wsupgrader = websocket.Upgrader{
-    ReadBufferSize:  1024,
-    WriteBufferSize: 1024,
-    CheckOrigin: func(r *http.Request) bool {
-        return true
-    },
-}
 
-type Payload struct {
-    Message string `json:"message"`
-}
-
-type Connections struct {
-    cs map[string]*websocket.Conn
-    sync.RWMutex
-}
-
-var wsConnections Connections
-
-func handleWebsocket(w http.ResponseWriter, r *http.Request) (err error) {
-
-    // handle websockets on this page
-    c, errUpgrade := wsupgrader.Upgrade(w, r, nil)
-    if errUpgrade != nil {
-        return errUpgrade
+    var wsupgrader = websocket.Upgrader {
+        ReadBufferSize: 1024,
+        WriteBufferSize: 1024,
+        CheckOrigin: func(r * http.Request) bool {
+            return true
+        },
     }
-    defer c.Close()
 
-    log.Debugf("%s connected\n", c.RemoteAddr().String())
-    wsConnections.Lock()
-    if len(wsConnections.cs) == 0 {
-        wsConnections.cs = make(map[string]*websocket.Conn)
+    type Payload struct {
+        Message string `json:"message"`
     }
-    wsConnections.cs[c.RemoteAddr().String()] = c
-    wsConnections.Unlock()
-    defer func() {
+
+    type Connections struct {
+        cs map[string] * websocket.Conn
+        sync.RWMutex
+    }
+
+    var wsConnections Connections
+
+    func handleWebsocket(w http.ResponseWriter, r * http.Request)(err error) {
+
+        // handle websockets on this page
+        c,
+        errUpgrade: = wsupgrader.Upgrade(w, r, nil)
+        if errUpgrade != nil {
+            return errUpgrade
+        }
+        defer c.Close()
+
+        log.Debugf("%s connected\n", c.RemoteAddr().String())
         wsConnections.Lock()
-        delete(wsConnections.cs, c.RemoteAddr().String())
+        if len(wsConnections.cs) == 0 {
+            wsConnections.cs = make(map[string] * websocket.Conn)
+        }
+        wsConnections.cs[c.RemoteAddr().String()] = c
         wsConnections.Unlock()
-    }()
+        defer func() {
+            wsConnections.Lock()
+            delete(wsConnections.cs, c.RemoteAddr().String())
+            wsConnections.Unlock()
+        }()
 
-    var p Payload
-    for {
-        err := c.ReadJSON(&p)
-        if err != nil {
-            log.Debug("read:", err)
-            break
+        var p Payload
+        for {
+            err: = c.ReadJSON( & p)
+            if err != nil {
+                log.Debug("read:", err)
+                break
+            }
+            log.Debugf("recv: %v", p)
         }
-        log.Debugf("recv: %v", p)
+        return
     }
-    return
-}
 
-        /* vue apps */
-        var app_postlist = new Vue({
-            el: '#app_postlist',
-            data: {
-                docs: []
-            },
-            methods: {
-                select: function (event) {
-                    // hide post list and editor
-                    app_postlist.docs = [];
-                    document.getElementById("editable").style.display = 'none'; // needed to add brs at end
-                    document.getElementById("edittitle").style.display = 'none';
+    /* vue apps */
+    var app_postlist = new Vue({
+        el: '#app_postlist',
+        data: {
+            docs: []
+        },
+        methods: {
+            select: function(event) {
+                // hide post list and editor
+                app_postlist.docs = [];
+                document.getElementById("editable").style.display = 'none'; // needed to add brs at end
+                document.getElementById("edittitle").style.display = 'none';
 
-                    document.getElementById("editlink").style.display = 'inline-block';
-                    document.getElementById("viewlink").style.display = 'inline-block';
+                document.getElementById("editlink").style.display = 'inline-block';
+                document.getElementById("viewlink").style.display = 'inline-block';
 
-                    doc_uuid = event.currentTarget.id;
-                    if (globalPassword != null) {
-                        localforage.getItem(doc_uuid).then(function (getValue) {
-                            doc = JSON.parse(decode(getValue, globalPassword));
-                            c = new showdown.Converter()
-                            app_render.rawHTML = c.makeHtml(doc.markdown);
-                            app_render.doc = doc;
-                        });
-                    };
-                }
-            },
-            computed: {
-                sortedItems: function () {
-                    return this.docs.sort((a, b) => new Date(b.modified) - new Date(a.modified))
-                }
-            }
-        })
-
-        var app_render = new Vue({
-            el: '#app_render',
-            data: {
-                rawHTML: '<b>testing</b>',
-                doc: {},
-            }
-        })
-
-        /* generic functions */
-        // replace all function
-        String.prototype.replaceAll = function (search, replacement) {
-            var target = this;
-            return target.replace(new RegExp(search, 'g'), replacement);
-        };
-
-        function create_UUID() {
-            var dt = new Date().getTime();
-            var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-                var r = (dt + Math.random() * 16) % 16 | 0;
-                dt = Math.floor(dt / 16);
-                return (c == 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-            });
-            return uuid;
-        }
-
-
-        // slugify the current text
-        function slugify(text) {
-            var lines = text.split('\n');
-            for (var i = 0; i < lines.length; i++) {
-                var slug = lines[i].toString().toLowerCase()
-                    .replace(/\s+/g, '-') // Replace spaces with -
-                    .replace(/[^\w\-]+/g, '') // Remove all non-word chars
-                    .replace(/\-\-+/g, '-') // Replace multiple - with single -
-                    .replace(/^-+/, '') // Trim - from start of text
-                    .replace(/-+$/, ''); // Trim - from end of text
-                if (slug.length > 1) {
-                    return slug;
-                }
-            }
-            return "";
-        }
-
-        /* initialize *?
-        /* initiate local storage with password */
-        // Feel free to change the drivers order :)
-        localforage.setDriver([
-            localforage.INDEXEDDB,
-            localforage.WEBSQL,
-            localforage.LOCALSTORAGE
-        ])
-
-
-
-        var CY = {};
-        CY.debounce = function (func, wait, immediate) {
-            var timeout;
-            return function () {
-                var context = this,
-                    args = arguments;
-                var later = function () {
-                    timeout = null;
-                    if (!immediate) {
-                        func.apply(context, args);
-                    }
+                doc_uuid = event.currentTarget.id;
+                if (globalPassword != null) {
+                    localforage.getItem(doc_uuid).then(function(getValue) {
+                        doc = JSON.parse(decode(getValue, globalPassword));
+                        c = new showdown.Converter()
+                        app_render.rawHTML = c.makeHtml(doc.markdown);
+                        app_render.doc = doc;
+                    });
                 };
-                var callNow = immediate && !timeout;
-                clearTimeout(timeout);
-                timeout = setTimeout(later, wait || 200);
-                if (callNow) {
+            }
+        },
+        computed: {
+            sortedItems: function() {
+                return this.docs.sort((a, b) => new Date(b.modified) - new Date(a.modified))
+            }
+        }
+    })
+
+    var app_render = new Vue({
+        el: '#app_render',
+        data: {
+            rawHTML: '<b>testing</b>',
+            doc: {},
+        }
+    })
+
+    /* generic functions */
+    // replace all function
+    String.prototype.replaceAll = function(search, replacement) {
+        var target = this;
+        return target.replace(new RegExp(search, 'g'), replacement);
+    };
+
+    function create_UUID() {
+        var dt = new Date().getTime();
+        var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = (dt + Math.random() * 16) % 16 | 0;
+            dt = Math.floor(dt / 16);
+            return (c == 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+        });
+        return uuid;
+    }
+
+
+    // slugify the current text
+    function slugify(text) {
+        var lines = text.split('\n');
+        for (var i = 0; i < lines.length; i++) {
+            var slug = lines[i].toString().toLowerCase()
+                .replace(/\s+/g, '-') // Replace spaces with -
+                .replace(/[^\w\-]+/g, '') // Remove all non-word chars
+                .replace(/\-\-+/g, '-') // Replace multiple - with single -
+                .replace(/^-+/, '') // Trim - from start of text
+                .replace(/-+$/, ''); // Trim - from end of text
+            if (slug.length > 1) {
+                return slug;
+            }
+        }
+        return "";
+    }
+
+    /* initialize *?
+    /* initiate local storage with password */
+    // Feel free to change the drivers order :)
+    localforage.setDriver([
+        localforage.INDEXEDDB,
+        localforage.WEBSQL,
+        localforage.LOCALSTORAGE
+    ])
+
+
+
+    var CY = {};
+    CY.debounce = function(func, wait, immediate) {
+        var timeout;
+        return function() {
+            var context = this,
+                args = arguments;
+            var later = function() {
+                timeout = null;
+                if (!immediate) {
                     func.apply(context, args);
                 }
             };
+            var callNow = immediate && !timeout;
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait || 200);
+            if (callNow) {
+                func.apply(context, args);
+            }
         };
+    };
 
 
-        // Constructor function for Person objects
-        // a = new Document();
-        Document = function () {
-            this.uuid = create_UUID();
-            this.created = new Date();
-            this.modified = new Date();
-            this.title = "";
-            this.markdown = "";
-            this.hash = CryptoJS.SHA256(this.uuid + this.title + this.markdown).toString();
-        }
+    // Constructor function for Person objects
+    // a = new Document();
+    Document = function() {
+        this.uuid = create_UUID();
+        this.created = new Date();
+        this.modified = new Date();
+        this.title = "";
+        this.markdown = "";
+        this.hash = CryptoJS.SHA256(this.uuid + this.title + this.markdown).toString();
+    }
 
 
-        // a = new Document("HI");
-        // CY.updateDocument(a);
+    // a = new Document("HI");
+    // CY.updateDocument(a);
 
-        CY.updateDocument = function (doc) {
+    CY.updateDocument = function(doc) {
+        if (globalPassword != null) {
+            doc.hash = CryptoJS.SHA256(doc.uuid + doc.title + doc.markdown).toString();
+            encoded = encode(JSON.stringify(doc), globalPassword);
+            console.log(encoded);
+            localforage.setItem(doc.uuid, encoded, function() {
+                console.log(
+                    `uploaded ${encoded.length} bytes for '${doc.title}' (${doc.uuid})`);
+
+                var newwindowname = slugify(doc.title);
+                // console.log(newwindowname);
+                if (newwindowname != undefined && newwindowname.length > 0 && "/" + newwindowname !=
+                    window.location
+                    .pathname) {
+                    history.replaceState({}, newwindowname, newwindowname);
+                    document.title = newwindowname + " | " + window.rwtxt.domain;
+                }
+            });
+        };
+    };
+
+    CY.contentEdited = function() {
+        console.log('edited');
+        app_render.doc.modified = new Date();
+        app_render.doc.markdown = document.getElementById("editable").value;
+        app_render.doc.title = document.getElementById("edittitle").value;
+        CY.updateDocument(app_render.doc);
+    };
+    document.getElementById("editable").addEventListener('input', CY.debounce(CY.contentEdited, 200));
+    document.getElementById("edittitle").addEventListener('input', CY.debounce(CY.contentEdited, 200));
+
+    CY.showEditor = function() {
+        app_postlist.docs = [];
+        app_render.rawHTML = "";
+
+        document.getElementById("edittitle").style.display = 'inline-block';
+        document.getElementById("editlink").style.display = 'inline-block';
+        document.getElementById("viewlink").style.display = 'inline-block';
+        document.getElementById("editable").value = app_render.doc.markdown;
+        document.getElementById("edittitle").value = app_render.doc.title;
+        document.getElementById("editable").style.display = 'inline-block'; // needed to add brs at end
+        document.getElementById("edittitle").focus();
+    }
+
+    CY.showView = function() {
+        // hide post list and editor
+        app_postlist.docs = [];
+        document.getElementById("editable").style.display = 'none'; // needed to add brs at end
+        document.getElementById("editlink").style.display = 'inline-block';
+        document.getElementById("viewlink").style.display = 'inline-block';
+        document.getElementById("edittitle").style.display = 'none';
+
+        // show
+        app_render.rawHTML = (new showdown.Converter()).makeHtml(app_render.doc.markdown);
+    }
+
+    CY.showNew = function() {
+        app_render.doc = new Document();
+
+        CY.showEditor();
+    }
+
+    CY.showList = function() {
+        // hide
+        app_render.rawHTML = "";
+        document.getElementById("editable").style.display = 'none'; // needed to add brs at end
+        document.getElementById("editlink").style.display = 'none';
+        document.getElementById("viewlink").style.display = 'none';
+        document.getElementById("edittitle").style.display = 'none';
+
+        // show
+        app_postlist.docs = [];
+        localforage.keys().then(function(keys) {
             if (globalPassword != null) {
-                doc.hash = CryptoJS.SHA256(doc.uuid + doc.title + doc.markdown).toString();
-                encoded = encode(JSON.stringify(doc), globalPassword);
-                console.log(encoded);
-                localforage.setItem(doc.uuid, encoded, function () {
-                    console.log(
-                        `uploaded ${encoded.length} bytes for '${doc.title}' (${doc.uuid})`);
-
-                    var newwindowname = slugify(doc.title);
-                    // console.log(newwindowname);
-                    if (newwindowname != undefined && newwindowname.length > 0 && "/" + newwindowname !=
-                        window.location
-                        .pathname) {
-                        history.replaceState({}, newwindowname, newwindowname);
-                        document.title = newwindowname + " | " + window.rwtxt.domain;
-                    }
+                keys.forEach(function(key) {
+                    localforage.getItem(key).then(function(getValue) {
+                        decoded = decode(getValue,
+                            globalPassword);
+                        console.log(decoded);
+                        if (decoded != null) {
+                            app_postlist.docs.push(JSON.parse(decoded));
+                        }
+                    });
                 });
-            };
-        };
+            }
+        }).catch(function(err) {
+            // This code runs if there were any errors
+            console.log(err);
+        });
+    }
+    document.getElementById("editlink").addEventListener("click", CY.showEditor);
+    document.getElementById("viewlink").addEventListener("click", CY.showView);
+    document.getElementById("listlink").addEventListener("click", CY.showList);
+    document.getElementById("newlink").addEventListener("click", CY.showNew);
 
-        CY.contentEdited = function () {
-            console.log('edited');
-            app_render.doc.modified = new Date();
-            app_render.doc.markdown = document.getElementById("editable").value;
-            app_render.doc.title = document.getElementById("edittitle").value;
-            CY.updateDocument(app_render.doc);
-        };
-        document.getElementById("editable").addEventListener('input', CY.debounce(CY.contentEdited, 200));
-        document.getElementById("edittitle").addEventListener('input', CY.debounce(CY.contentEdited, 200));
 
-        CY.showEditor = function () {
-            app_postlist.docs = [];
-            app_render.rawHTML = "";
+    // TODO: indexing
 
-            document.getElementById("edittitle").style.display = 'inline-block';
-            document.getElementById("editlink").style.display = 'inline-block';
-            document.getElementById("viewlink").style.display = 'inline-block';
-            document.getElementById("editable").value = app_render.doc.markdown;
-            document.getElementById("edittitle").value = app_render.doc.title;
-            document.getElementById("editable").style.display = 'inline-block'; // needed to add brs at end
-            document.getElementById("edittitle").focus();
+    // var documents = [{
+    //     "name": "Lunr",
+    //     "text": "Like Solr, but much smaller, and not as bright."
+    // }, {
+    //     "name": "React",
+    //     "text": "A JavaScript library for building user interfaces."
+    // }, {
+    //     "name": "Lodash",
+    //     "text": "A modern JavaScript utility library delivering modularity, performance & extras."
+    // }]
+    // var idx = lunr(function () {
+    //     this.ref('name')
+    //     this.field('text')
+
+    //     documents.forEach(function (doc) {
+    //         this.add(doc)
+    //     }, this)
+    // })
+
+    // idx.search("bright")
+
+
+
+
+    postData('/', {
+            t: "ping",
+        })
+        .then(data => console.log(JSON.stringify(data))) // JSON-string from `response.json()` call
+        .catch(error => console.log('error: ' + error));
+
+    function postData(url = '', data = {}) {
+        // Default options are marked with *
+        return fetch(url, {
+                method: 'POST', // *GET, POST, PUT, DELETE, etc.
+                mode: 'same-origin', // no-cors, cors, *same-origin
+                cache: 'no-cache', // *default, no-cache, reload, force-cache, only-if-cached
+                credentials: 'same-origin', // include, *same-origin, omit
+                headers: {
+                    'Content-Type': 'application/json',
+                    // 'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                redirect: 'follow', // manual, *follow, error
+                referrer: 'no-referrer', // no-referrer, *client
+                body: JSON.stringify(data), // body data type must match "Content-Type" header
+            })
+            .then(response => response.json()); // parses JSON response into native Javascript objects 
+    }
+
+
+
+
+
+
+    var keySize = 256;
+    var ivSize = 128;
+    var iterations = 100;
+
+    // http://www.adonespitogo.com/articles/encrypting-data-with-cryptojs-aes/
+
+    function encode(msgString, pass) {
+        msg = CryptoJS.enc.Utf16.parse(LZString.compressToUTF16(msgString))
+        var salt = CryptoJS.lib.WordArray.random(128 / 8);
+
+        var key = CryptoJS.PBKDF2(pass, salt, {
+            keySize: keySize / 32,
+            iterations: iterations
+        });
+
+        var iv = CryptoJS.lib.WordArray.random(128 / 8);
+
+        var encrypted = CryptoJS.AES.encrypt(msg, key, {
+            iv: iv,
+            padding: CryptoJS.pad.Pkcs7,
+            mode: CryptoJS.mode.CBC
+
+        });
+
+        // salt, iv will be hex 32 in length
+        // append them to the ciphertext for use  in decryption
+        var transitmessage = salt.toString() + iv.toString() + encrypted.toString();
+        return transitmessage;
+    }
+
+    function decode(transitmessage, pass) {
+        if (transitmessage == null) {
+            console.log("got null transmit message")
+            return null;
         }
+        var salt = CryptoJS.enc.Hex.parse(transitmessage.substr(0, 32));
+        var iv = CryptoJS.enc.Hex.parse(transitmessage.substr(32, 32))
+        var encrypted = transitmessage.substring(64);
 
-        CY.showView = function () {
-            // hide post list and editor
-            app_postlist.docs = [];
-            document.getElementById("editable").style.display = 'none'; // needed to add brs at end
-            document.getElementById("editlink").style.display = 'inline-block';
-            document.getElementById("viewlink").style.display = 'inline-block';
-            document.getElementById("edittitle").style.display = 'none';
+        var key = CryptoJS.PBKDF2(pass, salt, {
+            keySize: keySize / 32,
+            iterations: iterations
+        });
 
-            // show
-            app_render.rawHTML = (new showdown.Converter()).makeHtml(app_render.doc.markdown);
-        }
+        var decrypted = CryptoJS.AES.decrypt(encrypted, key, {
+            iv: iv,
+            padding: CryptoJS.pad.Pkcs7,
+            mode: CryptoJS.mode.CBC
 
-        CY.showNew = function () {
-            app_render.doc = new Document();
+        })
+        return LZString.decompressFromUTF16(decrypted.toString(CryptoJS.enc.Utf16));
+    }
 
-            CY.showEditor();
-        }
 
-        CY.showList = function () {
-            // hide
-            app_render.rawHTML = "";
-            document.getElementById("editable").style.display = 'none'; // needed to add brs at end
-            document.getElementById("editlink").style.display = 'none';
-            document.getElementById("viewlink").style.display = 'none';
-            document.getElementById("edittitle").style.display = 'none';
-
-            // show
-            app_postlist.docs = [];
-            localforage.keys().then(function (keys) {
+    window.onload = function() {
+        // TODO: check password
+        // globalPassword = prompt("Choose a passphrase for encryption:");
+        if (window.location.pathname != "/") {
+            titleToFind = window.location.pathname.substring(1, window.location.pathname.length);
+            localforage.keys().then(function(keys) {
                 if (globalPassword != null) {
-                    keys.forEach(function (key) {
-                        localforage.getItem(key).then(function (getValue) {
+                    keys.forEach(function(key) {
+                        localforage.getItem(key).then(function(getValue) {
                             decoded = decode(getValue,
                                 globalPassword);
-                            console.log(decoded);
                             if (decoded != null) {
-                                app_postlist.docs.push(JSON.parse(decoded));
+                                doc = JSON.parse(decoded)
+                                if (slugify(doc.title) == slugify(titleToFind)) {
+                                    app_render.doc = doc;
+                                    console.log(app_render.doc);
+                                    CY.showView();
+                                }
                             }
                         });
                     });
                 }
-            }).catch(function (err) {
+            }).catch(function(err) {
                 // This code runs if there were any errors
                 console.log(err);
             });
+        } else {
+            app_render.doc = new Document();
+            CY.showList();
         }
-        document.getElementById("editlink").addEventListener("click", CY.showEditor);
-        document.getElementById("viewlink").addEventListener("click", CY.showView);
-        document.getElementById("listlink").addEventListener("click", CY.showList);
-        document.getElementById("newlink").addEventListener("click", CY.showNew);
-
-
-        // TODO: indexing
-
-        // var documents = [{
-        //     "name": "Lunr",
-        //     "text": "Like Solr, but much smaller, and not as bright."
-        // }, {
-        //     "name": "React",
-        //     "text": "A JavaScript library for building user interfaces."
-        // }, {
-        //     "name": "Lodash",
-        //     "text": "A modern JavaScript utility library delivering modularity, performance & extras."
-        // }]
-        // var idx = lunr(function () {
-        //     this.ref('name')
-        //     this.field('text')
-
-        //     documents.forEach(function (doc) {
-        //         this.add(doc)
-        //     }, this)
-        // })
-
-        // idx.search("bright")
-
-
-
-
-        postData('/', {
-                t: "ping",
-            })
-            .then(data => console.log(JSON.stringify(data))) // JSON-string from `response.json()` call
-            .catch(error => console.log('error: ' + error));
-
-        function postData(url = '', data = {}) {
-            // Default options are marked with *
-            return fetch(url, {
-                    method: 'POST', // *GET, POST, PUT, DELETE, etc.
-                    mode: 'same-origin', // no-cors, cors, *same-origin
-                    cache: 'no-cache', // *default, no-cache, reload, force-cache, only-if-cached
-                    credentials: 'same-origin', // include, *same-origin, omit
-                    headers: {
-                        'Content-Type': 'application/json',
-                        // 'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    redirect: 'follow', // manual, *follow, error
-                    referrer: 'no-referrer', // no-referrer, *client
-                    body: JSON.stringify(data), // body data type must match "Content-Type" header
-                })
-                .then(response => response.json()); // parses JSON response into native Javascript objects 
-        }
-
-
-
-
-
-
-        var keySize = 256;
-        var ivSize = 128;
-        var iterations = 100;
-
-        // http://www.adonespitogo.com/articles/encrypting-data-with-cryptojs-aes/
-
-        function encode(msgString, pass) {
-            msg = CryptoJS.enc.Utf16.parse(LZString.compressToUTF16(msgString))
-            var salt = CryptoJS.lib.WordArray.random(128 / 8);
-
-            var key = CryptoJS.PBKDF2(pass, salt, {
-                keySize: keySize / 32,
-                iterations: iterations
-            });
-
-            var iv = CryptoJS.lib.WordArray.random(128 / 8);
-
-            var encrypted = CryptoJS.AES.encrypt(msg, key, {
-                iv: iv,
-                padding: CryptoJS.pad.Pkcs7,
-                mode: CryptoJS.mode.CBC
-
-            });
-
-            // salt, iv will be hex 32 in length
-            // append them to the ciphertext for use  in decryption
-            var transitmessage = salt.toString() + iv.toString() + encrypted.toString();
-            return transitmessage;
-        }
-
-        function decode(transitmessage, pass) {
-            if (transitmessage == null) {
-                console.log("got null transmit message")
-                return null;
-            }
-            var salt = CryptoJS.enc.Hex.parse(transitmessage.substr(0, 32));
-            var iv = CryptoJS.enc.Hex.parse(transitmessage.substr(32, 32))
-            var encrypted = transitmessage.substring(64);
-
-            var key = CryptoJS.PBKDF2(pass, salt, {
-                keySize: keySize / 32,
-                iterations: iterations
-            });
-
-            var decrypted = CryptoJS.AES.decrypt(encrypted, key, {
-                iv: iv,
-                padding: CryptoJS.pad.Pkcs7,
-                mode: CryptoJS.mode.CBC
-
-            })
-            return LZString.decompressFromUTF16(decrypted.toString(CryptoJS.enc.Utf16));
-        }
-
-
-        window.onload = function () {
-            // TODO: check password
-            // globalPassword = prompt("Choose a passphrase for encryption:");
-            if (window.location.pathname != "/") {
-                titleToFind = window.location.pathname.substring(1, window.location.pathname.length);
-                localforage.keys().then(function (keys) {
-                    if (globalPassword != null) {
-                        keys.forEach(function (key) {
-                            localforage.getItem(key).then(function (getValue) {
-                                decoded = decode(getValue,
-                                    globalPassword);
-                                if (decoded != null) {
-                                    doc = JSON.parse(decoded)
-                                    if (slugify(doc.title) == slugify(titleToFind)) {
-                                        app_render.doc = doc;
-                                        console.log(app_render.doc);
-                                        CY.showView();
-                                    }
-                                }
-                            });
-                        });
-                    }
-                }).catch(function (err) {
-                    // This code runs if there were any errors
-                    console.log(err);
-                });
-            } else {
-                app_render.doc = new Document();
-                CY.showList();
-            }
-        }
+    }
     </script>
-
 </body>
 
 </html>
