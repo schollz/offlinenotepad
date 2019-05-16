@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/schollz/logger"
@@ -120,6 +121,59 @@ Disallow: /`))
 		}
 		w.Header().Set("Content-Type", kind)
 		w.Write(b)
+	}
+	return
+}
+
+var wsupgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
+type Payload struct {
+	Message string `json:"message"`
+}
+
+type Connections struct {
+	cs map[string]*websocket.Conn
+	sync.RWMutex
+}
+
+var wsConnections Connections
+
+func handleWebsocket(w http.ResponseWriter, r *http.Request) (err error) {
+
+	// handle websockets on this page
+	c, errUpgrade := wsupgrader.Upgrade(w, r, nil)
+	if errUpgrade != nil {
+		return errUpgrade
+	}
+	defer c.Close()
+
+	log.Debugf("%s connected\n", c.RemoteAddr().String())
+	wsConnections.Lock()
+	if len(wsConnections.cs) == 0 {
+		wsConnections.cs = make(map[string]*websocket.Conn)
+	}
+	wsConnections.cs[c.RemoteAddr().String()] = c
+	wsConnections.Unlock()
+	defer func() {
+		wsConnections.Lock()
+		delete(wsConnections.cs, c.RemoteAddr().String())
+		wsConnections.Unlock()
+	}()
+
+	var p Payload
+	for {
+		err := c.ReadJSON(&p)
+		if err != nil {
+			log.Debug("read:", err)
+			break
+		}
+		log.Debugf("recv: %v", p)
 	}
 	return
 }
