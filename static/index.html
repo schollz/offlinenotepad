@@ -36,7 +36,7 @@
 
 <body>
     <main id="app">
-        <span class="fr fonty" style="float:right; margin-top:-1em; padding-bottom:0.5em; margin-bottom:0.5em;" v-show="showMenu">
+        <span class="fr fonty" style="float:right; margin-top:-1em; padding-bottom:0.5em; margin-bottom:0.5em;" v-show="showViewOrEdit">
             <a id='viewlink' v-on:click="showView = true">View</a>&nbsp;
             <a id='editlink' v-on:click="showEdit = true">Edit</a>
         </span>
@@ -46,7 +46,7 @@
         </span>
         <br>
         <div class="list" v-show="showList">
-            <div v-for="doc in sortedItems">
+            <div v-for="doc in sortedDocs">
                 <div v-bind:id="doc.uuid" v-on:click="select($event)"><span v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
                 <div>{{doc.created}}</div>
             </div>
@@ -215,7 +215,7 @@
     var app = new Vue({
         el: '#app',
         data: {
-            docs: {},
+            docs: [],
             doc: {},
             sortedItems: [],
             showView: false,
@@ -230,53 +230,60 @@
             select: function(event) {
                 doc_uuid = event.currentTarget.id;
                 console.log(`clicked ${doc_uuid}`)
-                var _this = this;
-                this.docs.forEach(function(doc) {
-                    if (doc_uuid == doc.uuid) {
-                        console.log(doc.uuid + ' = ' + doc_uuid);
-                        _this.doc = doc;
-                        _this.showView = true;
+                for (i = 0; i < this.docs.length; i++) {
+                    if (this.docs[i].uuid = doc_uuid) {
+                        this.doc = this.docs[i];
+                        this.showView = true;
+                        break
                     }
-                })
+                }
             },
             updateDoc: debounce(function() {
                 console.log(this.doc.title);
-                if (this.showMenu) {
+                if (this.showEdit) { // only update if in edit mode
                     // update the URL
                     updateURL(this.doc.title, this.doc.uuid);
+                    // update in the local storage
                     updateDocument(this.doc);
+                    // update in the server
+                    // TODO
+                    // update in the app
+                    foundDoc = false;
+                    for (i = 0; i < this.docs.length; i++) {
+                        if (this.docs[i].uuid = this.doc.uuid) {
+                            this.docs[i] = this.doc;
+                            foundDoc = true
+                            break
+                        }
+                    }
+                    if (!foundDoc) {
+                        this.docs.push(this.doc);
+                        this.docs = this.docs.sort(function(a, b) {
+                            return new Date(b.modified) - new Date(a.modified);
+                        });
+                    }
                 }
             }, 200),
         },
         computed: {
-            showMenu: function() {
+            showViewOrEdit: function() {
                 return this.showView || this.showEdit;
+            },
+            sortedDocs: function() {
+                return this.docs.sort(function(a, b) {
+                    return new Date(b.modified) - new Date(a.modified);
+                });
             }
         },
         watch: {
-            docs: function(val) {
-                var docList = [];
-                console.log("generating sorted")
-                for (key in this.docs) {
-                    console.log("key: " + key)
-                    var doc = this.docs[key];
-                    docList.push(doc);
-                }
-                console.log(docList);
-                docList.sort((a, b) => new Date(b.modified) - new Date(a.modified));
-                this.sortedItems = docList;
-            },
             showView: function(val) {
                 if (val == true) {
                     this.showEdit = false;
-                    this.showList = false;
-                    this.doc.rawHTML = (new showdown.Converter()).makeHtml(this.doc.markdown);
                 }
             },
             showEdit: function(val) {
                 if (val == true) {
                     this.showView = false;
-                    this.showList = false;
                 }
             },
             showList: function(val) {
@@ -286,8 +293,9 @@
                     updateURL("/", "/");
                 }
             },
-            showMenu: function(val) {
+            showViewOrEdit: function(val) {
                 if (val == true) {
+                    this.showList = false;
                     updateURL(this.doc.title, this.doc.uuid);
                 }
             },
@@ -404,9 +412,12 @@
                         if (decoded != null) {
                             doc = JSON.parse(decoded);
                             console.log("loaded: " + doc.uuid + (doc != null));
-                            app.docs[doc.uuid] = doc;
+                            app.docs.push(doc);
                         }
                     });
+                });
+                app.docs = app.docs.sort(function(a, b) {
+                    return new Date(b.modified) - new Date(a.modified);
                 });
             }
         }).catch(function(err) {
