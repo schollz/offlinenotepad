@@ -32,6 +32,11 @@
     <meta name='twitter:creator' content='@paul_kinlan'>
     <link rel='stylesheet' href='/static/css/style.css'>
     <!-- <script src='/static/js/pwacompat.min.js' async></script> -->
+    <style>
+    [v-cloak] {
+        display: none
+    }
+    </style>
 </head>
 
 <body>
@@ -45,13 +50,13 @@
             <a id='listlink' v-on:click="showList = true">List</a>&nbsp;
         </span>
         <br>
-        <div class="list" v-show="showList">
+        <div class="list" v-show="showList" v-cloak>
             <div v-for="doc in sortedDocs">
                 <div v-bind:id="doc.uuid" v-on:click="select($event)"><span v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
                 <div>{{doc.created}}</div>
             </div>
         </div>
-        <div class="fonty" v-show="showView">
+        <div class="fonty" v-show="showView" v-cloak>
             <h1 v-if="doc.title">{{doc.title}}</h1>
             <h1 v-else>{{doc.uuid}}</h1>
             <div v-html="doc.rawHTML"></div>
@@ -241,6 +246,8 @@
             updateDoc: debounce(function() {
                 console.log(this.doc.title);
                 if (this.showEdit) { // only update if in edit mode
+                    this.doc.rawHTML = (new showdown.Converter()).makeHtml(this.doc.markdown)
+
                     // update the URL
                     updateURL(this.doc.title, this.doc.uuid);
                     // update in the local storage
@@ -402,7 +409,7 @@
     // document.getElementById("listlink").addEventListener("click", CY.showList);
     // document.getElementById("newlink").addEventListener("click", CY.showNew);
     loadDocs = function() {
-        app.docs = {};
+        app.docs = [];
         localforage.keys().then(function(keys) {
             if (globalPassword != null) {
                 keys.forEach(function(key) {
