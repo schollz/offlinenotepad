@@ -31,37 +31,35 @@
     <meta name='twitter:image' content='https://airhorner.com/images/touch/Airhorner_192.png'>
     <meta name='twitter:creator' content='@paul_kinlan'>
     <link rel='stylesheet' href='/static/css/style.css'>
-    <script src='/static/js/pwacompat.min.js' async></script>
+    <!-- <script src='/static/js/pwacompat.min.js' async></script> -->
 </head>
 
 <body>
-    <main>
-        <span class="fr fonty" style="float:right; margin-top:-1em; padding-bottom:0.5em; margin-bottom:0.5em;">
-            <a id='viewlink'>View</a>&nbsp;
-            <a id='editlink'>Edit</a>
+    <main id="app">
+        <span class="fr fonty" style="float:right; margin-top:-1em; padding-bottom:0.5em; margin-bottom:0.5em;" v-show="showMenu">
+            <a id='viewlink' v-on:click="showView = true">View</a>&nbsp;
+            <a id='editlink' v-on:click="showEdit = true">Edit</a>
         </span>
         <span class="fr fonty" style="float:left; margin-top:-1em; padding-bottom:0.5em; margin-bottom:0.5em;">
-            <a id='newlink'>New</a>&nbsp;
-            <a id='listlink'>List</a>&nbsp;
+            <a id='newlink' v-on:click="makeNew">New</a>&nbsp;
+            <a id='listlink' v-on:click="showList = true">List</a>&nbsp;
         </span>
         <br>
-        <div id="app_postlist" class="list" v-if="show">
+        <div class="list" v-show="showList">
             <div v-for="doc in sortedItems">
                 <div v-bind:id="doc.uuid" v-on:click="select($event)"><span v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
                 <div>{{doc.created}}</div>
             </div>
         </div>
-        <div class="fonty" id="app_render" v-if="show">
+        <div class="fonty" v-show="showView">
             <h1 v-if="doc.title">{{doc.title}}</h1>
             <h1 v-else>{{doc.uuid}}</h1>
-            <div v-html="rawHTML"></div>
+            <div v-html="doc.rawHTML"></div>
         </div>
-        <input id="edittitle" style="width:100%;font-size:24px;border:none;padding-bottom:0.5em;display:none;" placeholder="Title">
-        <textarea class="writing" id="editable" style="-webkit-user-select:text;display:none;" rows=110 placeholder="Click here and start writing" autofocus>
+        <input id="edittitle" v-show="showEdit" style="width:100%;font-size:24px;border:none;padding-bottom:0.5em;display:none;" placeholder="Title" v-model="doc.title" v-on:keyup="updateDoc">
+        <textarea class="writing" v-show="showEdit" id="editable" style="-webkit-user-select:text;display:none;" rows=110 placeholder="Click here and start writing" autofocus v-on:keyup="updateDoc" v-model="doc.markdown">
+            {{doc.markdown}}
         </textarea>
-        <!-- <div id='installer'>
-            <button class='button'>Install</button>
-        </div> -->
     </main>
     <script src="/static/js/vue.js"></script>
     <script src="/static/js/lz-string.js"></script>
@@ -86,88 +84,50 @@
         }
     </script> -->
     <script>
-    /* globals */
+    /* init */
+    // initialize local storage
+    localforage.setDriver([
+        localforage.INDEXEDDB,
+        localforage.WEBSQL,
+        localforage.LOCALSTORAGE
+    ])
+
+    /* 
+    globals */
     var globalPassword = "zack";
     var globalUser = "z"
+    var socket; // websocket
 
-    /* websockets */
-    var socket;
-    const socketMessageListener = (event) => {
-        console.log(event.data);
-        var data = JSON.parse(event.data);
-        if (data.message == "reload") {
-            location.reload();
-        }
-    };
-    const socketOpenListener = (event) => {
-        console.log('Connected');
-        CY.updateServer();
-    };
-    const socketCloseListener = (event) => {
-        if (socket) {
-            console.log('Disconnected.');
-        }
-        var url = window.origin.replace("http", "ws") + '/ws';
-        socket = new WebSocket(url);
-        socket.addEventListener('open', socketOpenListener);
-        socket.addEventListener('message', socketMessageListener);
-        socket.addEventListener('close', socketCloseListener);
-    };
-    socketCloseListener();
-
-
-    /* vue apps */
-    var app_postlist = new Vue({
-        el: '#app_postlist',
-        data: {
-            docs: [],
-            show: false
-        },
-        methods: {
-            select: function(event) {
-                // hide post list and editor
-                app_postlist.docs = [];
-                document.getElementById("editable").style.display = 'none'; // needed to add brs at end
-                document.getElementById("edittitle").style.display = 'none';
-
-                document.getElementById("editlink").style.display = 'inline-block';
-                document.getElementById("viewlink").style.display = 'inline-block';
-
-                doc_uuid = event.currentTarget.id;
-                if (globalPassword != null) {
-                    localforage.getItem(doc_uuid).then(function(getValue) {
-                        doc = JSON.parse(decode(getValue, globalPassword));
-                        c = new showdown.Converter()
-                        app_render.rawHTML = c.makeHtml(doc.markdown);
-                        app_render.doc = doc;
-                        CY.showView();
-                    });
-                };
-            }
-        },
-        computed: {
-            sortedItems: function() {
-                return this.docs.sort((a, b) => new Date(b.modified) - new Date(a.modified))
-            }
-        }
-    })
-
-    var app_render = new Vue({
-        el: '#app_render',
-        data: {
-            rawHTML: '<b>testing</b>',
-            show: false,
-            doc: {},
-        }
-    })
 
     /* generic functions */
-    // replace all function
+    // debounce function
+    debounce = function(func, wait, immediate) {
+        var timeout;
+        return function() {
+            var context = this,
+                args = arguments;
+            var later = function() {
+                timeout = null;
+                if (!immediate) {
+                    func.apply(context, args);
+                }
+            };
+            var callNow = immediate && !timeout;
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait || 200);
+            if (callNow) {
+                func.apply(context, args);
+            }
+        };
+    };
+
+    // replace all
     String.prototype.replaceAll = function(search, replacement) {
         var target = this;
         return target.replace(new RegExp(search, 'g'), replacement);
     };
 
+    // create UUID
     function create_UUID() {
         var dt = new Date().getTime();
         var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -196,37 +156,152 @@
         return "";
     }
 
-    /* initialize *?
-    /* initiate local storage with password */
-    // Feel free to change the drivers order :)
-    localforage.setDriver([
-        localforage.INDEXEDDB,
-        localforage.WEBSQL,
-        localforage.LOCALSTORAGE
-    ])
+    // update the history
+    function updateURL(url1, url2) {
+        var newwindowname = slugify(url1);
+        if (newwindowname == "") {
+            newwindowname = url2;
+        }
+        // console.log(newwindowname);
+        if (newwindowname != undefined && newwindowname.length > 0 && "/" + newwindowname !=
+            window.location
+            .pathname && newwindowname != window.location.pathname) {
+            history.replaceState({}, newwindowname, newwindowname);
+            document.title = newwindowname;
+        }
+    }
+
+    /* websockets */
+    const socketMessageListener = (event) => {
+        console.log(event.data);
+        var data = JSON.parse(event.data);
+        if (data.message == "reload") {
+            location.reload();
+        }
+    };
+    const socketOpenListener = (event) => {
+        console.log('Connected');
+        // CY.updateServer();
+    };
+    const socketCloseListener = (event) => {
+        if (socket) {
+            console.log('Disconnected.');
+        }
+        var url = window.origin.replace("http", "ws") + '/ws';
+        socket = new WebSocket(url);
+        socket.addEventListener('open', socketOpenListener);
+        socket.addEventListener('message', socketMessageListener);
+        socket.addEventListener('close', socketCloseListener);
+    };
+
+
+
+    // updateDocument saves a new document to local storage and server
+    updateDocument = function(doc) {
+        if (globalPassword != null) {
+            doc.hash = CryptoJS.SHA256(doc.uuid + doc.title + doc.markdown).toString();
+            encoded = encode(JSON.stringify(doc), globalPassword);
+            console.log(encoded);
+            localforage.setItem(doc.uuid, encoded, function() {
+                console.log(
+                    `uploaded ${encoded.length} bytes for '${doc.title}' (${doc.uuid})`);
+            });
+        };
+    };
+
+
+
+    /* vue apps */
+    var app = new Vue({
+        el: '#app',
+        data: {
+            docs: {},
+            doc: {},
+            sortedItems: [],
+            showView: false,
+            showEdit: false,
+            showList: false,
+        },
+        methods: {
+            makeNew: function(e) {
+                this.doc = new Document();
+                this.showEdit = true;
+            },
+            select: function(event) {
+                doc_uuid = event.currentTarget.id;
+                console.log(`clicked ${doc_uuid}`)
+                var _this = this;
+                this.docs.forEach(function(doc) {
+                    if (doc_uuid == doc.uuid) {
+                        console.log(doc.uuid + ' = ' + doc_uuid);
+                        _this.doc = doc;
+                        _this.showView = true;
+                    }
+                })
+            },
+            updateDoc: debounce(function() {
+                console.log(this.doc.title);
+                if (this.showMenu) {
+                    // update the URL
+                    updateURL(this.doc.title, this.doc.uuid);
+                    updateDocument(this.doc);
+                }
+            }, 200),
+        },
+        computed: {
+            showMenu: function() {
+                return this.showView || this.showEdit;
+            }
+        },
+        watch: {
+            docs: function(val) {
+                var docList = [];
+                console.log("generating sorted")
+                for (key in this.docs) {
+                    console.log("key: " + key)
+                    var doc = this.docs[key];
+                    docList.push(doc);
+                }
+                console.log(docList);
+                docList.sort((a, b) => new Date(b.modified) - new Date(a.modified));
+                this.sortedItems = docList;
+            },
+            showView: function(val) {
+                if (val == true) {
+                    this.showEdit = false;
+                    this.showList = false;
+                    this.doc.rawHTML = (new showdown.Converter()).makeHtml(this.doc.markdown);
+                }
+            },
+            showEdit: function(val) {
+                if (val == true) {
+                    this.showView = false;
+                    this.showList = false;
+                }
+            },
+            showList: function(val) {
+                if (val == true) {
+                    this.showEdit = false;
+                    this.showView = false;
+                    updateURL("/", "/");
+                }
+            },
+            showMenu: function(val) {
+                if (val == true) {
+                    updateURL(this.doc.title, this.doc.uuid);
+                }
+            },
+        }
+    })
+
+
+
+
 
 
 
     var CY = {};
-    CY.debounce = function(func, wait, immediate) {
-        var timeout;
-        return function() {
-            var context = this,
-                args = arguments;
-            var later = function() {
-                timeout = null;
-                if (!immediate) {
-                    func.apply(context, args);
-                }
-            };
-            var callNow = immediate && !timeout;
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait || 200);
-            if (callNow) {
-                func.apply(context, args);
-            }
-        };
-    };
+
 
 
     // Constructor function for Person objects
@@ -241,95 +316,95 @@
     }
 
 
-    // a = new Document("HI");
-    // CY.updateDocument(a);
+    // CY.contentEdited = function() {
+    //     console.log('edited');
+    //     app_render.doc.modified = new Date();
+    //     app_render.doc.markdown = document.getElementById("editable").value;
+    //     app_render.doc.title = document.getElementById("edittitle").value;
+    //     CY.updateDocument(app_render.doc);
+    // };
 
-    CY.updateDocument = function(doc) {
-        if (globalPassword != null) {
-            doc.hash = CryptoJS.SHA256(doc.uuid + doc.title + doc.markdown).toString();
-            encoded = encode(JSON.stringify(doc), globalPassword);
-            console.log(encoded);
-            localforage.setItem(doc.uuid, encoded, function() {
-                console.log(
-                    `uploaded ${encoded.length} bytes for '${doc.title}' (${doc.uuid})`);
-                var newwindowname = slugify(doc.title);
-                if (newwindowname == "") {
-                    newwindowname = doc.uuid;
-                }
-                // console.log(newwindowname);
-                if (newwindowname != undefined && newwindowname.length > 0 && "/" + newwindowname !=
-                    window.location
-                    .pathname) {
-                    history.replaceState({}, newwindowname, newwindowname);
-                    document.title = newwindowname;
-                }
-            });
-        };
-    };
+    // document.getElementById("editable").addEventListener('input', CY.debounce(CY.contentEdited, 200));
+    // document.getElementById("edittitle").addEventListener('input', CY.debounce(CY.contentEdited, 200));
 
-    CY.contentEdited = function() {
-        console.log('edited');
-        app_render.doc.modified = new Date();
-        app_render.doc.markdown = document.getElementById("editable").value;
-        app_render.doc.title = document.getElementById("edittitle").value;
-        CY.updateDocument(app_render.doc);
-    };
-    document.getElementById("editable").addEventListener('input', CY.debounce(CY.contentEdited, 200));
-    document.getElementById("edittitle").addEventListener('input', CY.debounce(CY.contentEdited, 200));
+    // CY.showEditor = function() {
+    //     app_render.show = false;
+    //     app_postlist.show = false;
 
-    CY.showEditor = function() {
-        app_render.show = false;
-        app_postlist.show = false;
+    //     document.getElementById("edittitle").style.display = 'inline-block';
+    //     document.getElementById("editlink").style.display = 'inline-block';
+    //     document.getElementById("viewlink").style.display = 'inline-block';
+    //     document.getElementById("editable").value = app_render.doc.markdown;
+    //     document.getElementById("edittitle").value = app_render.doc.title;
+    //     document.getElementById("editable").style.display = 'inline-block'; // needed to add brs at end
+    //     document.getElementById("edittitle").focus();
+    // }
 
-        document.getElementById("edittitle").style.display = 'inline-block';
-        document.getElementById("editlink").style.display = 'inline-block';
-        document.getElementById("viewlink").style.display = 'inline-block';
-        document.getElementById("editable").value = app_render.doc.markdown;
-        document.getElementById("edittitle").value = app_render.doc.title;
-        document.getElementById("editable").style.display = 'inline-block'; // needed to add brs at end
-        document.getElementById("edittitle").focus();
-    }
+    // CY.showView = function() {
+    //     // hide post list and editor
+    //     app_postlist.show = false;
+    //     document.getElementById("editable").style.display = 'none'; // needed to add brs at end
+    //     document.getElementById("editlink").style.display = 'inline-block';
+    //     document.getElementById("viewlink").style.display = 'inline-block';
+    //     document.getElementById("edittitle").style.display = 'none';
 
-    CY.showView = function() {
-        // hide post list and editor
-        app_postlist.show = false;
-        document.getElementById("editable").style.display = 'none'; // needed to add brs at end
-        document.getElementById("editlink").style.display = 'inline-block';
-        document.getElementById("viewlink").style.display = 'inline-block';
-        document.getElementById("edittitle").style.display = 'none';
+    //     // show
+    //     app_render.rawHTML = (new showdown.Converter()).makeHtml(app_render.doc.markdown);
+    //     app_render.show = true;
+    //     CY.updateDocument(app_render.doc);
+    // }
 
-        // show
-        app_render.rawHTML = (new showdown.Converter()).makeHtml(app_render.doc.markdown);
-        app_render.show = true;
-        CY.updateDocument(app_render.doc);
-    }
+    // CY.showNew = function() {
+    //     app_render.doc = new Document();
 
-    CY.showNew = function() {
-        app_render.doc = new Document();
+    //     CY.showEditor();
+    // }
 
-        CY.showEditor();
-    }
+    // CY.showList = function() {
+    //     // hide
+    //     app_render.show = false;
+    //     app_postlist.show = true;
+    //     document.getElementById("editable").style.display = 'none'; // needed to add brs at end
+    //     document.getElementById("editlink").style.display = 'none';
+    //     document.getElementById("viewlink").style.display = 'none';
+    //     document.getElementById("edittitle").style.display = 'none';
 
-    CY.showList = function() {
-        // hide
-        app_render.show = false;
-        app_postlist.show = true;
-        document.getElementById("editable").style.display = 'none'; // needed to add brs at end
-        document.getElementById("editlink").style.display = 'none';
-        document.getElementById("viewlink").style.display = 'none';
-        document.getElementById("edittitle").style.display = 'none';
-
-        // show
-        app_postlist.docs = [];
+    //     // show
+    //     app_postlist.docs = [];
+    //     localforage.keys().then(function(keys) {
+    //         if (globalPassword != null) {
+    //             keys.forEach(function(key) {
+    //                 localforage.getItem(key).then(function(getValue) {
+    //                     decoded = decode(getValue,
+    //                         globalPassword);
+    //                     console.log(decoded);
+    //                     if (decoded != null) {
+    //                         app_postlist.docs.push(JSON.parse(decoded));
+    //                     }
+    //                 });
+    //             });
+    //         }
+    //     }).catch(function(err) {
+    //         // This code runs if there were any errors
+    //         console.log(err);
+    //     });
+    // }
+    // document.getElementById("editlink").addEventListener("click", CY.showEditor);
+    // document.getElementById("viewlink").addEventListener("click", CY.showView);
+    // document.getElementById("listlink").addEventListener("click", CY.showList);
+    // document.getElementById("newlink").addEventListener("click", CY.showNew);
+    loadDocs = function() {
+        app.docs = {};
         localforage.keys().then(function(keys) {
             if (globalPassword != null) {
                 keys.forEach(function(key) {
                     localforage.getItem(key).then(function(getValue) {
                         decoded = decode(getValue,
                             globalPassword);
-                        console.log(decoded);
                         if (decoded != null) {
-                            app_postlist.docs.push(JSON.parse(decoded));
+                            doc = JSON.parse(decoded);
+                            console.log("loaded: " + doc.uuid + (doc != null));
+                            app.docs[doc.uuid] = doc;
                         }
                     });
                 });
@@ -339,11 +414,6 @@
             console.log(err);
         });
     }
-    document.getElementById("editlink").addEventListener("click", CY.showEditor);
-    document.getElementById("viewlink").addEventListener("click", CY.showView);
-    document.getElementById("listlink").addEventListener("click", CY.showList);
-    document.getElementById("newlink").addEventListener("click", CY.showNew);
-
 
     // TODO: indexing
 
@@ -454,35 +524,39 @@
     }
 
 
-    CY.updateServer = function() {
-        // offer the server all of the current hashes
-        localforage.keys().then(function(keys) {
-            if (globalPassword != null) {
-                keys.forEach(function(key) {
-                    localforage.getItem(key).then(function(getValue) {
-                        decoded = decode(getValue,
-                            globalPassword);
-                        if (decoded != null) {
-                            doc = JSON.parse(decoded)
-                            socket.send(JSON.stringify({
-                                "t": "offer",
-                                "u": globalUser,
-                                "h": doc.hash,
-                                "u": doc.uuid,
-                            }));
-                        }
-                    });
-                });
-            }
-        }).catch(function(err) {
-            // This code runs if there were any errors
-            console.log(err);
-        });
-    }
+    // CY.updateServer = function() {
+    //     // offer the server all of the current hashes
+    //     localforage.keys().then(function(keys) {
+    //         if (globalPassword != null) {
+    //             keys.forEach(function(key) {
+    //                 localforage.getItem(key).then(function(getValue) {
+    //                     decoded = decode(getValue,
+    //                         globalPassword);
+    //                     if (decoded != null) {
+    //                         doc = JSON.parse(decoded)
+    //                         socket.send(JSON.stringify({
+    //                             "t": "offer",
+    //                             "u": globalUser,
+    //                             "h": doc.hash,
+    //                             "u": doc.uuid,
+    //                         }));
+    //                     }
+    //                 });
+    //             });
+    //         }
+    //     }).catch(function(err) {
+    //         // This code runs if there were any errors
+    //         console.log(err);
+    //     });
+    // }
 
     window.onload = function() {
         // TODO: check password
         // globalPassword = prompt("Choose a passphrase for encryption:");
+        socketCloseListener();
+        app.doc = new Document();
+        loadDocs();
+        var loadedDoc = false;
         if (window.location.pathname != "/") {
             titleToFind = window.location.pathname.substring(1, window.location.pathname.length);
             localforage.keys().then(function(keys) {
@@ -494,9 +568,10 @@
                             if (decoded != null) {
                                 doc = JSON.parse(decoded)
                                 if (slugify(doc.title) == slugify(titleToFind) || doc.uuid == titleToFind) {
-                                    app_render.doc = doc;
-                                    console.log(app_render.doc);
-                                    CY.showView();
+                                    app.doc = doc;
+                                    console.log(app.doc);
+                                    app.showView = true;
+                                    loadedDoc = true;
                                 }
                             }
                         });
@@ -506,10 +581,11 @@
                 // This code runs if there were any errors
                 console.log(err);
             });
-        } else {
-            app_render.doc = new Document();
-            CY.showList();
         }
+        if (loadedDoc == false) {
+            app.showList = true;
+        }
+
     }
     </script>
 </body>
