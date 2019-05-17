@@ -8,7 +8,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -77,6 +76,8 @@ func handle(w http.ResponseWriter, r *http.Request) (err error) {
 		// special path
 		w.Write([]byte(`User-agent: * 
 Disallow: /`))
+	} else if r.URL.Path == "/ws" {
+		return handleWebsocket(w, r)
 	} else if r.URL.Path == "/favicon.ico" {
 		// TODO
 	} else if r.URL.Path == "/sitemap.xml" {
@@ -135,15 +136,12 @@ var wsupgrader = websocket.Upgrader{
 }
 
 type Payload struct {
-	Message string `json:"message"`
+	Type string `json:"t,omitempty"`
+	User string `json:"u,omitempty"`
+	Hash string `json:"h,omitempty"`
+	UUID string `json:"i,omitempty"`
+	Data string `json:"m,omitempty"`
 }
-
-type Connections struct {
-	cs map[string]*websocket.Conn
-	sync.RWMutex
-}
-
-var wsConnections Connections
 
 func handleWebsocket(w http.ResponseWriter, r *http.Request) (err error) {
 
@@ -155,17 +153,6 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request) (err error) {
 	defer c.Close()
 
 	log.Debugf("%s connected\n", c.RemoteAddr().String())
-	wsConnections.Lock()
-	if len(wsConnections.cs) == 0 {
-		wsConnections.cs = make(map[string]*websocket.Conn)
-	}
-	wsConnections.cs[c.RemoteAddr().String()] = c
-	wsConnections.Unlock()
-	defer func() {
-		wsConnections.Lock()
-		delete(wsConnections.cs, c.RemoteAddr().String())
-		wsConnections.Unlock()
-	}()
 
 	var p Payload
 	for {

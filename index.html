@@ -45,14 +45,14 @@
             <a id='listlink'>List</a>&nbsp;
         </span>
         <br>
-        <div id="app_postlist" class="list">
+        <div id="app_postlist" class="list" v-if="show">
             <div v-for="doc in sortedItems">
                 <div v-bind:id="doc.uuid" v-on:click="select($event)">{{doc.title}}</div>
                 <div>{{doc.created}}</div>
             </div>
         </div>
-        <div class="fonty" id="app_render">
-            <h1 v-if="rawHTML">{{doc.title}}</h1>
+        <div class="fonty" id="app_render" v-if="show">
+            <h1>{{doc.title}}</h1>
             <div v-html="rawHTML"></div>
         </div>
         <input id="edittitle" style="width:100%;font-size:24px;border:none;padding-bottom:0.5em;display:none;" placeholder="Title">
@@ -92,67 +92,36 @@
     var globalPassword = "zack";
 
     /* websockets */
-
-
-    var wsupgrader = websocket.Upgrader {
-        ReadBufferSize: 1024,
-        WriteBufferSize: 1024,
-        CheckOrigin: func(r * http.Request) bool {
-            return true
-        },
-    }
-
-    type Payload struct {
-        Message string `json:"message"`
-    }
-
-    type Connections struct {
-        cs map[string] * websocket.Conn
-        sync.RWMutex
-    }
-
-    var wsConnections Connections
-
-    func handleWebsocket(w http.ResponseWriter, r * http.Request)(err error) {
-
-        // handle websockets on this page
-        c,
-        errUpgrade: = wsupgrader.Upgrade(w, r, nil)
-        if errUpgrade != nil {
-            return errUpgrade
+    var socket;
+    const socketMessageListener = (event) => {
+        console.log(event.data);
+        var data = JSON.parse(event.data);
+        if (data.message == "reload") {
+            location.reload();
         }
-        defer c.Close()
-
-        log.Debugf("%s connected\n", c.RemoteAddr().String())
-        wsConnections.Lock()
-        if len(wsConnections.cs) == 0 {
-            wsConnections.cs = make(map[string] * websocket.Conn)
+    };
+    const socketOpenListener = (event) => {
+        console.log('Connected');
+    };
+    const socketCloseListener = (event) => {
+        if (socket) {
+            console.log('Disconnected.');
         }
-        wsConnections.cs[c.RemoteAddr().String()] = c
-        wsConnections.Unlock()
-        defer func() {
-            wsConnections.Lock()
-            delete(wsConnections.cs, c.RemoteAddr().String())
-            wsConnections.Unlock()
-        }()
+        var url = window.origin.replace("http", "ws") + '/ws';
+        socket = new WebSocket(url);
+        socket.addEventListener('open', socketOpenListener);
+        socket.addEventListener('message', socketMessageListener);
+        socket.addEventListener('close', socketCloseListener);
+    };
+    socketCloseListener();
 
-        var p Payload
-        for {
-            err: = c.ReadJSON( & p)
-            if err != nil {
-                log.Debug("read:", err)
-                break
-            }
-            log.Debugf("recv: %v", p)
-        }
-        return
-    }
 
     /* vue apps */
     var app_postlist = new Vue({
         el: '#app_postlist',
         data: {
-            docs: []
+            docs: [],
+            show: false
         },
         methods: {
             select: function(event) {
@@ -171,6 +140,8 @@
                         c = new showdown.Converter()
                         app_render.rawHTML = c.makeHtml(doc.markdown);
                         app_render.doc = doc;
+                        app_postlist.show = false;
+                        app_render.show = true;
                     });
                 };
             }
@@ -186,6 +157,7 @@
         el: '#app_render',
         data: {
             rawHTML: '<b>testing</b>',
+            show: false,
             doc: {},
         }
     })
@@ -288,7 +260,7 @@
                     window.location
                     .pathname) {
                     history.replaceState({}, newwindowname, newwindowname);
-                    document.title = newwindowname + " | " + window.rwtxt.domain;
+                    document.title = newwindowname;
                 }
             });
         };
@@ -305,8 +277,8 @@
     document.getElementById("edittitle").addEventListener('input', CY.debounce(CY.contentEdited, 200));
 
     CY.showEditor = function() {
-        app_postlist.docs = [];
-        app_render.rawHTML = "";
+        app_render.show = false;
+        app_postlist.show = false;
 
         document.getElementById("edittitle").style.display = 'inline-block';
         document.getElementById("editlink").style.display = 'inline-block';
@@ -319,7 +291,7 @@
 
     CY.showView = function() {
         // hide post list and editor
-        app_postlist.docs = [];
+        app_postlist.show = false;
         document.getElementById("editable").style.display = 'none'; // needed to add brs at end
         document.getElementById("editlink").style.display = 'inline-block';
         document.getElementById("viewlink").style.display = 'inline-block';
@@ -327,6 +299,7 @@
 
         // show
         app_render.rawHTML = (new showdown.Converter()).makeHtml(app_render.doc.markdown);
+        app_render.show = true;
     }
 
     CY.showNew = function() {
@@ -337,7 +310,8 @@
 
     CY.showList = function() {
         // hide
-        app_render.rawHTML = "";
+        app_render.show = false;
+        app_postlist.show = true;
         document.getElementById("editable").style.display = 'none'; // needed to add brs at end
         document.getElementById("editlink").style.display = 'none';
         document.getElementById("viewlink").style.display = 'none';
