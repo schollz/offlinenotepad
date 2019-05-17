@@ -47,19 +47,17 @@
         <br>
         <div id="app_postlist" class="list" v-if="show">
             <div v-for="doc in sortedItems">
-                <div v-bind:id="doc.uuid" v-on:click="select($event)">{{doc.title}}</div>
+                <div v-bind:id="doc.uuid" v-on:click="select($event)"><span v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
                 <div>{{doc.created}}</div>
             </div>
         </div>
         <div class="fonty" id="app_render" v-if="show">
-            <h1>{{doc.title}}</h1>
+            <h1 v-if="doc.title">{{doc.title}}</h1>
+            <h1 v-else>{{doc.uuid}}</h1>
             <div v-html="rawHTML"></div>
         </div>
         <input id="edittitle" style="width:100%;font-size:24px;border:none;padding-bottom:0.5em;display:none;" placeholder="Title">
         <textarea class="writing" id="editable" style="-webkit-user-select:text;display:none;" rows=110 placeholder="Click here and start writing" autofocus>
-# this is a test
- 
-*some test*
         </textarea>
         <!-- <div id='installer'>
             <button class='button'>Install</button>
@@ -142,8 +140,7 @@
                         c = new showdown.Converter()
                         app_render.rawHTML = c.makeHtml(doc.markdown);
                         app_render.doc = doc;
-                        app_postlist.show = false;
-                        app_render.show = true;
+                        CY.showView();
                     });
                 };
             }
@@ -256,6 +253,9 @@
                 console.log(
                     `uploaded ${encoded.length} bytes for '${doc.title}' (${doc.uuid})`);
                 var newwindowname = slugify(doc.title);
+                if (newwindowname == "") {
+                    newwindowname = doc.uuid;
+                }
                 // console.log(newwindowname);
                 if (newwindowname != undefined && newwindowname.length > 0 && "/" + newwindowname !=
                     window.location
@@ -301,6 +301,7 @@
         // show
         app_render.rawHTML = (new showdown.Converter()).makeHtml(app_render.doc.markdown);
         app_render.show = true;
+        CY.updateDocument(app_render.doc);
     }
 
     CY.showNew = function() {
@@ -492,7 +493,7 @@
                                 globalPassword);
                             if (decoded != null) {
                                 doc = JSON.parse(decoded)
-                                if (slugify(doc.title) == slugify(titleToFind)) {
+                                if (slugify(doc.title) == slugify(titleToFind) || doc.uuid == titleToFind) {
                                     app_render.doc = doc;
                                     console.log(app_render.doc);
                                     CY.showView();
