@@ -14,9 +14,9 @@
     <meta name='application-name' content='Air Horner'>
     <meta name='apple-mobile-web-app-status-bar-style' content='black'>
     <meta name='apple-mobile-web-app-title' content='Air Horner'>
-    <link rel='icon' sizes='192x192' href='/images/touch/Airhorner_192.png'>
-    <link rel='apple-touch-icon' href='/images/touch/Airhorner_192.png'>
-    <meta name='msapplication-TileImage' content='/images/touch/Airhorner_144.png'>
+    <link rel='icon' sizes='192x192' href='/static/images/touch/Airhorner_192.png'>
+    <link rel='apple-touch-icon' href='/static/images/touch/Airhorner_192.png'>
+    <meta name='msapplication-TileImage' content='/static/images/touch/Airhorner_144.png'>
     <meta name='msapplication-TileColor' content='#2196F3'>
     <meta name='theme-color' content='#2196F3'>
     <meta property='og:title' content='Air Horn'>
@@ -30,8 +30,8 @@
     <meta name='twitter:description' content='The best and easiest Air Horn web app there is. No install just use it right away in your browser!'>
     <meta name='twitter:image' content='https://airhorner.com/images/touch/Airhorner_192.png'>
     <meta name='twitter:creator' content='@paul_kinlan'>
-    <link rel='stylesheet' href='style.css'>
-    <script src='/js/pwacompat.min.js' async></script>
+    <link rel='stylesheet' href='/static/css/style.css'>
+    <script src='/static/js/pwacompat.min.js' async></script>
 </head>
 
 <body>
@@ -65,18 +65,18 @@
             <button class='button'>Install</button>
         </div> -->
     </main>
-    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
-    <script src="/js/lz-string.js"></script>
-    <script src="/js/pako.min.js"></script>
-    <script src="/js/crypto-js.min.js"></script>
-    <script src="/js/enc-utf16.min.js"></script>
-    <script src="/js/lunr.min.js"></script>
-    <script src="/js/localforage.js"></script>
-    <script src="/js/showdown.min.js"></script>
+    <script src="/static/js/vue.js"></script>
+    <script src="/static/js/lz-string.js"></script>
+    <script src="/static/js/pako.min.js"></script>
+    <script src="/static/js/crypto-js.min.js"></script>
+    <script src="/static/js/enc-utf16.min.js"></script>
+    <script src="/static/js/lunr.min.js"></script>
+    <script src="/static/js/localforage.js"></script>
+    <script src="/static/js/showdown.min.js"></script>
     <!-- <script>
         /* code for the service worker */
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js', {
+            navigator.serviceWorker.register('/static/sw.js', {
                     scope: '/'
                 })
                 .then(function (registration) {
@@ -90,6 +90,7 @@
     <script>
     /* globals */
     var globalPassword = "zack";
+    var globalUser = "z"
 
     /* websockets */
     var socket;
@@ -102,6 +103,7 @@
     };
     const socketOpenListener = (event) => {
         console.log('Connected');
+        CY.updateServer();
     };
     const socketCloseListener = (event) => {
         if (socket) {
@@ -253,7 +255,6 @@
             localforage.setItem(doc.uuid, encoded, function() {
                 console.log(
                     `uploaded ${encoded.length} bytes for '${doc.title}' (${doc.uuid})`);
-
                 var newwindowname = slugify(doc.title);
                 // console.log(newwindowname);
                 if (newwindowname != undefined && newwindowname.length > 0 && "/" + newwindowname !=
@@ -369,29 +370,29 @@
 
 
 
-    postData('/', {
-            t: "ping",
-        })
-        .then(data => console.log(JSON.stringify(data))) // JSON-string from `response.json()` call
-        .catch(error => console.log('error: ' + error));
+    // postData('/', {
+    //         t: "ping",
+    //     })
+    //     .then(data => console.log(JSON.stringify(data))) // JSON-string from `response.json()` call
+    //     .catch(error => console.log('error: ' + error));
 
-    function postData(url = '', data = {}) {
-        // Default options are marked with *
-        return fetch(url, {
-                method: 'POST', // *GET, POST, PUT, DELETE, etc.
-                mode: 'same-origin', // no-cors, cors, *same-origin
-                cache: 'no-cache', // *default, no-cache, reload, force-cache, only-if-cached
-                credentials: 'same-origin', // include, *same-origin, omit
-                headers: {
-                    'Content-Type': 'application/json',
-                    // 'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                redirect: 'follow', // manual, *follow, error
-                referrer: 'no-referrer', // no-referrer, *client
-                body: JSON.stringify(data), // body data type must match "Content-Type" header
-            })
-            .then(response => response.json()); // parses JSON response into native Javascript objects 
-    }
+    // function postData(url = '', data = {}) {
+    //     // Default options are marked with *
+    //     return fetch(url, {
+    //             method: 'POST', // *GET, POST, PUT, DELETE, etc.
+    //             mode: 'same-origin', // no-cors, cors, *same-origin
+    //             cache: 'no-cache', // *default, no-cache, reload, force-cache, only-if-cached
+    //             credentials: 'same-origin', // include, *same-origin, omit
+    //             headers: {
+    //                 'Content-Type': 'application/json',
+    //                 // 'Content-Type': 'application/x-www-form-urlencoded',
+    //             },
+    //             redirect: 'follow', // manual, *follow, error
+    //             referrer: 'no-referrer', // no-referrer, *client
+    //             body: JSON.stringify(data), // body data type must match "Content-Type" header
+    //         })
+    //         .then(response => response.json()); // parses JSON response into native Javascript objects 
+    // }
 
 
 
@@ -451,6 +452,32 @@
         return LZString.decompressFromUTF16(decrypted.toString(CryptoJS.enc.Utf16));
     }
 
+
+    CY.updateServer = function() {
+        // offer the server all of the current hashes
+        localforage.keys().then(function(keys) {
+            if (globalPassword != null) {
+                keys.forEach(function(key) {
+                    localforage.getItem(key).then(function(getValue) {
+                        decoded = decode(getValue,
+                            globalPassword);
+                        if (decoded != null) {
+                            doc = JSON.parse(decoded)
+                            socket.send(JSON.stringify({
+                                "t": "offer",
+                                "u": globalUser,
+                                "h": doc.hash,
+                                "u": doc.uuid,
+                            }));
+                        }
+                    });
+                });
+            }
+        }).catch(function(err) {
+            // This code runs if there were any errors
+            console.log(err);
+        });
+    }
 
     window.onload = function() {
         // TODO: check password

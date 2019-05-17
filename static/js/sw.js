@@ -6,15 +6,16 @@ self.addEventListener('install', e => {
             return cache.addAll([
                     `/`,
                     `/index.html`,
-                    `/style.css`,
-                    `/js/crypto-js.min.js`,
-                    `/js/enc-utf16.min.js`,
-                    `/js/localforage.js`,
-                    `/js/lunr.min.js`,
-                    `/js/lz-string.js`,
-                    `/js/pako.min.js`,
-                    `/js/showdown.min.js`,
-                    '/js/pwacompat.min.js',
+                    `/static/style.css`,
+                    `/static/js/crypto-js.min.js`,
+                    `/static/js/enc-utf16.min.js`,
+                    `/static/js/localforage.js`,
+                    `/static/js/lunr.min.js`,
+                    `/static/js/lz-string.js`,
+                    `/static/js/pako.min.js`,
+                    `/static/js/showdown.min.js`,
+                    '/static/js/pwacompat.min.js',
+                    '/static/js/vue.js',
                 ])
                 .then(() => self.skipWaiting());
         })
