@@ -32,38 +32,36 @@
     <meta name='twitter:creator' content='@paul_kinlan'>
     <link rel='stylesheet' href='/static/css/style.css'>
     <!-- <script src='/static/js/pwacompat.min.js' async></script> -->
-    <style>
-    [v-cloak] {
-        display: none
-    }
-    </style>
 </head>
 
 <body>
     <main id="app">
-        <span class="fr fonty" style="float:right; margin-top:-1em; padding-bottom:0.5em; margin-bottom:0.5em;" v-show="showViewOrEdit">
-            <a id='viewlink' v-on:click="showView = true" v-show="showEdit">View</a>
-            <a id='editlink' v-on:click="showEdit = true" v-show="showView">Edit</a>
-        </span>
-        <span class="fr fonty" style="float:left; margin-top:-1em; padding-bottom:0.5em; margin-bottom:0.5em;">
+        <span class="fl fonty topbar">
             <a id='newlink' v-on:click="makeNew">New</a>&nbsp;
             <a id='listlink' v-on:click="showList = true">List</a>&nbsp;
+        </span>
+        <span class="fr fonty topbar" v-show="showViewOrEdit">
+            <a id='viewlink' v-on:click="showView = true" v-show="showEdit">View</a>
+            <a id='editlink' v-on:click="showEdit = true" v-show="showView">Edit</a>
         </span>
         <br>
         <div class="list" v-show="showList" v-cloak>
             <div v-for="doc in sortedDocs">
-                <div v-bind:id="doc.uuid" v-on:click="select($event)"><span v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
+                <div v-bind:id="doc.uuid" v-on:click="select($event)"><span class="link" v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
                 <div>{{doc.created}}</div>
             </div>
         </div>
         <div class="fonty" v-show="showView" v-cloak>
             <h1 v-if="doc.title">{{doc.title}}</h1>
             <h1 v-else>{{doc.uuid}}</h1>
+            <!-- TODO: if . in title, show raw pre-formated text -->
             <div v-html="doc.rawHTML"></div>
         </div>
-        <input id="edittitle" v-show="showEdit" style="width:100%;font-size:24px;border:none;padding-bottom:0.5em;display:none;" placeholder="Title" v-model="doc.title" v-on:keyup="updateDoc">
-        <textarea class="writing" v-show="showEdit" id="editable" style="-webkit-user-select:text;display:none;" rows=110 placeholder="Click here and start writing" autofocus v-on:keyup="updateDoc" v-model="doc.markdown">
+        <input id="edittitle" v-show="showEdit" placeholder="Title" v-model="doc.title" v-on:keyup="updateDoc">
+        <textarea class="writing" v-show="showEdit" id="editable" rows=110 placeholder="Click here and start writing" autofocus v-on:keyup="updateDoc" v-model="doc.markdown">
             {{doc.markdown}}
+                        <!-- TODO: if . in title, show raw pre-formated text -->
+
         </textarea>
     </main>
     <script src="/static/js/vue.js"></script>

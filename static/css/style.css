@@ -375,6 +375,11 @@ figcaption {
     float: right;
 }
 
+
+.fl {
+    float: left;
+}
+
 .icons {
     float: right;
     position: fixed;
@@ -389,7 +394,7 @@ figcaption {
 
 
 
-#editlink:hover {
+.link:hover {
     cursor: pointer;
 }
 
@@ -437,31 +442,6 @@ summary {
     overflow: hidden;
 }
 
-/* On screens that are 992px or less, set the background color to blue */
-@media screen and (min-width: 1400px) {
-    .fr {
-        right: 18em;
-    }
-}
-
-@media screen and (max-width: 1400px) {
-    .fr {
-        right: 10em;
-    }
-}
-
-@media screen and (max-width: 992px) {
-    .fr {
-        right: 6em;
-    }
-}
-
-/* On screens that are 600px or less, set the background color to olive */
-@media screen and (max-width: 600px) {
-    .fr {
-        right: 1em;
-    }
-}
 
 @media screen and (max-device-width: 480px) {
     main {
@@ -475,4 +455,25 @@ summary {
 
 [contenteditable]:focus {
     outline: 0px solid transparent;
+}
+
+[v-cloak] {
+    display: none
+}
+
+.topbar {
+    margin-top: -1em;
+    padding-bottom: 0.5em;
+    margin-bottom: 0.5em;
+}
+
+#edittitle {
+    width: 100%;
+    font-size: 24px;
+    border: none;
+    padding: 0.2em;
+}
+
+#editable {
+    -webkit-user-select: text;
 }
