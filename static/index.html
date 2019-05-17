@@ -8,7 +8,7 @@
     <meta name='description' content='An Air horn. Probably the best air horn web app there is.'>
     <meta name='viewport' content='width=device-width, initial-scale=1'>
     <link rel='canonical' href='https://airhorner.com/'>
-    <link rel='manifest' href='manifest.json'>
+    <link rel='manifest' href='/static/manifest.json'>
     <meta name='mobile-web-app-capable' content='yes'>
     <meta name='apple-mobile-web-app-capable' content='yes'>
     <meta name='application-name' content='Air Horner'>
@@ -42,8 +42,8 @@
 <body>
     <main id="app">
         <span class="fr fonty" style="float:right; margin-top:-1em; padding-bottom:0.5em; margin-bottom:0.5em;" v-show="showViewOrEdit">
-            <a id='viewlink' v-on:click="showView = true">View</a>&nbsp;
-            <a id='editlink' v-on:click="showEdit = true">Edit</a>
+            <a id='viewlink' v-on:click="showView = true" v-show="showEdit">View</a>
+            <a id='editlink' v-on:click="showEdit = true" v-show="showView">Edit</a>
         </span>
         <span class="fr fonty" style="float:left; margin-top:-1em; padding-bottom:0.5em; margin-bottom:0.5em;">
             <a id='newlink' v-on:click="makeNew">New</a>&nbsp;
@@ -236,7 +236,7 @@
                 doc_uuid = event.currentTarget.id;
                 console.log(`clicked ${doc_uuid}`)
                 for (i = 0; i < this.docs.length; i++) {
-                    if (this.docs[i].uuid = doc_uuid) {
+                    if (this.docs[i].uuid == doc_uuid) {
                         this.doc = this.docs[i];
                         this.showView = true;
                         break
@@ -257,13 +257,14 @@
                     // update in the app
                     foundDoc = false;
                     for (i = 0; i < this.docs.length; i++) {
-                        if (this.docs[i].uuid = this.doc.uuid) {
+                        if (this.docs[i].uuid == this.doc.uuid) {
                             this.docs[i] = this.doc;
                             foundDoc = true
                             break
                         }
                     }
                     if (!foundDoc) {
+                        console.log("adding new doc");
                         this.docs.push(this.doc);
                         this.docs = this.docs.sort(function(a, b) {
                             return new Date(b.modified) - new Date(a.modified);
