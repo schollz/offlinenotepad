@@ -183,13 +183,7 @@ func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err er
 			break
 		}
 		log.Debugf("recv: %v", p)
-		switch p.Type {
-		case "offer":
-			// check database for hash and see if its new and should request it
-			err = dbHandleOffer(p)
-		default:
-			log.Debug("unknown type")
-		}
+		err = s.dbHandlePayload(p)
 		if err != nil {
 			log.Error(err)
 			break
@@ -198,13 +192,31 @@ func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err er
 	return
 }
 
-func (s *server) dbHandleOffer(p Payload) (err error) {
-	s.dbCreateBuckets(p.User)
+func (s *server) dbHandlePayload(p Payload) (err error) {
+	// create buckets for user if they do not exist
+	err = s.dbCreateBuckets(p.User)
+	if err != nil {
+		return
+	}
+
+	// switch on the type of payload
+	switch p.Type {
+	case "offer":
+		// check database for hash and see if its new and should request it
+		err = s.dbHandleOffer(p)
+	default:
+		log.Debug("unknown type")
+	}
 	return
 }
 
-func (s *server) dbCreateBuckets(user string) {
-	s.db.Update(func(tx *bolt.Tx) error {
+func (s *server) dbHandleOffer(p Payload) (err error) {
+
+	return
+}
+
+func (s *server) dbCreateBuckets(user string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte(user + "-data"))
 		if err != nil {
 			return fmt.Errorf("create bucket: %s", err)
