@@ -462,16 +462,18 @@ summary {
 }
 
 .topbar {
-    margin-top: -1em;
-    padding-bottom: 0.5em;
-    margin-bottom: 0.5em;
+    margin-top: 0em;
+    padding-bottom: 1em;
+    margin-bottom: 1em;
 }
 
 #edittitle {
     width: 100%;
     font-size: 24px;
     border: none;
-    padding: 0.2em;
+    padding-top: 0.2em;
+    padding-bottom: 0.2em;
+    margin-bottom: 0.5em;
 }
 
 #editable {
