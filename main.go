@@ -12,25 +12,45 @@ import (
 
 	"github.com/gorilla/websocket"
 	log "github.com/schollz/logger"
+	bolt "go.etcd.io/bbolt"
 )
 
 func main() {
 	log.SetLevel("trace")
-	err := serve()
+	s, err := New()
+	if err != nil {
+		log.Error(err)
+	}
+	err = s.Serve()
 	if err != nil {
 		log.Error(err)
 	}
 }
-func serve() (err error) {
+
+type server struct {
+	db *bolt.DB
+}
+
+func New() (s *server, err error) {
+	s = new(server)
+	log.Debug("opening database")
+	s.db, err = bolt.Open("data.db", 0666, nil)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func (s *server) Serve() (err error) {
 	port := 8003
 	log.Infof("listening on :%d", port)
-	http.HandleFunc("/", handler)
+	http.HandleFunc("/", s.handler)
 	return http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
+func (s *server) handler(w http.ResponseWriter, r *http.Request) {
 	t := time.Now().UTC()
-	err := handle(w, r)
+	err := s.handle(w, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Error(err)
@@ -38,7 +58,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	log.Infof("%v %v %v %s\n", r.RemoteAddr, r.Method, r.URL.Path, time.Since(t))
 }
 
-func handlePost(w http.ResponseWriter, r *http.Request) (err error) {
+func (s *server) handlePost(w http.ResponseWriter, r *http.Request) (err error) {
 	type PostData struct {
 		Type   string `json:"t,omitempty"`
 		Bucket string `json:"b,omitempty"`
@@ -67,9 +87,10 @@ func handlePost(w http.ResponseWriter, r *http.Request) (err error) {
 	w.Write(js)
 	return
 }
-func handle(w http.ResponseWriter, r *http.Request) (err error) {
+
+func (s *server) handle(w http.ResponseWriter, r *http.Request) (err error) {
 	if r.Method == http.MethodPost {
-		return handlePost(w, r)
+		return s.handlePost(w, r)
 	}
 	// very special paths
 	if r.URL.Path == "/robots.txt" {
@@ -77,7 +98,7 @@ func handle(w http.ResponseWriter, r *http.Request) (err error) {
 		w.Write([]byte(`User-agent: * 
 Disallow: /`))
 	} else if r.URL.Path == "/ws" {
-		return handleWebsocket(w, r)
+		return s.handleWebsocket(w, r)
 	} else if r.URL.Path == "/favicon.ico" {
 		// TODO
 	} else if r.URL.Path == "/sitemap.xml" {
@@ -143,7 +164,7 @@ type Payload struct {
 	Data string `json:"m,omitempty"`
 }
 
-func handleWebsocket(w http.ResponseWriter, r *http.Request) (err error) {
+func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err error) {
 
 	// handle websockets on this page
 	c, errUpgrade := wsupgrader.Upgrade(w, r, nil)
@@ -162,6 +183,36 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request) (err error) {
 			break
 		}
 		log.Debugf("recv: %v", p)
+		switch p.Type {
+		case "offer":
+			// check database for hash and see if its new and should request it
+			err = dbHandleOffer(p)
+		default:
+			log.Debug("unknown type")
+		}
+		if err != nil {
+			log.Error(err)
+			break
+		}
 	}
 	return
+}
+
+func (s *server) dbHandleOffer(p Payload) (err error) {
+	s.dbCreateBuckets(p.User)
+	return
+}
+
+func (s *server) dbCreateBuckets(user string) {
+	s.db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte(user + "-data"))
+		if err != nil {
+			return fmt.Errorf("create bucket: %s", err)
+		}
+		_, err = tx.CreateBucketIfNotExists([]byte(user + "-hashes"))
+		if err != nil {
+			return fmt.Errorf("create bucket: %s", err)
+		}
+		return nil
+	})
 }
