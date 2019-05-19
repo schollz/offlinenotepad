@@ -179,9 +179,7 @@
     const socketMessageListener = (event) => {
         console.log(event.data);
         var data = JSON.parse(event.data);
-        if (data.message == "reload") {
-            location.reload();
-        }
+        procesSocket(data);
     };
     const socketOpenListener = (event) => {
         console.log('Connected');
@@ -257,7 +255,7 @@
                             "t": "offer",
                             "u": globalUser,
                             "h": this.doc.hash,
-                            "u": this.doc.uuid,
+                            "i": this.doc.uuid,
                         }));
                     }
 
@@ -339,84 +337,6 @@
         this.hash = CryptoJS.SHA256(this.uuid + this.title + this.markdown).toString();
     }
 
-
-    // CY.contentEdited = function() {
-    //     console.log('edited');
-    //     app_render.doc.modified = new Date();
-    //     app_render.doc.markdown = document.getElementById("editable").value;
-    //     app_render.doc.title = document.getElementById("edittitle").value;
-    //     CY.updateDocument(app_render.doc);
-    // };
-
-    // document.getElementById("editable").addEventListener('input', CY.debounce(CY.contentEdited, 200));
-    // document.getElementById("edittitle").addEventListener('input', CY.debounce(CY.contentEdited, 200));
-
-    // CY.showEditor = function() {
-    //     app_render.show = false;
-    //     app_postlist.show = false;
-
-    //     document.getElementById("edittitle").style.display = 'inline-block';
-    //     document.getElementById("editlink").style.display = 'inline-block';
-    //     document.getElementById("viewlink").style.display = 'inline-block';
-    //     document.getElementById("editable").value = app_render.doc.markdown;
-    //     document.getElementById("edittitle").value = app_render.doc.title;
-    //     document.getElementById("editable").style.display = 'inline-block'; // needed to add brs at end
-    //     document.getElementById("edittitle").focus();
-    // }
-
-    // CY.showView = function() {
-    //     // hide post list and editor
-    //     app_postlist.show = false;
-    //     document.getElementById("editable").style.display = 'none'; // needed to add brs at end
-    //     document.getElementById("editlink").style.display = 'inline-block';
-    //     document.getElementById("viewlink").style.display = 'inline-block';
-    //     document.getElementById("edittitle").style.display = 'none';
-
-    //     // show
-    //     app_render.rawHTML = (new showdown.Converter()).makeHtml(app_render.doc.markdown);
-    //     app_render.show = true;
-    //     CY.updateDocument(app_render.doc);
-    // }
-
-    // CY.showNew = function() {
-    //     app_render.doc = new Document();
-
-    //     CY.showEditor();
-    // }
-
-    // CY.showList = function() {
-    //     // hide
-    //     app_render.show = false;
-    //     app_postlist.show = true;
-    //     document.getElementById("editable").style.display = 'none'; // needed to add brs at end
-    //     document.getElementById("editlink").style.display = 'none';
-    //     document.getElementById("viewlink").style.display = 'none';
-    //     document.getElementById("edittitle").style.display = 'none';
-
-    //     // show
-    //     app_postlist.docs = [];
-    //     localforage.keys().then(function(keys) {
-    //         if (globalPassword != null) {
-    //             keys.forEach(function(key) {
-    //                 localforage.getItem(key).then(function(getValue) {
-    //                     decoded = decode(getValue,
-    //                         globalPassword);
-    //                     console.log(decoded);
-    //                     if (decoded != null) {
-    //                         app_postlist.docs.push(JSON.parse(decoded));
-    //                     }
-    //                 });
-    //             });
-    //         }
-    //     }).catch(function(err) {
-    //         // This code runs if there were any errors
-    //         console.log(err);
-    //     });
-    // }
-    // document.getElementById("editlink").addEventListener("click", CY.showEditor);
-    // document.getElementById("viewlink").addEventListener("click", CY.showView);
-    // document.getElementById("listlink").addEventListener("click", CY.showList);
-    // document.getElementById("newlink").addEventListener("click", CY.showNew);
     loadDocs = function() {
         app.docs = [];
         localforage.keys().then(function(keys) {
@@ -440,6 +360,26 @@
             // This code runs if there were any errors
             console.log(err);
         });
+    }
+
+    procesSocket = function(d) {
+        if (!d.s) { // not a success
+            console.log("error: " + d.me);
+            return;
+        }
+        if (d.t = "request" && d.i != undefined) {
+            // send the requested data to the server
+            localforage.getItem(d.i).then(function(getValue) {
+                socket.send(JSON.stringify({
+                    "t": "update",
+                    "u": globalUser,
+                    "i": d.i,
+                    "h": d.h,
+                    "d": getValue,
+                }));
+            });
+            return
+        }
     }
 
     // TODO: indexing

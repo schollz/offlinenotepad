@@ -157,15 +157,20 @@ var wsupgrader = websocket.Upgrader{
 }
 
 type Payload struct {
-	Type string `json:"t,omitempty"`
-	User string `json:"u,omitempty"`
-	Hash string `json:"h,omitempty"`
-	UUID string `json:"i,omitempty"`
-	Data string `json:"m,omitempty"`
+	// message meta
+	Type    string `json:"t"`
+	Success bool   `json:"s"`
+	Message string `json:"me"`
+
+	// data that can be passed
+	User  string   `json:"u,omitempty"`
+	Hash  string   `json:"h,omitempty"`
+	UUID  string   `json:"i,omitempty"`
+	Data  string   `json:"d,omitempty"`
+	Datas []string `json:"ds,omitempty"`
 }
 
 func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err error) {
-
 	// handle websockets on this page
 	c, errUpgrade := wsupgrader.Upgrade(w, r, nil)
 	if errUpgrade != nil {
@@ -179,20 +184,30 @@ func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err er
 	for {
 		err := c.ReadJSON(&p)
 		if err != nil {
-			log.Debug("read:", err)
+			log.Debug("error reading JSON")
 			break
 		}
 		log.Debugf("recv: %v", p)
-		err = s.dbHandlePayload(p)
+		rp, err := s.dbHandlePayload(p)
 		if err != nil {
-			log.Error(err)
+			rp.Type = "message"
+			rp.Success = false
+			rp.Message = err.Error()
+		} else {
+			rp.Success = true
+		}
+		log.Debugf("send: %+v", rp)
+		err = c.WriteJSON(rp)
+		if err != nil {
+			log.Debug("error writing JSON")
 			break
 		}
 	}
+	log.Error(err)
 	return
 }
 
-func (s *server) dbHandlePayload(p Payload) (err error) {
+func (s *server) dbHandlePayload(p Payload) (rp Payload, err error) {
 	// create buckets for user if they do not exist
 	err = s.dbCreateBuckets(p.User)
 	if err != nil {
@@ -203,15 +218,55 @@ func (s *server) dbHandlePayload(p Payload) (err error) {
 	switch p.Type {
 	case "offer":
 		// check database for hash and see if its new and should request it
-		err = s.dbHandleOffer(p)
+		rp, err = s.dbHandleOffer(p)
+	case "update":
+		// update the database with the specified payload
+		rp, err = s.dbHandleUpdate(p)
 	default:
 		log.Debug("unknown type")
+	}
+
+	return
+}
+
+func (s *server) dbHandleUpdate(p Payload) (rp Payload, err error) {
+	// got offer from user, check if the uuid exists
+	// and whether the hash for that uuid is different
+	rp.Type = "message"
+	rp.Message = "updated"
+	err = s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(p.User + "-hashes"))
+		return b.Put([]byte(p.UUID), []byte(p.Hash))
+	})
+	if err != nil {
+		return
+	}
+	err = s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(p.User + "-data"))
+		return b.Put([]byte(p.UUID), []byte(p.Data))
+	})
+	if err != nil {
+		return
 	}
 	return
 }
 
-func (s *server) dbHandleOffer(p Payload) (err error) {
-
+func (s *server) dbHandleOffer(p Payload) (rp Payload, err error) {
+	// got offer from user, check if the uuid exists
+	// and whether the hash for that uuid is different
+	rp.Type = "request"
+	rp.UUID = p.UUID
+	rp.Hash = p.Hash
+	rp.Message = "ok"
+	err = s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(p.User + "-hashes"))
+		v := b.Get([]byte(p.UUID))
+		if v != nil && string(v) == p.Hash {
+			// no request needed
+			rp = Payload{Type: "message", Message: p.UUID[:4] + " ok"}
+		}
+		return nil
+	})
 	return
 }
 
