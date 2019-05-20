@@ -43,7 +43,7 @@ func New() (s *server, err error) {
 }
 
 func (s *server) Serve() (err error) {
-	port := 8003
+	port := 8251
 	log.Infof("listening on :%d", port)
 	http.HandleFunc("/", s.handler)
 	return http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
