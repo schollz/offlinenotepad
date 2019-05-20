@@ -8,14 +8,19 @@ self.addEventListener('install', e => {
                     `/index.html`,
                     `/static/style.css`,
                     `/static/js/crypto-js.min.js`,
+                    `/static/js/crypto-js.min.js.map`,
                     `/static/js/enc-utf16.min.js`,
+                    `/static/js/enc-utf16.min.js.map`,
                     `/static/js/localforage.js`,
                     `/static/js/lunr.min.js`,
                     `/static/js/lz-string.js`,
                     `/static/js/pako.min.js`,
                     `/static/js/showdown.min.js`,
+                    `/static/js/showdown.min.js.map`,
                     '/static/js/pwacompat.min.js',
                     '/static/js/vue.js',
+                    '/static/js/sweetalert.js',
+                    '/static/js/moment.min.js',
                 ])
                 .then(() => self.skipWaiting());
         })

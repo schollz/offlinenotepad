@@ -22,10 +22,10 @@
     <meta property='og:title' content='nenotes'>
     <meta property='og:type' content='website'>
     <meta property='og:image' content='https://airhorner.com/images/touch/Airhorner_192.png'>
-    <meta property='og:url' content='https://airhorner.com/'>
+    <meta property='og:url' content='https://nenotes.com/'>
     <meta property='og:description' content='nenotes, any notes for any time.'>
     <meta name='twitter:card' content='summary'>
-    <meta name='twitter:url' content='https://airhorner.com/'>
+    <meta name='twitter:url' content='https://nenotes.com/'>
     <meta name='twitter:title' content='nenotes'>
     <meta name='twitter:description' content='nenotes, any notes for any time.'>
     <meta name='twitter:image' content='https://airhorner.com/images/touch/Airhorner_192.png'>
@@ -64,7 +64,8 @@
                         <!-- TODO: if . in title, show raw pre-formated text -->
         </textarea>
     </main>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
+    <script src="/static/js/sweetalert.js"></script>
+    <script src="/static/js/moment.min.js"></script>
     <script src="/static/js/vue.js"></script>
     <script src="/static/js/lz-string.js"></script>
     <script src="/static/js/pako.min.js"></script>
@@ -419,7 +420,13 @@
                         decoded = decode(getValue,
                             globalPassword);
                         if (decoded != null) {
-                            doc = JSON.parse(decoded);
+                            try {
+                                doc = JSON.parse(decoded);
+                            } catch (e) {
+                                console.log("[warn]: could not parse json")
+                                return;
+                            }
+
                             socketSend({
                                 "type": "offer",
                                 "user": globalUser,
@@ -460,7 +467,13 @@
                         decoded = decode(getValue,
                             globalPassword);
                         if (decoded != null) {
-                            doc = JSON.parse(decoded);
+                            try {
+                                doc = JSON.parse(decoded);
+                            } catch (e) {
+                                console.log("[warn]: could not parse json")
+                                return;
+                            }
+
                             console.log(`[debug] loaded '${doc.title}'`)
                             app.docs.push(doc);
                             sortDocs();
@@ -499,7 +512,11 @@
                 });
             });
             return
-        } else if (d.type == "hashes" && d.uuids.length > 0) {
+        } else if (d.type == "hashes") {
+            if (d.uuids == undefined) {
+                console.log("[debug] no documents found");
+                return;
+            }
             // this will sync down
             // check to see if any hashes differ
             for (j = 0; j < d.uuids.length; j++) {
@@ -527,7 +544,13 @@
             // received an update for the data in the app
             decoded = decode(d.data, globalPassword);
             if (decoded != null) {
-                doc = JSON.parse(decoded)
+                try {
+                    doc = JSON.parse(decoded)
+                } catch (err) {
+                    console.log(err)
+                    return;
+                }
+
                 if (doc != null) {
                     doci = -1;
                     for (i = 0; i < app.docs.length; i++) {
@@ -654,10 +677,7 @@
     }
 
 
-
-    window.onload = function() {
-        // TODO: check password
-        // globalPassword = prompt("Choose a passphrase for encryption:");
+    function startup() {
         app.doc = new Document();
         loadDocs();
         var loadedDoc = false;
@@ -670,7 +690,12 @@
                             decoded = decode(getValue,
                                 globalPassword);
                             if (decoded != null) {
-                                doc = JSON.parse(decoded)
+                                try {
+                                    doc = JSON.parse(decoded);
+                                } catch (e) {
+                                    console.log("[warn]: could not parse json")
+                                    return;
+                                }
                                 if (slugify(doc.title) == slugify(titleToFind) || doc.uuid == titleToFind) {
                                     app.doc = doc;
                                     console.log(app.doc);
@@ -690,6 +715,35 @@
             app.showList = true;
         }
         socketCloseListener();
+    }
+
+
+    window.onload = function() {
+        // TODO: check password
+        // globalPassword = prompt("Choose a passphrase for encryption:");
+        Swal.fire({
+            title: 'Enter your user name',
+            input: 'text',
+            inputPlaceholder: 'Enter your user name',
+            inputAttributes: {
+                autocapitalize: 'off',
+                autocorrect: 'off'
+            }
+        }).then(result => {
+            globalUser = result.value;
+            Swal.fire({
+                title: 'Enter your password',
+                input: 'password',
+                inputPlaceholder: 'Enter your password',
+                inputAttributes: {
+                    autocapitalize: 'off',
+                    autocorrect: 'off'
+                }
+            }).then(result => {
+                globalPassword = result.value;
+                startup();
+            });
+        })
     }
     </script>
 </body>
