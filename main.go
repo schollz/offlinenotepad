@@ -158,16 +158,18 @@ var wsupgrader = websocket.Upgrader{
 
 type Payload struct {
 	// message meta
-	Type    string `json:"t"`
-	Success bool   `json:"s"`
-	Message string `json:"me"`
+	Type    string `json:"type"`
+	Success bool   `json:"success"`
+	Message string `json:"message"`
 
 	// data that can be passed
-	User  string   `json:"u,omitempty"`
-	Hash  string   `json:"h,omitempty"`
-	UUID  string   `json:"i,omitempty"`
-	Data  string   `json:"d,omitempty"`
-	Datas []string `json:"ds,omitempty"`
+	User   string   `json:"user,omitempty"`
+	Hash   string   `json:"hash,omitempty"`
+	Hashes []string `json:"hashes,omitempty"`
+	UUID   string   `json:"uuid,omitempty"`
+	UUIDs  []string `json:"uuids,omitempty"`
+	Data   string   `json:"data,omitempty"`
+	Datas  string   `json"datas,omitempty"`
 }
 
 func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err error) {
@@ -181,6 +183,9 @@ func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err er
 	log.Debugf("%s connected\n", c.RemoteAddr().String())
 
 	var p Payload
+
+	// on initiation, send a hashlist
+
 	for {
 		err := c.ReadJSON(&p)
 		if err != nil {
@@ -190,9 +195,7 @@ func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err er
 		log.Debugf("recv: %v", p)
 		rp, err := s.dbHandlePayload(p)
 		if err != nil {
-			rp.Type = "message"
-			rp.Success = false
-			rp.Message = err.Error()
+			rp = Payload{Type: "message", Success: false, Message: err.Error()}
 		} else {
 			rp.Success = true
 		}
@@ -208,6 +211,12 @@ func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err er
 }
 
 func (s *server) dbHandlePayload(p Payload) (rp Payload, err error) {
+	// check validity of payload
+	if p.User == "" {
+		err = fmt.Errorf("need to supply user")
+		return
+	}
+
 	// create buckets for user if they do not exist
 	err = s.dbCreateBuckets(p.User)
 	if err != nil {
@@ -222,6 +231,12 @@ func (s *server) dbHandlePayload(p Payload) (rp Payload, err error) {
 	case "update":
 		// update the database with the specified payload
 		rp, err = s.dbHandleUpdate(p)
+	case "hashes":
+		// client requests a list of hashes
+		rp, err = s.dbHandleGetHashes(p)
+	case "request":
+		// client requests the data for a uuid
+		rp, err = s.dbHandleRequest(p)
 	default:
 		log.Debug("unknown type")
 	}
@@ -229,7 +244,52 @@ func (s *server) dbHandlePayload(p Payload) (rp Payload, err error) {
 	return
 }
 
+func (s *server) dbHandleRequest(p Payload) (rp Payload, err error) {
+	if p.UUID == "" {
+		err = fmt.Errorf("need to supply UUID for " + p.Type)
+		return
+	}
+
+	// got offer from user, check if the uuid exists
+	// and whether the hash for that uuid is different
+	rp.Type = "update"
+	rp.UUID = p.UUID
+	rp.Message = "ok"
+	err = s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(p.User + "-data"))
+		v := b.Get([]byte(p.UUID))
+		if v == nil {
+			return fmt.Errorf("%s not found", p.UUID)
+		}
+		rp.Data = string(v)
+		return nil
+	})
+	return
+}
+
+func (s *server) dbHandleGetHashes(p Payload) (rp Payload, err error) {
+	rp.Type = "hashes"
+	rp.Hashes = []string{}
+	rp.UUIDs = []string{}
+	err = s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(p.User + "-hashes"))
+		c := b.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			rp.UUIDs = append(rp.UUIDs, string(k))
+			rp.Hashes = append(rp.Hashes, string(v))
+		}
+		return nil
+	})
+	rp.Message = fmt.Sprintf("found %d hashes", len(rp.Hashes))
+	return
+}
+
 func (s *server) dbHandleUpdate(p Payload) (rp Payload, err error) {
+	if p.UUID == "" {
+		err = fmt.Errorf("need to supply UUID for " + p.Type)
+		return
+	}
+
 	// got offer from user, check if the uuid exists
 	// and whether the hash for that uuid is different
 	rp.Type = "message"
@@ -252,6 +312,11 @@ func (s *server) dbHandleUpdate(p Payload) (rp Payload, err error) {
 }
 
 func (s *server) dbHandleOffer(p Payload) (rp Payload, err error) {
+	if p.UUID == "" {
+		err = fmt.Errorf("need to supply UUID for " + p.Type)
+		return
+	}
+
 	// got offer from user, check if the uuid exists
 	// and whether the hash for that uuid is different
 	rp.Type = "request"
