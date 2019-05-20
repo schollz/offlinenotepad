@@ -143,6 +143,11 @@ Disallow: /`))
 				kind = "text/html"
 			}
 		}
+		if kind != "text/html" {
+			w.Header().Set("Cache-Control", "max-age:290304000, public")
+			w.Header().Set("Last-Modified", time.Now().Format(http.TimeFormat))
+			w.Header().Set("Expires", time.Now().AddDate(60, 0, 0).Format(http.TimeFormat))
+		}
 		w.Header().Set("Content-Type", kind)
 		w.Write(b)
 	}
