@@ -40,7 +40,10 @@
             <span class="fl fonty">
                 <a id='listlink' v-on:click="showList = true">Home</a>&nbsp;
                 <a id='newlink' v-on:click="makeNew">New</a>&nbsp;
-                <a id='viewlink' v-on:click="showView = true" v-show="showEdit">View</a>
+                <span v-show="showEdit">
+                    <a id='viewlink' v-on:click="showView = true">View</a>&nbsp;
+                    <a id='deletelink' v-on:click="deleteDoc">Delete</a>
+                </span>
                 <a id='editlink' v-on:click="showEdit = true" v-show="showView">Edit</a>
             </span>
             <span class="fr fonty" v-show="showViewOrEdit">
@@ -48,7 +51,8 @@
         </div>
         <div class="list" v-show="showList" v-cloak>
             <div v-for="doc in sortedDocs">
-                <div v-bind:id="doc.uuid" v-on:click="select($event)"><span class="link" v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
+                <div v-bind:id="doc.uuid" v-on:click="select($event)"><span class="link"
+                        v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
                 <div>{{ formatDate(doc.created) }}</div>
             </div>
         </div>
@@ -58,8 +62,11 @@
             <!-- TODO: if . in title, show raw pre-formated text -->
             <div v-html="doc.rawHTML"></div>
         </div>
-        <input id="edittitle" v-show="showEdit" placeholder="Title" v-model="doc.title" v-on:keyup="updateDoc" v-bind:class="{ iscode: isCode }" v-cloak>
-        <textarea class="writing" v-show="showEdit" id="editable" rows=110 placeholder="Click here and start writing" autofocus v-on:keyup="updateDoc" @keydown.tab.prevent="tabber($event)" v-model="doc.markdown" v-bind:class="{ iscode: isCode }" v-cloak>
+        <input id="edittitle" v-show="showEdit" placeholder="Title" v-model="doc.title" v-on:keyup="updateDoc"
+            v-bind:class="{ iscode: isCode }" v-cloak>
+        <textarea class="writing" v-show="showEdit" id="editable" rows=110 placeholder="Click here and start writing"
+            autofocus v-on:keyup="updateDoc" @keydown.tab.prevent="tabber($event)" v-model="doc.markdown"
+            v-bind:class="{ iscode: isCode }" v-cloak>
             {{doc.markdown}}
                         <!-- TODO: if . in title, show raw pre-formated text -->
         </textarea>
@@ -89,212 +96,255 @@
         }
     </script> -->
     <script>
-    /* init */
-    // initialize local storage
-    localforage.setDriver([
-        localforage.LOCALSTORAGE,
-        localforage.INDEXEDDB,
-        localforage.WEBSQL,
-    ])
+        /* init */
+        // initialize local storage
+        localforage.setDriver([
+            localforage.LOCALSTORAGE,
+            localforage.INDEXEDDB,
+            localforage.WEBSQL,
+        ])
 
-    /* 
-    globals */
-    var globalPassword = "zack";
-    var globalUser = "z"
-    var socket; // websocket
-    var hasConnected = false;
+        /* 
+        globals */
+        var globalPassword = "zack";
+        var globalUser = "z"
+        var socket; // websocket
+        var hasConnected = false;
 
 
-    /* generic functions */
-    // debounce function
-    const debounce = function(func, wait, immediate) {
-        var timeout;
-        return function() {
-            var context = this,
-                args = arguments;
-            var later = function() {
-                timeout = null;
-                if (!immediate) {
+        /* generic functions */
+        // debounce function
+        const debounce = function (func, wait, immediate) {
+            var timeout;
+            return function () {
+                var context = this,
+                    args = arguments;
+                var later = function () {
+                    timeout = null;
+                    if (!immediate) {
+                        func.apply(context, args);
+                    }
+                };
+                var callNow = immediate && !timeout;
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait || 200);
+                if (callNow) {
                     func.apply(context, args);
                 }
             };
-            var callNow = immediate && !timeout;
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait || 200);
-            if (callNow) {
-                func.apply(context, args);
+        };
+
+        // replace all
+        String.prototype.replaceAll = function (search, replacement) {
+            var target = this;
+            return target.replace(new RegExp(search, 'g'), replacement);
+        };
+
+        // create UUID
+        function create_UUID() {
+            var dt = new Date().getTime();
+            var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+                var r = (dt + Math.random() * 16) % 16 | 0;
+                dt = Math.floor(dt / 16);
+                return (c == 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+            });
+            return uuid;
+        }
+
+
+        // slugify the current text
+        function slugify(text) {
+            var lines = text.split('\n');
+            for (var i = 0; i < lines.length; i++) {
+                var slug = lines[i].toString().toLowerCase()
+                    .replace(/\s+/g, '-') // Replace spaces with -
+                    .replace(/[^\w\-]+/g, '') // Remove all non-word chars
+                    .replace(/\-\-+/g, '-') // Replace multiple - with single -
+                    .replace(/^-+/, '') // Trim - from start of text
+                    .replace(/-+$/, ''); // Trim - from end of text
+                if (slug.length > 1) {
+                    return slug;
+                }
+            }
+            return "";
+        }
+
+        // update the history
+        function updateURL(url1, url2) {
+            var newwindowname = slugify(url1);
+            if (newwindowname == "") {
+                newwindowname = url2;
+            }
+            // console.log(newwindowname);
+            if (newwindowname != undefined && newwindowname.length > 0 && "/" + newwindowname !=
+                window.location
+                .pathname && newwindowname != window.location.pathname) {
+                history.replaceState({}, newwindowname, newwindowname);
+                if (url1 == "/") {
+                    url1 = "nenotes"
+                }
+                document.title = url1;
+            }
+        }
+
+        /* websockets */
+        const socketMessageListener = (event) => {
+            var data = JSON.parse(event.data);
+            processSocketMessage(data);
+        };
+        const socketOpenListener = (event) => {
+            console.log('[debug] connected');
+            if (!hasConnected) {
+                hasConnected = true;
+                // request hashes for syncing down
+                socketSend({
+                    "type": "hashes",
+                    "user": globalUser,
+                });
+            }
+            syncUp();
+        };
+        const socketCloseListener = (event) => {
+            if (socket) {
+                console.log('[debug] disconnected');
+                hasConnected = false;
+            }
+            var url = window.origin.replace("http", "ws") + '/ws';
+            try {
+                socket = new WebSocket(url);
+                socket.addEventListener('open', socketOpenListener);
+                socket.addEventListener('message', socketMessageListener);
+                socket.addEventListener('close', socketCloseListener);
+            } catch (err) {
+                console.log("[debug] no connection available")
             }
         };
-    };
-
-    // replace all
-    String.prototype.replaceAll = function(search, replacement) {
-        var target = this;
-        return target.replace(new RegExp(search, 'g'), replacement);
-    };
-
-    // create UUID
-    function create_UUID() {
-        var dt = new Date().getTime();
-        var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-            var r = (dt + Math.random() * 16) % 16 | 0;
-            dt = Math.floor(dt / 16);
-            return (c == 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-        });
-        return uuid;
-    }
-
-
-    // slugify the current text
-    function slugify(text) {
-        var lines = text.split('\n');
-        for (var i = 0; i < lines.length; i++) {
-            var slug = lines[i].toString().toLowerCase()
-                .replace(/\s+/g, '-') // Replace spaces with -
-                .replace(/[^\w\-]+/g, '') // Remove all non-word chars
-                .replace(/\-\-+/g, '-') // Replace multiple - with single -
-                .replace(/^-+/, '') // Trim - from start of text
-                .replace(/-+$/, ''); // Trim - from end of text
-            if (slug.length > 1) {
-                return slug;
-            }
-        }
-        return "";
-    }
-
-    // update the history
-    function updateURL(url1, url2) {
-        var newwindowname = slugify(url1);
-        if (newwindowname == "") {
-            newwindowname = url2;
-        }
-        // console.log(newwindowname);
-        if (newwindowname != undefined && newwindowname.length > 0 && "/" + newwindowname !=
-            window.location
-            .pathname && newwindowname != window.location.pathname) {
-            history.replaceState({}, newwindowname, newwindowname);
-            if (url1 == "/") {
-                url1 = "nenotes"
-            }
-            document.title = url1;
-        }
-    }
-
-    /* websockets */
-    const socketMessageListener = (event) => {
-        var data = JSON.parse(event.data);
-        processSocketMessage(data);
-    };
-    const socketOpenListener = (event) => {
-        console.log('[debug] connected');
-        if (!hasConnected) {
-            hasConnected = true;
-            // request hashes for syncing down
-            socketSend({
-                "type": "hashes",
-                "user": globalUser,
-            });
-        }
-        syncUp();
-    };
-    const socketCloseListener = (event) => {
-        if (socket) {
-            console.log('[debug] disconnected');
-            hasConnected = false;
-        }
-        var url = window.origin.replace("http", "ws") + '/ws';
-        try {
-            socket = new WebSocket(url);
-            socket.addEventListener('open', socketOpenListener);
-            socket.addEventListener('message', socketMessageListener);
-            socket.addEventListener('close', socketCloseListener);
-        } catch (err) {
-            console.log("[debug] no connection available")
-        }
-    };
 
 
 
-    /* vue apps */
-    var app = new Vue({
-        el: '#app',
-        data: {
-            docs: [],
-            doc: {},
-            sortedItems: [],
-            showView: false,
-            showEdit: false,
-            showList: false,
-        },
-        methods: {
-            tabber: function(event) {
-                let text = this.doc.markdown,
-                    originalSelectionStart = event.target.selectionStart,
-                    textStart = text.slice(0, originalSelectionStart),
-                    textEnd = text.slice(originalSelectionStart);
-
-                this.doc.markdown = `${textStart}\t${textEnd}`
-                event.target.value = this.doc.markdown
-                event.target.selectionEnd = event.target.selectionStart = originalSelectionStart + 1
-
+        /* vue apps */
+        var app = new Vue({
+            el: '#app',
+            data: {
+                docs: [],
+                doc: {},
+                sortedItems: [],
+                showView: false,
+                showEdit: false,
+                showList: false,
             },
-            formatDate: function(datestr) {
-                return moment(datestr).format("MM-DD hh:mm A")
-            },
-            removeDoc: function(index) {
-                this.docs.splice(index, 1);
-            },
-            makeNew: function(e) {
-                this.doc = new Document();
-                this.showEdit = true;
-            },
-            select: function(event) {
-                doc_uuid = event.currentTarget.id;
-                for (i = 0; i < this.docs.length; i++) {
-                    if (this.docs[i].uuid == doc_uuid) {
-                        this.doc = this.docs[i];
-                        this.showView = true;
-                        break
+            methods: {
+                tabber: function (event) {
+                    let text = this.doc.markdown,
+                        originalSelectionStart = event.target.selectionStart,
+                        textStart = text.slice(0, originalSelectionStart),
+                        textEnd = text.slice(originalSelectionStart);
+
+                    this.doc.markdown = `${textStart}\t${textEnd}`
+                    event.target.value = this.doc.markdown
+                    event.target.selectionEnd = event.target.selectionStart = originalSelectionStart + 1
+
+                },
+                formatDate: function (datestr) {
+                    return moment(datestr).format("MM-DD hh:mm A")
+                },
+                removeDoc: function (index) {
+                    this.docs.splice(index, 1);
+                },
+                makeNew: function (e) {
+                    this.doc = new Document();
+                    this.showEdit = true;
+                },
+                select: function (event) {
+                    doc_uuid = event.currentTarget.id;
+                    for (i = 0; i < this.docs.length; i++) {
+                        if (this.docs[i].uuid == doc_uuid) {
+                            this.doc = this.docs[i];
+                            this.showView = true;
+                            break
+                        }
                     }
-                }
-            },
-            keyDown: function(e) {
-                var keyCode = e.keyCode || e.which;
+                },
+                keyDown: function (e) {
+                    var keyCode = e.keyCode || e.which;
 
-                if (keyCode == 9) {
-                    e.preventDefault();
-                    console.log(e.currentTarget);
-                    var start = e.currentTarget.selectionStart;
-                    var end = e.currentTarget.selectionEnd;
-                    this.doc.markdown = [this.doc.markdown.slice(0, start), "\t", this.doc.markdown.slice(start)].join('');
-                    e.currentTarget.selectionStart = start;
-                    e.currentTarget.selectionEnd = end;
+                    if (keyCode == 9) {
+                        e.preventDefault();
+                        console.log(e.currentTarget);
+                        var start = e.currentTarget.selectionStart;
+                        var end = e.currentTarget.selectionEnd;
+                        this.doc.markdown = [this.doc.markdown.slice(0, start), "\t", this.doc.markdown
+                            .slice(start)
+                        ].join('');
+                        e.currentTarget.selectionStart = start;
+                        e.currentTarget.selectionEnd = end;
 
-                }
-            },
-            updateDoc: debounce(function() {
-                if (this.showEdit) { // only update if in edit mode
-                    // update the modified timestamp
-                    this.doc.modified = moment.utc();
+                    }
+                },
+                deleteDoc: function (e) {
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: "You won't be able to revert this!",
+                        type: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#3085d6',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, delete it!'
+                    }).then((result) => {
+                        if (result.value) {
+                            console.log(`[debug] sending delete to server for '${this.doc.uuid}'`)
+                            socketSend({
+                                "type": "delete",
+                                "user": globalUser,
+                                "uuid": this.doc.uuid,
+                            });
+                            // delete from app
+                            for (i = 0; i < this.docs.length; i++) {
+                                if (this.docs[i].uuid == this.doc.uuid) {
+                                    this.removeDoc(i);
+                                    break
+                                }
+                            }
+                            var _this = this;
+                            localforage.removeItem(this.doc.uuid).then(function () {
+                                console.log(`[debug] removed ${_this.doc.uuid}`);
+                            }).then(function () {
+                                _this.showList = true;
+                                _this.doc = new Document();
+                                Swal.fire(
+                                    'Deleted!',
+                                    'Your file has been deleted.',
+                                    'success'
+                                )
+                            }).catch(function (err) {
+                                console.log("[error] problem removing: " + err);
+                            });
+                        }
+                    })
+                },
+                updateDoc: debounce(function () {
+                    if (this.showEdit) { // only update if in edit mode
+                        // update the modified timestamp
+                        this.doc.modified = moment.utc();
 
-                    // update the html (for viewer)
-                    this.doc.rawHTML = (new showdown.Converter()).makeHtml(this.doc.markdown)
+                        // update the html (for viewer)
+                        this.doc.rawHTML = (new showdown.Converter()).makeHtml(this.doc.markdown)
 
-                    // update the hash
-                    this.doc.hash = CryptoJS.SHA256(this.doc.uuid + this.doc.title + this.doc.markdown).toString();
+                        // update the hash
+                        this.doc.hash = CryptoJS.SHA256(this.doc.uuid + this.doc.title + this.doc
+                            .markdown).toString();
 
 
-                    // update the URL
-                    updateURL(this.doc.title, this.doc.uuid);
+                        // update the URL
+                        updateURL(this.doc.title, this.doc.uuid);
 
-                    // update in the local storage
-                    if (globalPassword != null) {
-                        encoded = encode(JSON.stringify(this.doc), globalPassword);
-                        localforage.setItem(this.doc.uuid, encoded);
-                    };
+                        // update in the local storage
+                        if (globalPassword != null) {
+                            encoded = encode(JSON.stringify(this.doc), globalPassword);
+                            localforage.setItem(this.doc.uuid, encoded);
+                        };
 
-                    // update in the server by sending an offer
-                    if (this.doc.title.length > 0 || this.doc.markdown.length > 0) {
+                        // update in the server by sending an offer
                         console.log(`[debug] sending offer to server for '${this.doc.title}'`)
                         socketSend({
                             "type": "offer",
@@ -316,377 +366,82 @@
                             this.docs.push(this.doc);
                             sortDocs();
                         }
-                    } else {
-                        console.log(`[debug] sending delete to server for '${this.doc.uuid}'`)
-                        socketSend({
-                            "type": "delete",
-                            "user": globalUser,
-                            "uuid": this.doc.uuid,
-                        });
-                        // delete from app
-                        for (i = 0; i < this.docs.length; i++) {
-                            if (this.docs[i].uuid == this.doc.uuid) {
-                                this.removeDoc(i);
-                                break
-                            }
-                        }
-                        var _this = this;
-                        localforage.removeItem(this.doc.uuid).then(function() {
-                            console.log(`[debug] removed ${_this.doc.uuid}`);
-                        }).then(function() {
-                            _this.showList = true;
-                            _this.doc = new Document();
-                        }).catch(function(err) {
-                            console.log("[error] problem removing: " + err);
-                        });
+
                     }
-
-
-                }
-            }, 200),
-        },
-        computed: {
-            showViewOrEdit: function() {
-                return this.showView || this.showEdit;
+                }, 200),
             },
-            sortedDocs: function() {
-                return this.docs.sort(function(a, b) {
-                    return new Date(b.modified) - new Date(a.modified);
-                });
-            },
-            isCode: function() {
-                if (this.doc.title == undefined) {
-                    return false;
-                }
-                return this.doc.title.includes(".");
-            }
-        },
-        watch: {
-            showView: function(val) {
-                if (val == true) {
-                    this.showEdit = false;
-                }
-            },
-            showEdit: function(val) {
-                if (val == true) {
-                    this.showView = false;
-                }
-            },
-            showList: function(val) {
-                if (val == true) {
-                    this.showEdit = false;
-                    this.showView = false;
-                    updateURL("/", "/");
-                }
-            },
-            showViewOrEdit: function(val) {
-                if (val == true) {
-                    this.showList = false;
-                    updateURL(this.doc.title, this.doc.uuid);
-                }
-            },
-        }
-    })
-
-
-
-
-
-
-
-    var CY = {};
-
-
-
-    // Constructor function for Person objects
-    // a = new Document();
-    Document = function() {
-        this.uuid = create_UUID();
-        this.created = moment.utc();
-        this.modified = moment.utc();
-        this.title = "";
-        this.markdown = "";
-        this.hash = CryptoJS.SHA256(this.uuid + this.title + this.markdown).toString();
-    }
-
-    syncUp = function() {
-        if (socket.readyState != 1) {
-            return
-        }
-        localforage.keys().then(function(keys) {
-            if (globalPassword != null) {
-                keys.forEach(function(key) {
-                    localforage.getItem(key).then(function(getValue) {
-                        decoded = decode(getValue,
-                            globalPassword);
-                        if (decoded != null) {
-                            try {
-                                doc = JSON.parse(decoded);
-                            } catch (e) {
-                                console.log("[warn]: could not parse json")
-                                return;
-                            }
-
-                            socketSend({
-                                "type": "offer",
-                                "user": globalUser,
-                                "hash": doc.hash,
-                                "uuid": doc.uuid,
-                            });
-                        }
+            computed: {
+                showViewOrEdit: function () {
+                    return this.showView || this.showEdit;
+                },
+                sortedDocs: function () {
+                    return this.docs.sort(function (a, b) {
+                        return new Date(b.modified) - new Date(a.modified);
                     });
-                });
-            }
-        }).catch(function(err) {
-            // This code runs if there were any errors
-            console.log(err);
-        });
-    }
-
-
-    function socketSend(data) {
-        if (socket == null) {
-            return
-        }
-        if (socket.readyState != 1) {
-            return
-        }
-        jsonData = JSON.stringify(data);
-        console.log("[debug] uploading " + jsonData)
-        socket.send(jsonData);
-    }
-
-    function loadDocs() {
-        console.log("[debug] loading docs")
-        app.docs = [];
-
-        localforage.keys().then(function(keys) {
-            if (globalPassword != null) {
-                keys.forEach(function(key) {
-                    localforage.getItem(key).then(function(getValue) {
-                        decoded = decode(getValue,
-                            globalPassword);
-                        if (decoded != null) {
-                            try {
-                                doc = JSON.parse(decoded);
-                            } catch (e) {
-                                console.log("[warn]: could not parse json")
-                                return;
-                            }
-
-                            console.log(`[debug] loaded '${doc.title}'`)
-                            app.docs.push(doc);
-                            sortDocs();
-                        }
-                    });
-                });
-
-            }
-        }).catch(function(err) {
-            console.log(err);
-        });
-    }
-
-    function sortDocs() {
-        console.log(`[debug] sorting ${app.docs.length} loaded docs`)
-        app.docs = app.docs.sort(function(a, b) {
-            return new Date(b.modified) - new Date(a.modified);
-        });
-    }
-
-    function processSocketMessage(d) {
-        console.log("[debug] received: " + JSON.stringify(d))
-        if (!d.success) { // not a success
-            console.log("error: " + d.message);
-            return;
-        }
-        if (d.type == "request" && d.uuid != undefined) {
-            // send the requested data to the server
-            localforage.getItem(d.uuid).then(function(getValue) {
-                socketSend({
-                    "type": "update",
-                    "user": globalUser,
-                    "uuid": d.uuid,
-                    "hash": d.hash,
-                    "data": getValue,
-                });
-            });
-            return
-        } else if (d.type == "hashes") {
-            if (d.uuids == undefined) {
-                console.log("[debug] no documents found");
-                return;
-            }
-            // this will sync down
-            // check to see if any hashes differ
-            for (j = 0; j < d.uuids.length; j++) {
-                // check if uuid exists
-                var needs_update = true;
-                for (i = 0; i < app.docs.length; i++) {
-                    if (app.docs[i].uuid == d.uuids[j]) {
-                        needs_update = !(app.docs[i].hash == d.hashes[j])
-                        if (needs_update) {
-                            console.log(`${app.docs[i].uuid}: ${d.hashes[j]} != ${app.docs[i].hash}`)
-                        }
-                        break
+                },
+                isCode: function () {
+                    if (this.doc.title == undefined) {
+                        return false;
                     }
+                    return this.doc.title.includes(".");
                 }
-                if (needs_update) {
-                    console.log(`requesting ${d.uuids[j]} from server`)
-                    socketSend({
-                        "type": "request",
-                        "user": globalUser,
-                        "uuid": d.uuids[j],
-                    });
-                }
-            }
-        } else if (d.type == "update") {
-            // received an update for the data in the app
-            decoded = decode(d.data, globalPassword);
-            if (decoded != null) {
-                try {
-                    doc = JSON.parse(decoded)
-                } catch (err) {
-                    console.log(err)
-                    return;
-                }
-
-                if (doc != null) {
-                    doci = -1;
-                    for (i = 0; i < app.docs.length; i++) {
-                        if (app.docs[i].uuid == doc.uuid) {
-                            doci = i;
-                            break
-                        }
+            },
+            watch: {
+                showView: function (val) {
+                    if (val == true) {
+                        this.showEdit = false;
                     }
-                    if (doci == -1) {
-                        // this is a new doc, push it
-                        app.docs.push(doc);
-                        sortDocs();
-                    } else {
-                        // check to see if the timestamp is newer or older
-                        // if newer, re-encode and update
-                        incoming_doc_is_newer = doc.modified > app.docs[i].modified;
-                        if (incoming_doc_is_newer) {
-                            // re-encode and save and update the app
-                            console.log(`incoming '${doc.title}'' is newer`)
-                            encoded = encode(JSON.stringify(doc), globalPassword);
-                            localforage.setItem(doc.uuid, encoded);
-                            app.docs[doci] = doc;
-                        } else {
-                            // update the server with the current version
-                            console.log(`incoming '${doc.title}' is older, updating server`)
-                            encoded = encode(JSON.stringify(app.docs[doci]), globalPassword);
-                            socketSend({
-                                "type": "update",
-                                "user": globalUser,
-                                "uuid": app.docs[doci].uuid,
-                                "hash": app.docs[doci].hash,
-                                "data": encoded,
-                            });
-                        }
+                },
+                showEdit: function (val) {
+                    if (val == true) {
+                        this.showView = false;
                     }
-                }
+                },
+                showList: function (val) {
+                    if (val == true) {
+                        this.showEdit = false;
+                        this.showView = false;
+                        updateURL("/", "/");
+                    }
+                },
+                showViewOrEdit: function (val) {
+                    if (val == true) {
+                        this.showList = false;
+                        updateURL(this.doc.title, this.doc.uuid);
+                    }
+                },
             }
-        } else if (d.type == "message") {
-            console.log("[info] message: " + d.message);
-        } else {
-            console.log(`[warn] unknown type: ${d.type}`)
-        }
-    }
-
-    // TODO: indexing
-
-    // var documents = [{
-    //     "name": "Lunr",
-    //     "text": "Like Solr, but much smaller, and not as bright."
-    // }, {
-    //     "name": "React",
-    //     "text": "A JavaScript library for building user interfaces."
-    // }, {
-    //     "name": "Lodash",
-    //     "text": "A modern JavaScript utility library delivering modularity, performance & extras."
-    // }]
-    // var idx = lunr(function () {
-    //     this.ref('name')
-    //     this.field('text')
-
-    //     documents.forEach(function (doc) {
-    //         this.add(doc)
-    //     }, this)
-    // })
-
-    // idx.search("bright")
-
-
-
-
-
-
-    // encryption
-    const keySize = 256;
-    const ivSize = 128;
-    const iterations = 100;
-
-    // http://www.adonespitogo.com/articles/encrypting-data-with-cryptojs-aes/
-    function encode(msgString, pass) {
-        msg = CryptoJS.enc.Utf16.parse(LZString.compressToUTF16(msgString))
-        var salt = CryptoJS.lib.WordArray.random(128 / 8);
-
-        var key = CryptoJS.PBKDF2(pass, salt, {
-            keySize: keySize / 32,
-            iterations: iterations
-        });
-
-        var iv = CryptoJS.lib.WordArray.random(128 / 8);
-
-        var encrypted = CryptoJS.AES.encrypt(msg, key, {
-            iv: iv,
-            padding: CryptoJS.pad.Pkcs7,
-            mode: CryptoJS.mode.CBC
-
-        });
-
-        // salt, iv will be hex 32 in length
-        // append them to the ciphertext for use  in decryption
-        var transitmessage = salt.toString() + iv.toString() + encrypted.toString();
-        return transitmessage;
-    }
-
-    function decode(transitmessage, pass) {
-        if (transitmessage == null) {
-            console.log("got null transmit message")
-            return null;
-        }
-        var salt = CryptoJS.enc.Hex.parse(transitmessage.substr(0, 32));
-        var iv = CryptoJS.enc.Hex.parse(transitmessage.substr(32, 32))
-        var encrypted = transitmessage.substring(64);
-
-        var key = CryptoJS.PBKDF2(pass, salt, {
-            keySize: keySize / 32,
-            iterations: iterations
-        });
-
-        var decrypted = CryptoJS.AES.decrypt(encrypted, key, {
-            iv: iv,
-            padding: CryptoJS.pad.Pkcs7,
-            mode: CryptoJS.mode.CBC
-
         })
-        return LZString.decompressFromUTF16(decrypted.toString(CryptoJS.enc.Utf16));
-    }
 
 
-    function startup() {
-        app.doc = new Document();
-        loadDocs();
-        var loadedDoc = false;
-        if (window.location.pathname != "/") {
-            titleToFind = window.location.pathname.substring(1, window.location.pathname.length);
-            localforage.keys().then(function(keys) {
+
+
+
+
+
+        var CY = {};
+
+
+
+        // Constructor function for Person objects
+        // a = new Document();
+        Document = function () {
+            this.uuid = create_UUID();
+            this.created = moment.utc();
+            this.modified = moment.utc();
+            this.title = "";
+            this.markdown = "";
+            this.hash = CryptoJS.SHA256(this.uuid + this.title + this.markdown).toString();
+        }
+
+        syncUp = function () {
+            if (socket.readyState != 1) {
+                return
+            }
+            localforage.keys().then(function (keys) {
                 if (globalPassword != null) {
-                    keys.forEach(function(key) {
-                        localforage.getItem(key).then(function(getValue) {
+                    keys.forEach(function (key) {
+                        localforage.getItem(key).then(function (getValue) {
                             decoded = decode(getValue,
                                 globalPassword);
                             if (decoded != null) {
@@ -696,55 +451,328 @@
                                     console.log("[warn]: could not parse json")
                                     return;
                                 }
-                                if (slugify(doc.title) == slugify(titleToFind) || doc.uuid == titleToFind) {
-                                    app.doc = doc;
-                                    console.log(app.doc);
-                                    app.showView = true;
-                                    loadedDoc = true;
-                                }
+
+                                socketSend({
+                                    "type": "offer",
+                                    "user": globalUser,
+                                    "hash": doc.hash,
+                                    "uuid": doc.uuid,
+                                });
                             }
                         });
                     });
                 }
-            }).catch(function(err) {
+            }).catch(function (err) {
                 // This code runs if there were any errors
                 console.log(err);
             });
         }
-        if (loadedDoc == false) {
-            app.showList = true;
-        }
-        socketCloseListener();
-    }
 
 
-    window.onload = function() {
-        // TODO: check password
-        // globalPassword = prompt("Choose a passphrase for encryption:");
-        Swal.fire({
-            title: 'Enter your user name',
-            input: 'text',
-            inputPlaceholder: 'Enter your user name',
-            inputAttributes: {
-                autocapitalize: 'off',
-                autocorrect: 'off'
+        function socketSend(data) {
+            if (socket == null) {
+                return
             }
-        }).then(result => {
-            globalUser = result.value;
-            Swal.fire({
-                title: 'Enter your password',
-                input: 'password',
-                inputPlaceholder: 'Enter your password',
-                inputAttributes: {
-                    autocapitalize: 'off',
-                    autocorrect: 'off'
+            if (socket.readyState != 1) {
+                return
+            }
+            jsonData = JSON.stringify(data);
+            console.log("[debug] uploading " + jsonData)
+            socket.send(jsonData);
+        }
+
+        function loadDocs() {
+            console.log("[debug] loading docs")
+            app.docs = [];
+
+            localforage.keys().then(function (keys) {
+                if (globalPassword != null) {
+                    keys.forEach(function (key) {
+                        localforage.getItem(key).then(function (getValue) {
+                            decoded = decode(getValue,
+                                globalPassword);
+                            if (decoded != null) {
+                                try {
+                                    doc = JSON.parse(decoded);
+                                } catch (e) {
+                                    console.log("[warn]: could not parse json")
+                                    return;
+                                }
+
+                                console.log(`[debug] loaded '${doc.title}'`)
+                                app.docs.push(doc);
+                                sortDocs();
+                            }
+                        });
+                    });
+
                 }
-            }).then(result => {
-                globalPassword = result.value;
-                startup();
+            }).catch(function (err) {
+                console.log(err);
             });
-        })
-    }
+        }
+
+        function sortDocs() {
+            console.log(`[debug] sorting ${app.docs.length} loaded docs`)
+            app.docs = app.docs.sort(function (a, b) {
+                return new Date(b.modified) - new Date(a.modified);
+            });
+        }
+
+        function processSocketMessage(d) {
+            console.log("[debug] received: " + JSON.stringify(d))
+            if (!d.success) { // not a success
+                console.log("error: " + d.message);
+                return;
+            }
+            if (d.type == "request" && d.uuid != undefined) {
+                // send the requested data to the server
+                localforage.getItem(d.uuid).then(function (getValue) {
+                    socketSend({
+                        "type": "update",
+                        "user": globalUser,
+                        "uuid": d.uuid,
+                        "hash": d.hash,
+                        "data": getValue,
+                    });
+                });
+                return
+            } else if (d.type == "hashes") {
+                if (d.uuids == undefined) {
+                    console.log("[debug] no documents found");
+                    return;
+                }
+                // this will sync down
+                // check to see if any hashes differ
+                for (j = 0; j < d.uuids.length; j++) {
+                    // check if uuid exists
+                    var needs_update = true;
+                    for (i = 0; i < app.docs.length; i++) {
+                        if (app.docs[i].uuid == d.uuids[j]) {
+                            needs_update = !(app.docs[i].hash == d.hashes[j])
+                            if (needs_update) {
+                                console.log(`${app.docs[i].uuid}: ${d.hashes[j]} != ${app.docs[i].hash}`)
+                            }
+                            break
+                        }
+                    }
+                    if (needs_update) {
+                        console.log(`requesting ${d.uuids[j]} from server`)
+                        socketSend({
+                            "type": "request",
+                            "user": globalUser,
+                            "uuid": d.uuids[j],
+                        });
+                    }
+                }
+            } else if (d.type == "update") {
+                // received an update for the data in the app
+                decoded = decode(d.data, globalPassword);
+                if (decoded != null) {
+                    try {
+                        doc = JSON.parse(decoded)
+                    } catch (err) {
+                        console.log(err)
+                        return;
+                    }
+
+                    if (doc != null) {
+                        doci = -1;
+                        for (i = 0; i < app.docs.length; i++) {
+                            if (app.docs[i].uuid == doc.uuid) {
+                                doci = i;
+                                break
+                            }
+                        }
+                        if (doci == -1) {
+                            // this is a new doc, push it
+                            app.docs.push(doc);
+                            sortDocs();
+                        } else {
+                            // check to see if the timestamp is newer or older
+                            // if newer, re-encode and update
+                            incoming_doc_is_newer = doc.modified > app.docs[i].modified;
+                            if (incoming_doc_is_newer) {
+                                // re-encode and save and update the app
+                                console.log(`incoming '${doc.title}'' is newer`)
+                                encoded = encode(JSON.stringify(doc), globalPassword);
+                                localforage.setItem(doc.uuid, encoded);
+                                app.docs[doci] = doc;
+                            } else {
+                                // update the server with the current version
+                                console.log(`incoming '${doc.title}' is older, updating server`)
+                                encoded = encode(JSON.stringify(app.docs[doci]), globalPassword);
+                                socketSend({
+                                    "type": "update",
+                                    "user": globalUser,
+                                    "uuid": app.docs[doci].uuid,
+                                    "hash": app.docs[doci].hash,
+                                    "data": encoded,
+                                });
+                            }
+                        }
+                    }
+                }
+            } else if (d.type == "message") {
+                console.log("[info] message: " + d.message);
+            } else {
+                console.log(`[warn] unknown type: ${d.type}`)
+            }
+        }
+
+        // TODO: indexing
+
+        // var documents = [{
+        //     "name": "Lunr",
+        //     "text": "Like Solr, but much smaller, and not as bright."
+        // }, {
+        //     "name": "React",
+        //     "text": "A JavaScript library for building user interfaces."
+        // }, {
+        //     "name": "Lodash",
+        //     "text": "A modern JavaScript utility library delivering modularity, performance & extras."
+        // }]
+        // var idx = lunr(function () {
+        //     this.ref('name')
+        //     this.field('text')
+
+        //     documents.forEach(function (doc) {
+        //         this.add(doc)
+        //     }, this)
+        // })
+
+        // idx.search("bright")
+
+
+
+
+
+
+        // encryption
+        const keySize = 256;
+        const ivSize = 128;
+        const iterations = 100;
+
+        // http://www.adonespitogo.com/articles/encrypting-data-with-cryptojs-aes/
+        function encode(msgString, pass) {
+            msg = CryptoJS.enc.Utf16.parse(LZString.compressToUTF16(msgString))
+            var salt = CryptoJS.lib.WordArray.random(128 / 8);
+
+            var key = CryptoJS.PBKDF2(pass, salt, {
+                keySize: keySize / 32,
+                iterations: iterations
+            });
+
+            var iv = CryptoJS.lib.WordArray.random(128 / 8);
+
+            var encrypted = CryptoJS.AES.encrypt(msg, key, {
+                iv: iv,
+                padding: CryptoJS.pad.Pkcs7,
+                mode: CryptoJS.mode.CBC
+
+            });
+
+            // salt, iv will be hex 32 in length
+            // append them to the ciphertext for use  in decryption
+            var transitmessage = salt.toString() + iv.toString() + encrypted.toString();
+            return transitmessage;
+        }
+
+        function decode(transitmessage, pass) {
+            if (transitmessage == null) {
+                console.log("got null transmit message")
+                return null;
+            }
+            var salt = CryptoJS.enc.Hex.parse(transitmessage.substr(0, 32));
+            var iv = CryptoJS.enc.Hex.parse(transitmessage.substr(32, 32))
+            var encrypted = transitmessage.substring(64);
+
+            var key = CryptoJS.PBKDF2(pass, salt, {
+                keySize: keySize / 32,
+                iterations: iterations
+            });
+
+            var decrypted = CryptoJS.AES.decrypt(encrypted, key, {
+                iv: iv,
+                padding: CryptoJS.pad.Pkcs7,
+                mode: CryptoJS.mode.CBC
+
+            })
+            return LZString.decompressFromUTF16(decrypted.toString(CryptoJS.enc.Utf16));
+        }
+
+
+        function startup() {
+            app.doc = new Document();
+            loadDocs();
+            var loadedDoc = false;
+            if (window.location.pathname != "/") {
+                titleToFind = window.location.pathname.substring(1, window.location.pathname.length);
+                localforage.keys().then(function (keys) {
+                    if (globalPassword != null) {
+                        keys.forEach(function (key) {
+                            localforage.getItem(key).then(function (getValue) {
+                                decoded = decode(getValue,
+                                    globalPassword);
+                                if (decoded != null) {
+                                    try {
+                                        doc = JSON.parse(decoded);
+                                    } catch (e) {
+                                        console.log("[warn]: could not parse json")
+                                        return;
+                                    }
+                                    if (slugify(doc.title) == slugify(titleToFind) || doc
+                                        .uuid == titleToFind) {
+                                        app.doc = doc;
+                                        console.log(app.doc);
+                                        app.showView = true;
+                                        loadedDoc = true;
+                                    }
+                                }
+                            });
+                        });
+                    }
+                }).catch(function (err) {
+                    // This code runs if there were any errors
+                    console.log(err);
+                });
+            }
+            if (loadedDoc == false) {
+                app.showList = true;
+            }
+            socketCloseListener();
+        }
+
+
+        window.onload = function () {
+            globalUser = "zack";
+            globalPassword = "zack";
+            startup();
+
+            // Swal.fire({
+            //     title: 'Enter your user name',
+            //     input: 'text',
+            //     inputPlaceholder: 'Enter your user name',
+            //     inputAttributes: {
+            //         autocapitalize: 'off',
+            //         autocorrect: 'off'
+            //     }
+            // }).then(result => {
+            //     globalUser = result.value;
+            //     Swal.fire({
+            //         title: 'Enter your password',
+            //         input: 'password',
+            //         inputPlaceholder: 'Enter your password',
+            //         inputAttributes: {
+            //             autocapitalize: 'off',
+            //             autocorrect: 'off'
+            //         }
+            //     }).then(result => {
+            //         globalPassword = result.value;
+            //         startup();
+            //     });
+            // })
+        }
     </script>
 </body>
 
