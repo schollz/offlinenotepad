@@ -3,7 +3,7 @@
 
 <head>
     <meta charset='utf-8'>
-    <title>The Air Horner</title>
+    <title>Air Horner</title>
     <meta http-equiv='X-UA-Compatible' content='IE=edge'>
     <meta name='description' content='An Air horn. Probably the best air horn web app there is.'>
     <meta name='viewport' content='width=device-width, initial-scale=1'>
@@ -470,6 +470,9 @@
                 for (i = 0; i < app.docs.length; i++) {
                     if (app.docs[i].uuid == d.uuids[j]) {
                         needs_update = !(app.docs[i].hash == d.hashes[j])
+                        if (needs_update) {
+                            console.log(`${app.docs[i].uuid}: ${d.hashes[j]} != ${app.docs[i].hash}`)
+                        }
                         break
                     }
                 }

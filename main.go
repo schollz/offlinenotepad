@@ -178,18 +178,19 @@ func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err er
 	if errUpgrade != nil {
 		return errUpgrade
 	}
-	defer c.Close()
-
 	log.Debugf("%s connected\n", c.RemoteAddr().String())
+
+	defer func() {
+		log.Debugf("%s connection closed", c.RemoteAddr().String())
+		c.Close()
+	}()
 
 	var p Payload
 
 	// on initiation, send a hashlist
-
 	for {
 		err := c.ReadJSON(&p)
 		if err != nil {
-			log.Debug("error reading JSON")
 			break
 		}
 		log.Debugf("recv: %v", p)
@@ -206,7 +207,6 @@ func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err er
 			break
 		}
 	}
-	log.Error(err)
 	return
 }
 
