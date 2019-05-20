@@ -236,6 +236,8 @@
             updateDoc: debounce(function() {
                 console.log(this.doc.title);
                 if (this.showEdit) { // only update if in edit mode
+                    // update the modified timestamp
+                    this.doc.modified = new Date();
 
                     // update the html (for viewer)
                     this.doc.rawHTML = (new showdown.Converter()).makeHtml(this.doc.markdown)
@@ -259,12 +261,14 @@
                     // update in the server by sending an offer
                     if (socket != null) {
                         console.log(`sending offer to server for ${this.doc.uuid}`)
-                        socket.send(JSON.stringify({
-                            "type": "offer",
-                            "user": globalUser,
-                            "hash": this.doc.hash,
-                            "uuid": this.doc.uuid,
-                        }));
+                        if (socket.readyState == 1) {
+                            socket.send(JSON.stringify({
+                                "type": "offer",
+                                "user": globalUser,
+                                "hash": this.doc.hash,
+                                "uuid": this.doc.uuid,
+                            }));
+                        }
                     }
 
 
@@ -414,26 +418,50 @@
             if (decoded != null) {
                 doc = JSON.parse(decoded)
                 if (doc != null) {
-                    encoded = encode(JSON.stringify(doc), globalPassword);
-                    localforage.setItem(doc.uuid, encoded, function() {
-                        console.log(
-                            `recieved ${encoded.length} bytes for '${doc.title}' (${doc.uuid})`);
-                    });
-                    found_doc = false;
+                    // TODO: check to see which version is newer
+                    // if the client version is newer, upload to the server
+                    // if the server version is newer
+
+                    doci = -1;
                     for (i = 0; i < app.docs.length; i++) {
                         if (app.docs[i].uuid == doc.uuid) {
-                            app.docs[i] = doc;
-                            found_doc = true;
+                            doci = i;
                             break
                         }
                     }
-                    if (!found_doc) {
+                    if (doci == -1) {
+                        // this is a new doc, push it
                         app.docs.push(doc);
+                    } else {
+                        // check to see if the timestamp is newer or older
+                        // if newer, re-encode and update
+                        incoming_doc_is_newer = doc.modified > app.docs[i].modified;
+                        if (incoming_doc_is_newer) {
+                            console.log("incoming ${doc.title} is newer")
+                            // re-encode and save and update the app
+                            encoded = encode(JSON.stringify(doc), globalPassword);
+                            localforage.setItem(doc.uuid, encoded, function() {
+                                console.log(
+                                    `recieved ${encoded.length} bytes for '${doc.title}' (${doc.uuid})`);
+                            });
+                            app.docs[doci] = doc;
+                        } else {
+                            console.log("incoming ${doc.title} is older, updating server")
+                            // update the server with the current version
+                            encoded = encode(JSON.stringify(app.docs[doci]), globalPassword);
+                            socket.send(JSON.stringify({
+                                "type": "update",
+                                "user": globalUser,
+                                "uuid": app.docs[doci].uuid,
+                                "hash": app.docs[doci].hash,
+                                "data": encoded,
+                            }));
+                        }
                     }
                 }
             }
-
-
+        } else if (d.type == "message") {
+            console.log("message: " + d.message);
         } else {
             console.log(`unknown type: ${d.type}`)
         }
