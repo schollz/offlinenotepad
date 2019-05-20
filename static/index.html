@@ -36,15 +36,17 @@
 
 <body>
     <main id="app">
+        <div class="checkmark" v-show="showCheck">☑️</div>
         <div class="topbar" v-cloak>
             <span class="fl fonty">
-                <a id='listlink' v-on:click="showList = true">Home</a>&nbsp;
-                <a id='newlink' v-on:click="makeNew">New</a>&nbsp;
+                <strong>nenotes</strong>&nbsp;
+                <a id='listlink' v-on:click="showList = true">📚</a>&nbsp;
+                <a id='newlink' v-on:click="makeNew">⚡</a>&nbsp;
                 <span v-show="showEdit">
-                    <a id='viewlink' v-on:click="showView = true">View</a>&nbsp;
-                    <a id='deletelink' v-on:click="deleteDoc">Delete</a>
+                    <a id='viewlink' v-on:click="showView = true">👓</a>&nbsp;
+                    <a id='deletelink' v-on:click="deleteDoc">🗑️</a>
                 </span>
-                <a id='editlink' v-on:click="showEdit = true" v-show="showView">Edit</a>
+                <a id='editlink' v-on:click="showEdit = true" v-show="showView">📝</a>
             </span>
             <span class="fr fonty" v-show="showViewOrEdit">
             </span>
@@ -232,8 +234,16 @@
                 showView: false,
                 showEdit: false,
                 showList: false,
+                showCheck: false,
             },
             methods: {
+                flashCheck: function () {
+                    this.showCheck = true;
+                    var _this = this;
+                    setTimeout(function () {
+                        _this.showCheck = false;
+                    }, 500)
+                },
                 tabber: function (event) {
                     let text = this.doc.markdown,
                         originalSelectionStart = event.target.selectionStart,
@@ -316,6 +326,7 @@
                                     'Your file has been deleted.',
                                     'success'
                                 )
+                                this.flashCheck();
                             }).catch(function (err) {
                                 console.log("[error] problem removing: " + err);
                             });
@@ -366,7 +377,7 @@
                             this.docs.push(this.doc);
                             sortDocs();
                         }
-
+                        this.flashCheck();
                     }
                 }, 200),
             },

@@ -488,3 +488,8 @@ summary {
     font-size: 85%;
     text-rendering: optimizelegibility;
 }
+
+.checkmark {
+    position: absolute;
+    right: 1em;
+}
