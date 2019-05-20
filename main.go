@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -172,6 +173,11 @@ type Payload struct {
 	Datas  string   `json"datas,omitempty"`
 }
 
+func (p Payload) String() string {
+	b, _ := json.Marshal(p)
+	return string(b)
+}
+
 func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err error) {
 	// handle websockets on this page
 	c, errUpgrade := wsupgrader.Upgrade(w, r, nil)
@@ -185,6 +191,7 @@ func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err er
 		c.Close()
 	}()
 
+	var sentBytes, receivedBytes int
 	var p Payload
 
 	// on initiation, send a hashlist
@@ -193,19 +200,29 @@ func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err er
 		if err != nil {
 			break
 		}
-		log.Debugf("recv: %v", p)
+		bb, _ := json.Marshal(p)
+		receivedBytes += len(bb)
+
+		log.Tracef("recv: %s", p)
 		rp, err := s.dbHandlePayload(p)
 		if err != nil {
 			rp = Payload{Type: "message", Success: false, Message: err.Error()}
 		} else {
 			rp.Success = true
 		}
-		log.Debugf("send: %+v", rp)
+		log.Tracef("send: %s", rp)
 		err = c.WriteJSON(rp)
 		if err != nil {
 			log.Debug("error writing JSON")
 			break
 		}
+		bb, _ = json.Marshal(rp)
+		sentBytes += len(bb)
+		log.Debugf("%s, sent: %s, recv: %s",
+			c.RemoteAddr().String(),
+			humanizeBytes(sentBytes),
+			humanizeBytes(receivedBytes),
+		)
 	}
 	return
 }
@@ -374,4 +391,27 @@ func (s *server) dbCreateBuckets(user string) error {
 		}
 		return nil
 	})
+}
+
+var sizes = []string{"B", "kB", "MB", "GB", "TB", "PB", "EB"}
+
+const base = 1000
+
+func logn(n, b float64) float64 {
+	return math.Log(n) / math.Log(b)
+}
+
+func humanizeBytes(s int) string {
+	if s < 10 {
+		return fmt.Sprintf("%d B", s)
+	}
+	e := math.Floor(logn(float64(s), base))
+	suffix := sizes[int(e)]
+	val := math.Floor(float64(s)/math.Pow(base, e)*10+0.5) / 10
+	f := "%.0f %s"
+	if val < 10 {
+		f = "%.1f %s"
+	}
+
+	return fmt.Sprintf(f, val, suffix)
 }
