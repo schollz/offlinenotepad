@@ -186,22 +186,28 @@
         if (!hasConnected) {
             hasConnected = true;
             // request hashes
-            socket.send(JSON.stringify({
+            socketSend({
                 "type": "hashes",
                 "user": globalUser,
-            }));
+            });
         }
+        syncUp();
         // CY.updateServer();
     };
     const socketCloseListener = (event) => {
         if (socket) {
-            console.log('Disconnected.');
+            console.log('[debug] disconnected');
+            hasConnected = false;
         }
         var url = window.origin.replace("http", "ws") + '/ws';
-        socket = new WebSocket(url);
-        socket.addEventListener('open', socketOpenListener);
-        socket.addEventListener('message', socketMessageListener);
-        socket.addEventListener('close', socketCloseListener);
+        try {
+            socket = new WebSocket(url);
+            socket.addEventListener('open', socketOpenListener);
+            socket.addEventListener('message', socketMessageListener);
+            socket.addEventListener('close', socketCloseListener);
+        } catch (err) {
+            console.log("[debug] no connection available")
+        }
     };
 
 
@@ -224,7 +230,6 @@
             },
             select: function(event) {
                 doc_uuid = event.currentTarget.id;
-                console.log(`clicked ${doc_uuid}`)
                 for (i = 0; i < this.docs.length; i++) {
                     if (this.docs[i].uuid == doc_uuid) {
                         this.doc = this.docs[i];
@@ -250,27 +255,19 @@
                     updateURL(this.doc.title, this.doc.uuid);
 
                     // update in the local storage
-                    if (globalPassword != null && socket.readyState == 1) {
+                    if (globalPassword != null) {
                         encoded = encode(JSON.stringify(this.doc), globalPassword);
-                        localforage.setItem(this.doc.uuid, encoded, function() {
-                            console.log(
-                                `uploaded ${encoded.length} bytes for '${this.doc.title}' (${this.doc.uuid})`);
-                        });
+                        localforage.setItem(this.doc.uuid, encoded);
                     };
 
                     // update in the server by sending an offer
-                    if (socket != null) {
-                        console.log(`sending offer to server for ${this.doc.uuid}`)
-                        if (socket.readyState == 1) {
-                            socket.send(JSON.stringify({
-                                "type": "offer",
-                                "user": globalUser,
-                                "hash": this.doc.hash,
-                                "uuid": this.doc.uuid,
-                            }));
-                        }
-                    }
-
+                    console.log(`[debug] sending offer to server for ${this.doc.uuid}`)
+                    socketSend({
+                        "type": "offer",
+                        "user": globalUser,
+                        "hash": this.doc.hash,
+                        "uuid": this.doc.uuid,
+                    });
 
                     // update in the app
                     foundDoc = false;
@@ -349,8 +346,10 @@
         this.hash = CryptoJS.SHA256(this.uuid + this.title + this.markdown).toString();
     }
 
-    loadDocs = function() {
-        app.docs = [];
+    syncUp = function() {
+        if (socket.readyState != 1) {
+            return
+        }
         localforage.keys().then(function(keys) {
             if (globalPassword != null) {
                 keys.forEach(function(key) {
@@ -359,13 +358,14 @@
                             globalPassword);
                         if (decoded != null) {
                             doc = JSON.parse(decoded);
-                            console.log("loaded: " + doc.uuid + (doc != null));
-                            app.docs.push(doc);
+                            socketSend({
+                                "type": "offer",
+                                "user": globalUser,
+                                "hash": doc.hash,
+                                "uuid": doc.uuid,
+                            });
                         }
                     });
-                });
-                app.docs = app.docs.sort(function(a, b) {
-                    return new Date(b.modified) - new Date(a.modified);
                 });
             }
         }).catch(function(err) {
@@ -374,8 +374,53 @@
         });
     }
 
-    processSocketMessage = function(d) {
-        console.log("processing " + JSON.stringify(d))
+
+    function socketSend(data) {
+        if (socket == null) {
+            return
+        }
+        if (socket.readyState != 1) {
+            return
+        }
+        jsonData = JSON.stringify(data);
+        console.log("[debug] uploading " + jsonData)
+        socket.send(jsonData);
+    }
+
+    function loadDocs() {
+        console.log("[debug] loading docs")
+        app.docs = [];
+
+        localforage.keys().then(function(keys) {
+            if (globalPassword != null) {
+                keys.forEach(function(key) {
+                    localforage.getItem(key).then(function(getValue) {
+                        decoded = decode(getValue,
+                            globalPassword);
+                        if (decoded != null) {
+                            doc = JSON.parse(decoded);
+                            console.log(`[debug] loaded '${doc.title}'`)
+                            app.docs.push(doc);
+                            sortDocs();
+                        }
+                    });
+                });
+
+            }
+        }).catch(function(err) {
+            console.log(err);
+        });
+    }
+
+    function sortDocs() {
+        console.log(`[debug] sorting ${app.docs.length} loaded docs`)
+        app.docs = app.docs.sort(function(a, b) {
+            return new Date(b.modified) - new Date(a.modified);
+        });
+    }
+
+    function processSocketMessage(d) {
+        console.log("[debug] received: " + JSON.stringify(d))
         if (!d.success) { // not a success
             console.log("error: " + d.message);
             return;
@@ -383,13 +428,13 @@
         if (d.type == "request" && d.uuid != undefined) {
             // send the requested data to the server
             localforage.getItem(d.uuid).then(function(getValue) {
-                socket.send(JSON.stringify({
+                socketSend({
                     "type": "update",
                     "user": globalUser,
                     "uuid": d.uuid,
                     "hash": d.hash,
                     "data": getValue,
-                }));
+                });
             });
             return
         } else if (d.type == "hashes" && d.uuids.length > 0) {
@@ -405,11 +450,11 @@
                 }
                 if (needs_update) {
                     console.log(`requesting ${d.uuids[j]} from server`)
-                    socket.send(JSON.stringify({
+                    socketSend({
                         "type": "request",
                         "user": globalUser,
                         "uuid": d.uuids[j],
-                    }));
+                    });
                 }
             }
         } else if (d.type == "update") {
@@ -418,10 +463,6 @@
             if (decoded != null) {
                 doc = JSON.parse(decoded)
                 if (doc != null) {
-                    // TODO: check to see which version is newer
-                    // if the client version is newer, upload to the server
-                    // if the server version is newer
-
                     doci = -1;
                     for (i = 0; i < app.docs.length; i++) {
                         if (app.docs[i].uuid == doc.uuid) {
@@ -437,33 +478,30 @@
                         // if newer, re-encode and update
                         incoming_doc_is_newer = doc.modified > app.docs[i].modified;
                         if (incoming_doc_is_newer) {
-                            console.log("incoming ${doc.title} is newer")
+                            console.log(`incoming '${doc.title}'' is newer`)
                             // re-encode and save and update the app
                             encoded = encode(JSON.stringify(doc), globalPassword);
-                            localforage.setItem(doc.uuid, encoded, function() {
-                                console.log(
-                                    `recieved ${encoded.length} bytes for '${doc.title}' (${doc.uuid})`);
-                            });
+                            localforage.setItem(doc.uuid, encoded);
                             app.docs[doci] = doc;
                         } else {
-                            console.log("incoming ${doc.title} is older, updating server")
+                            console.log(`incoming '${doc.title}' is older, updating server`)
                             // update the server with the current version
                             encoded = encode(JSON.stringify(app.docs[doci]), globalPassword);
-                            socket.send(JSON.stringify({
+                            socketSend({
                                 "type": "update",
                                 "user": globalUser,
                                 "uuid": app.docs[doci].uuid,
                                 "hash": app.docs[doci].hash,
                                 "data": encoded,
-                            }));
+                            });
                         }
                     }
                 }
             }
         } else if (d.type == "message") {
-            console.log("message: " + d.message);
+            console.log("[info] message: " + d.message);
         } else {
-            console.log(`unknown type: ${d.type}`)
+            console.log(`[warn] unknown type: ${d.type}`)
         }
     }
 
