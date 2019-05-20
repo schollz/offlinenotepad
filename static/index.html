@@ -62,7 +62,6 @@
         <textarea class="writing" v-show="showEdit" id="editable" rows=110 placeholder="Click here and start writing" autofocus v-on:keyup="updateDoc" v-model="doc.markdown" v-cloak>
             {{doc.markdown}}
                         <!-- TODO: if . in title, show raw pre-formated text -->
-
         </textarea>
     </main>
     <script src="/static/js/vue.js"></script>
@@ -91,9 +90,9 @@
     /* init */
     // initialize local storage
     localforage.setDriver([
+        localforage.LOCALSTORAGE,
         localforage.INDEXEDDB,
         localforage.WEBSQL,
-        localforage.LOCALSTORAGE
     ])
 
     /* 
@@ -182,17 +181,16 @@
         processSocketMessage(data);
     };
     const socketOpenListener = (event) => {
-        console.log('Connected');
+        console.log('[debug] connected');
         if (!hasConnected) {
             hasConnected = true;
-            // request hashes
+            // request hashes for syncing down
             socketSend({
                 "type": "hashes",
                 "user": globalUser,
             });
         }
         syncUp();
-        // CY.updateServer();
     };
     const socketCloseListener = (event) => {
         if (socket) {
@@ -224,6 +222,9 @@
             showList: false,
         },
         methods: {
+            removeDoc: function(index) {
+                this.docs.splice(index, 1);
+            },
             makeNew: function(e) {
                 this.doc = new Document();
                 this.showEdit = true;
@@ -239,7 +240,6 @@
                 }
             },
             updateDoc: debounce(function() {
-                console.log(this.doc.title);
                 if (this.showEdit) { // only update if in edit mode
                     // update the modified timestamp
                     this.doc.modified = new Date();
@@ -261,30 +261,54 @@
                     };
 
                     // update in the server by sending an offer
-                    console.log(`[debug] sending offer to server for ${this.doc.uuid}`)
-                    socketSend({
-                        "type": "offer",
-                        "user": globalUser,
-                        "hash": this.doc.hash,
-                        "uuid": this.doc.uuid,
-                    });
-
-                    // update in the app
-                    foundDoc = false;
-                    for (i = 0; i < this.docs.length; i++) {
-                        if (this.docs[i].uuid == this.doc.uuid) {
-                            this.docs[i] = this.doc;
-                            foundDoc = true
-                            break
+                    if (this.doc.title.length > 0 || this.doc.markdown.length > 0) {
+                        console.log(`[debug] sending offer to server for '${this.doc.title}'`)
+                        socketSend({
+                            "type": "offer",
+                            "user": globalUser,
+                            "hash": this.doc.hash,
+                            "uuid": this.doc.uuid,
+                        });
+                        // update in the app
+                        foundDoc = false;
+                        for (i = 0; i < this.docs.length; i++) {
+                            if (this.docs[i].uuid == this.doc.uuid) {
+                                this.docs[i] = this.doc;
+                                foundDoc = true
+                                break
+                            }
                         }
-                    }
-                    if (!foundDoc) {
-                        console.log("adding new doc");
-                        this.docs.push(this.doc);
-                        this.docs = this.docs.sort(function(a, b) {
-                            return new Date(b.modified) - new Date(a.modified);
+                        if (!foundDoc) {
+                            console.log("adding new doc");
+                            this.docs.push(this.doc);
+                            sortDocs();
+                        }
+                    } else {
+                        console.log(`[debug] sending delete to server for '${this.doc.uuid}'`)
+                        socketSend({
+                            "type": "delete",
+                            "user": globalUser,
+                            "uuid": this.doc.uuid,
+                        });
+                        // delete from app
+                        for (i = 0; i < this.docs.length; i++) {
+                            if (this.docs[i].uuid == this.doc.uuid) {
+                                this.removeDoc(i);
+                                break
+                            }
+                        }
+                        var _this = this;
+                        localforage.removeItem(this.doc.uuid).then(function() {
+                            console.log(`[debug] removed ${_this.doc.uuid}`);
+                        }).then(function() {
+                            _this.showList = true;
+                            _this.doc = new Document();
+                        }).catch(function(err) {
+                            console.log("[error] problem removing: " + err);
                         });
                     }
+
+
                 }
             }, 200),
         },
@@ -438,6 +462,7 @@
             });
             return
         } else if (d.type == "hashes" && d.uuids.length > 0) {
+            // this will sync down
             // check to see if any hashes differ
             for (j = 0; j < d.uuids.length; j++) {
                 // check if uuid exists
@@ -473,19 +498,20 @@
                     if (doci == -1) {
                         // this is a new doc, push it
                         app.docs.push(doc);
+                        sortDocs();
                     } else {
                         // check to see if the timestamp is newer or older
                         // if newer, re-encode and update
                         incoming_doc_is_newer = doc.modified > app.docs[i].modified;
                         if (incoming_doc_is_newer) {
-                            console.log(`incoming '${doc.title}'' is newer`)
                             // re-encode and save and update the app
+                            console.log(`incoming '${doc.title}'' is newer`)
                             encoded = encode(JSON.stringify(doc), globalPassword);
                             localforage.setItem(doc.uuid, encoded);
                             app.docs[doci] = doc;
                         } else {
-                            console.log(`incoming '${doc.title}' is older, updating server`)
                             // update the server with the current version
+                            console.log(`incoming '${doc.title}' is older, updating server`)
                             encoded = encode(JSON.stringify(app.docs[doci]), globalPassword);
                             socketSend({
                                 "type": "update",
@@ -532,12 +558,13 @@
 
 
 
-    var keySize = 256;
-    var ivSize = 128;
-    var iterations = 100;
+
+    // encryption
+    const keySize = 256;
+    const ivSize = 128;
+    const iterations = 100;
 
     // http://www.adonespitogo.com/articles/encrypting-data-with-cryptojs-aes/
-
     function encode(msgString, pass) {
         msg = CryptoJS.enc.Utf16.parse(LZString.compressToUTF16(msgString))
         var salt = CryptoJS.lib.WordArray.random(128 / 8);
