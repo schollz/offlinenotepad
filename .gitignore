@@ -3,3 +3,4 @@ rwtxt-offline
 tmp/
 *db
 *~
+*.exe
