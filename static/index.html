@@ -111,9 +111,11 @@
     // initialize local storage
     localforage.setDriver([
         localforage.LOCALSTORAGE,
-        localforage.INDEXEDDB,
         localforage.WEBSQL,
-    ])
+        localforage.INDEXEDDB,
+    ]).then(function() {
+	console.log("[debug] initialized localforage");
+    });
 
     /* 
     globals */
