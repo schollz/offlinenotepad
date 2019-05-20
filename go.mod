@@ -1,4 +1,4 @@
-module github.com/schollz/rwtxt-offline
+module github.com/schollz/nenotes
 
 go 1.12
 
