@@ -56,7 +56,7 @@
             <div v-for="doc in docsFound">
                 <div v-bind:id="doc.uuid" v-on:click="select($event)"><span class="link" v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
                 <div>{{ formatDate(doc.created) }}</div>
-                <small>{{doc.snippet}}</small>
+                <q v-html="doc.snippet" class="snippet"></q>
             </div>
         </div>
         <div class="list" v-show="showList" v-cloak>
@@ -274,12 +274,18 @@
                 this.docsFound = [];
                 console.log("[debug] searching")
                 this.searchIndex.search(this.searchText).forEach(function(el) {
-                    console.log(el);
-                    console.log(_this.docs[el.ref].title);
-                    console.log(_this.docs[el.ref].markdown);
                     var doc = _this.docs[el.ref];
-                    // TODO: extract snippets from search
-                    _this.docsFound.push({ title: doc.title, snippet: doc.markdown, uuid: doc.uuid, modified: doc.modified, created: doc.created });
+                    // extract snippets from search
+                    var locations = [];
+                    var wordFound = "";
+                    for (var word in el.matchData.metadata) {
+                        wordFound = word;
+                        for (var pos in el.matchData.metadata[word].text.position) {
+                            locations.push(el.matchData.metadata[word].text.position[pos][0]);
+                        }
+                    }
+                    snippet = getSnippet(doc.markdown, wordFound, locations);
+                    _this.docsFound.push({ title: doc.title, snippet: snippet, uuid: doc.uuid, modified: doc.modified, created: doc.created });
                 })
             }, 500),
             flashCheck: function() {
@@ -798,6 +804,58 @@
             app.showList = true;
         }
         socketCloseListener();
+    }
+
+
+    function getSnippet(text, word, locations) {
+        const locationLimit = 60;
+
+        function trimLeftWords(text) {
+            text = text.split(/[ ]+/).join(" ");
+            for (var i = 0; i < text.length - 1; i++) {
+                if (text[i] == " ") {
+                    text = text.substring(i + 1, text.length);
+                    break;
+                }
+            }
+            return "..." + text;
+        }
+
+        function trimRightWords(text) {
+            text = text.split(/[ ]+/).join(" ");
+            for (var i = text.length; i > 1; i--) {
+                if (text[i] == " ") {
+                    text = text.substring(0, i);
+                    break;
+                }
+            }
+            return text + "...";
+        }
+
+        function formatSnippet(text, currentSection, word) {
+            var re = new RegExp(word, 'g');
+            snippet = text.substring(currentSection[0], currentSection[1]);
+            if (currentSection[0] > 0) {
+                snippet = trimLeftWords(snippet);
+            }
+            if (currentSection[1] < text.length) {
+                snippet = trimRightWords(snippet);
+            }
+            return snippet.replace(re, "<mark>" + word + "</mark>");
+        }
+
+        var snippets = [];
+        var currentSection = [0, locationLimit];
+        for (var i = 0; i < locations.length; i++) {
+            if (locations[i] > currentSection[1] + locationLimit) {
+                snippets.push(formatSnippet(text, currentSection, word));
+                currentSection[0] = locations[i] - locationLimit;
+            }
+            currentSection[1] = locations[i] + locationLimit;
+        }
+        snippets.push(formatSnippet(text, currentSection, word));
+
+        return snippets.join(" ");
     }
 
 

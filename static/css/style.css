@@ -493,3 +493,10 @@ summary {
     position: absolute;
     right: 1em;
 }
+
+.snippet {
+    quotes: "“""”";
+    font-style: italic;
+    font-size: 85%;
+    margin-bottom: 0.5em;
+}
