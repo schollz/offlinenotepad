@@ -105,7 +105,7 @@
         }
     </script> -->
     <script>
-    /* init */
+        /* init */
     // initialize local storage
     localforage.setDriver([
         localforage.LOCALSTORAGE,
@@ -421,9 +421,6 @@
                     // update the modified timestamp
                     this.doc.modified = moment.utc();
 
-                    // update the html (for viewer)
-                    this.doc.rawHTML = (new showdown.Converter()).makeHtml(this.doc.markdown)
-
                     // update the hash
                     this.doc.hash = CryptoJS.SHA256(this.doc.uuid + this.doc.title + this.doc
                         .markdown).toString();
@@ -492,6 +489,8 @@
             showView: function(val) {
                 if (val == true) {
                     this.showEdit = false;
+                    // update the html (for viewer)
+                    this.doc.rawHTML = (new showdown.Converter()).makeHtml(this.doc.markdown)
                 }
             },
             showEdit: function(val) {
@@ -953,6 +952,9 @@
         return snippets.join(" ");
     }
 
+
+
+
     window.addEventListener('popstate', (event) => {
         console.log("[debug] location: " + document.location + ", state: " + JSON.stringify(event.state));
         app.showView = event.state.showView;
@@ -963,8 +965,44 @@
 
     window.onload = function() {
         promptUser();
+
+        document.getElementById('import').onclick = function() {
+        var files = document.getElementById('selectFiles').files;
+        console.log(files);
+        if (files.length <= 0) {
+            return false;
+        }
+
+        var fr = new FileReader();
+
+        fr.onload = function(e) {
+            console.log(e);
+            var result = JSON.parse(e.target.result);
+            console.log(result);
+            result.forEach(function(doc) {
+                console.log(doc.id);
+                console.log(doc.data);
+                newdoc = {
+                    "uuid":doc.id,
+                    "title":doc.slug,
+                    "created":doc.created,
+                    "modified":doc.modified,
+                    "markdown":doc.data,
+                };
+                console.log(newdoc);
+                app.docs.push(newdoc);
+                sortDocs();
+                encoded = encode(JSON.stringify(newdoc), app.password);
+                localforage.setItem(newdoc.uuid, encoded);
+            })
+        }
+
+        fr.readAsText(files.item(0));
+    };
+
     }
     </script>
+    <input type="file" id="selectFiles" value="Import" /> <button id="import">Import</button>
 </body>
 
 </html>
