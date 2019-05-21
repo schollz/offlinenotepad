@@ -175,7 +175,6 @@ type Payload struct {
 	UUID   string   `json:"uuid,omitempty"`
 	UUIDs  []string `json:"uuids,omitempty"`
 	Data   string   `json:"data,omitempty"`
-	Datas  string   `json"datas,omitempty"`
 }
 
 func (p Payload) String() string {
