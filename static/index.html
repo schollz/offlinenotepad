@@ -377,16 +377,7 @@
                     confirmButtonText: 'Yes, delete it!'
                 }).then((result) => {
                     if (result.value) {
-                        console.log(`[debug] deleting '${this.doc.uuid}'`)
-
-                        // delete from app
-                        var doci = -1
-                        for (i = 0; i < this.docs.length; i++) {
-                            if (this.docs[i].uuid == this.doc.uuid) {
-                                doci = i;
-                                break
-                            }
-                        }
+                        console.log(`[debug] removing '${this.doc.uuid}'`)
 
                         var _this = this;
                         this.doc.rawHTML = "";
@@ -402,18 +393,12 @@
                             "hash": this.doc.hash,
                             "data": encoded,
                         });
-                        this.docs[doci] = this.doc;
+                        loadDocs();
+                        this.showList = true;
+                        this.doc = new Document();
+                        this.flashCheck();
                         localforage.setItem(this.doc.uuid, encoded).then(function() {
                             console.log(`[debug] removed ${_this.doc.uuid}`);
-                        }).then(function() {
-                            _this.showList = true;
-                            _this.doc = new Document();
-                            Swal.fire(
-                                'Deleted!',
-                                'Your file has been deleted.',
-                                'success'
-                            )
-                            _this.flashCheck();
                         }).catch(function(err) {
                             console.log("[error] problem removing: " + err);
                         });
