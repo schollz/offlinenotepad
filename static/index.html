@@ -52,7 +52,7 @@
             </span>
         </div>
         <div class="list" v-show="showSearch" v-cloak>
-            <p>Found {{docsFound.length}} items that match '{{searchText}}':</p>
+            <p>Found {{docsFound.length}} items that match '{{searchedText}}':</p>
             <div v-for="doc in docsFound">
                 <div v-bind:id="doc.uuid" v-on:click="select($event)"><span class="link" v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
                 <div>{{ formatDate(doc.created) }}</div>
@@ -188,7 +188,12 @@
         if (newwindowname != undefined && newwindowname.length > 0 && "/" + newwindowname !=
             window.location
             .pathname && newwindowname != window.location.pathname) {
-            history.replaceState({}, newwindowname, newwindowname);
+            history.pushState({
+                showView: app.showView,
+                showEdit: app.showEdit,
+                showList: app.showList,
+                showSearch: app.showSearch,
+            }, newwindowname, newwindowname);
             if (url1 == "/") {
                 url1 = "nenotes"
             }
@@ -239,17 +244,22 @@
             doc: {},
             sortedItems: [],
             docsFound: [],
-            searchText: "",
-            searchIndex: {},
-            searchIndexLastModified: 0,
             showView: false,
             showEdit: false,
             showList: false,
             showSearch: false,
             showCheck: false,
+            searchText: "",
+            searchedText: "",
+            searchIndex: {},
+            searchIndexLastModified: 0,
         },
         methods: {
             searchDocs: debounce(function() {
+                console.log(this.searchText.length);
+                if (this.searchText.length == 0) {
+                    return;
+                }
                 console.log(`[debug] conducting search for ${this.searchText}`)
                 if (moment.utc() - this.searchIndexLastModified > 10000) {
                     console.log("[debug] indexing")
@@ -272,6 +282,7 @@
 
                 var _this = this;
                 this.showSearch = true;
+                this.searchedText = this.searchText;
                 this.docsFound = [];
                 console.log("[debug] searching")
                 this.searchIndex.search(this.searchText).forEach(function(el) {
@@ -862,6 +873,13 @@
         return snippets.join(" ");
     }
 
+    window.addEventListener('popstate', (event) => {
+        console.log("[debug] location: " + document.location + ", state: " + JSON.stringify(event.state));
+        app.showView = event.state.showView;
+        app.showEdit = event.state.showEdit;
+        app.showSearch = event.state.showSearch;
+        app.showList = event.state.showList;
+    });
 
     window.onload = function() {
         globalUser = "zack";
