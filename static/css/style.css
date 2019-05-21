@@ -506,7 +506,7 @@ summary {
     bottom: 2em;
     right: -1em;
     opacity: 0.05;
-    z-index: 99;
+    z-index: -1;
     width: 40em;
     color: white;
 }

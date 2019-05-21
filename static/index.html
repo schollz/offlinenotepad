@@ -36,7 +36,7 @@
 
 <body>
     <main id="app">
-        <div class="checkmark" v-show="showCheck">☑️</div>
+        <div class="checkmark" v-show="showCheck">✔️</div>
         <div class="topbar" v-cloak>
             <span class="fl fonty">
                 <a id='listlink' v-on:click="showList = true">📚</a>&nbsp;
@@ -49,19 +49,20 @@
             </span>
             <span class="fr fonty">
                 <input id="searchbar" v-on:keyup="searchDocs" v-model="searchText" placeholder="search notes" style="width: 8em;">
+                <a id="logoutlink" v-on:click="logOut">🚪</a>
             </span>
         </div>
         <div class="list" v-show="showSearch" v-cloak>
             <p>Found {{docsFound.length}} items that match '{{searchedText}}':</p>
             <div v-for="doc in docsFound">
-                <div v-bind:id="doc.uuid" v-on:click="select($event)"><span class="link" v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
+                <div v-bind:id="doc.uuid" class="link" v-on:click="select($event)"><span v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
                 <div>{{ formatDate(doc.created) }}</div>
                 <q v-html="doc.snippet" class="snippet"></q>
             </div>
         </div>
         <div class="list" v-show="showList" v-cloak>
             <div v-for="doc in sortedDocs">
-                <div v-bind:id="doc.uuid" v-on:click="select($event)"><span class="link" v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
+                <div v-bind:id="doc.uuid" class="link" v-on:click="select($event)"><span v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
                 <div>{{ formatDate(doc.created) }}</div>
             </div>
         </div>
@@ -78,6 +79,7 @@
         </textarea>
         <img src="/static/images/background2.png" class="watermark" v-show="showListOrSearch">
     </main>
+    <script src="https://cdn.jsdelivr.net/npm/js-cookie@2/src/js.cookie.min.js"></script>
     <script src="/static/js/sweetalert.js"></script>
     <script src="/static/js/moment.min.js"></script>
     <script src="/static/js/vue.js"></script>
@@ -115,8 +117,6 @@
 
     /* 
     globals */
-    var globalPassword = "zack";
-    var globalUser = "z"
     var socket; // websocket
     var hasConnected = false;
 
@@ -213,7 +213,7 @@
             // request hashes for syncing down
             socketSend({
                 "type": "hashes",
-                "user": globalUser,
+                "user": app.username,
             });
         }
         syncUp();
@@ -240,6 +240,8 @@
     var app = new Vue({
         el: '#app',
         data: {
+            username: "",
+            password: "",
             docs: [],
             doc: {},
             sortedItems: [],
@@ -255,6 +257,17 @@
             searchIndexLastModified: 0,
         },
         methods: {
+            logOut: function() {
+                console.log("logging out");
+                Cookies.remove("app.username");
+                Cookies.remove("app.password");
+                this.username = "";
+                this.password = "";
+                this.docs = [];
+                this.doc = {};
+                this.docsFound = [];
+                this.searchIndex = {};
+            },
             searchDocs: debounce(function() {
                 console.log(this.searchText.length);
                 if (this.searchText.length == 0) {
@@ -368,7 +381,7 @@
                         console.log(`[debug] sending delete to server for '${this.doc.uuid}'`)
                         socketSend({
                             "type": "delete",
-                            "user": globalUser,
+                            "user": this.username,
                             "uuid": this.doc.uuid,
                         });
 
@@ -385,7 +398,7 @@
                         this.doc.markdown = "";
                         this.doc.title = "deleted";
                         this.doc.modified = moment.utc();
-                        encoded = encode(JSON.stringify(this.doc), globalPassword);
+                        encoded = encode(JSON.stringify(this.doc), this.password);
                         localforage.setItem(this.doc.uuid, encoded).then(function() {
                             console.log(`[debug] removed ${_this.doc.uuid}`);
                         }).then(function() {
@@ -420,8 +433,8 @@
                     updateURL(this.doc.title, this.doc.uuid);
 
                     // update in the local storage
-                    if (globalPassword != null) {
-                        encoded = encode(JSON.stringify(this.doc), globalPassword);
+                    if (this.password != null) {
+                        encoded = encode(JSON.stringify(this.doc), this.password);
                         localforage.setItem(this.doc.uuid, encoded);
                     };
 
@@ -429,7 +442,7 @@
                     console.log(`[debug] sending offer to server for '${this.doc.title}'`)
                     socketSend({
                         "type": "offer",
-                        "user": globalUser,
+                        "user": this.username,
                         "hash": this.doc.hash,
                         "uuid": this.doc.uuid,
                     });
@@ -471,6 +484,11 @@
             }
         },
         watch: {
+            username: function(val) {
+                if (val == "") {
+                    promptUser();
+                }
+            },
             showView: function(val) {
                 if (val == true) {
                     this.showEdit = false;
@@ -482,6 +500,10 @@
                 }
             },
             showList: function(val) {
+                console.log(val);
+                if (this.username == "" || this.password == "") {
+                    promptUser();
+                }
                 if (val == true) {
                     this.showEdit = false;
                     this.showView = false;
@@ -532,11 +554,11 @@
             return
         }
         localforage.keys().then(function(keys) {
-            if (globalPassword != null) {
+            if (app.password != null) {
                 keys.forEach(function(key) {
                     localforage.getItem(key).then(function(getValue) {
                         decoded = decode(getValue,
-                            globalPassword);
+                            app.password);
                         if (decoded != null) {
                             try {
                                 doc = JSON.parse(decoded);
@@ -547,7 +569,7 @@
 
                             socketSend({
                                 "type": "offer",
-                                "user": globalUser,
+                                "user": app.username,
                                 "hash": doc.hash,
                                 "uuid": doc.uuid,
                             });
@@ -579,11 +601,11 @@
         app.docs = [];
 
         localforage.keys().then(function(keys) {
-            if (globalPassword != null) {
+            if (app.password != null) {
                 keys.forEach(function(key) {
                     localforage.getItem(key).then(function(getValue) {
                         decoded = decode(getValue,
-                            globalPassword);
+                            app.password);
                         if (decoded != null) {
                             try {
                                 doc = JSON.parse(decoded);
@@ -627,7 +649,7 @@
             localforage.getItem(d.uuid).then(function(getValue) {
                 socketSend({
                     "type": "update",
-                    "user": globalUser,
+                    "user": app.username,
                     "uuid": d.uuid,
                     "hash": d.hash,
                     "data": getValue,
@@ -657,14 +679,14 @@
                     console.log(`requesting ${d.uuids[j]} from server`)
                     socketSend({
                         "type": "request",
-                        "user": globalUser,
+                        "user": app.username,
                         "uuid": d.uuids[j],
                     });
                 }
             }
         } else if (d.type == "update") {
             // received an update for the data in the app
-            decoded = decode(d.data, globalPassword);
+            decoded = decode(d.data, app.password);
             if (decoded != null) {
                 try {
                     doc = JSON.parse(decoded)
@@ -684,7 +706,7 @@
                     if (doci == -1) {
                         // this is a new doc, push it
                         console.log(`incoming '${doc.title}' is new`)
-                        encoded = encode(JSON.stringify(doc), globalPassword);
+                        encoded = encode(JSON.stringify(doc), app.password);
                         localforage.setItem(doc.uuid, encoded);
                         app.docs.push(doc);
                         sortDocs();
@@ -695,16 +717,16 @@
                         if (incoming_doc_is_newer) {
                             // re-encode and save and update the app
                             console.log(`incoming '${doc.title}'' is newer`)
-                            encoded = encode(JSON.stringify(doc), globalPassword);
+                            encoded = encode(JSON.stringify(doc), app.password);
                             localforage.setItem(doc.uuid, encoded);
                             app.docs[doci] = doc;
                         } else {
                             // update the server with the current version
                             console.log(`incoming '${doc.title}' is older, updating server`)
-                            encoded = encode(JSON.stringify(app.docs[doci]), globalPassword);
+                            encoded = encode(JSON.stringify(app.docs[doci]), app.password);
                             socketSend({
                                 "type": "update",
-                                "user": globalUser,
+                                "user": app.username,
                                 "uuid": app.docs[doci].uuid,
                                 "hash": app.docs[doci].hash,
                                 "data": encoded,
@@ -780,6 +802,61 @@
     }
 
 
+    function promptUser() {
+        app.username = Cookies.get('app.username');
+        app.password = decode(Cookies.get('app.password'), app.username);
+        if (app.username == undefined || app.username == "undefined" || app.username == "") {
+            Swal.fire({
+                title: 'Enter your user name',
+                input: 'text',
+                inputPlaceholder: 'Enter your user name',
+                inputAttributes: {
+                    autocapitalize: 'off',
+                    autocorrect: 'off',
+                },
+                inputValidator: (value) => {
+                    if (!value) {
+                        return 'You need to write something!'
+                    }
+                }
+            }).then(result => {
+                app.username = result.value;
+                Cookies.set('app.username', app.username);
+                app.password = decode(Cookies.get('app.password'), app.username);
+                if (app.password == undefined || app.password == null) {
+                    promptPassword();
+                }
+            })
+        } else if (app.password == undefined || app.password == null || app.password == "undefined" || app.password == "") {
+            promptPassword();
+        } else {
+            startup();
+        }
+    }
+
+
+    function promptPassword() {
+        Swal.fire({
+            title: 'Enter your password',
+            input: 'password',
+            inputPlaceholder: 'Enter your password',
+            inputAttributes: {
+                autocapitalize: 'off',
+                autocorrect: 'off'
+            },
+            inputValidator: (value) => {
+                if (!value) {
+                    return 'You need to write something!'
+                }
+            }
+        }).then(result => {
+            app.password = result.value;
+            Cookies.set('app.password', encode(app.password, app.username));
+            startup();
+        });
+    }
+
+
     function startup() {
         app.doc = new Document();
         loadDocs();
@@ -787,11 +864,11 @@
         if (window.location.pathname != "/") {
             titleToFind = window.location.pathname.substring(1, window.location.pathname.length);
             localforage.keys().then(function(keys) {
-                if (globalPassword != null) {
+                if (app.password != null) {
                     keys.forEach(function(key) {
                         localforage.getItem(key).then(function(getValue) {
                             decoded = decode(getValue,
-                                globalPassword);
+                                app.password);
                             if (decoded != null) {
                                 try {
                                     doc = JSON.parse(decoded);
@@ -882,33 +959,7 @@
     });
 
     window.onload = function() {
-        globalUser = "zack";
-        globalPassword = "zack";
-        startup();
-
-        // Swal.fire({
-        //     title: 'Enter your user name',
-        //     input: 'text',
-        //     inputPlaceholder: 'Enter your user name',
-        //     inputAttributes: {
-        //         autocapitalize: 'off',
-        //         autocorrect: 'off'
-        //     }
-        // }).then(result => {
-        //     globalUser = result.value;
-        //     Swal.fire({
-        //         title: 'Enter your password',
-        //         input: 'password',
-        //         inputPlaceholder: 'Enter your password',
-        //         inputAttributes: {
-        //             autocapitalize: 'off',
-        //             autocorrect: 'off'
-        //         }
-        //     }).then(result => {
-        //         globalPassword = result.value;
-        //         startup();
-        //     });
-        // })
+        promptUser();
     }
     </script>
 </body>
