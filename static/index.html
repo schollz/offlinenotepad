@@ -716,10 +716,13 @@
                         incoming_doc_is_newer = doc.modified > app.docs[i].modified;
                         if (incoming_doc_is_newer) {
                             // re-encode and save and update the app
-                            console.log(`incoming '${doc.title}'' is newer`)
+                            console.log(`incoming '${doc.title}' is newer`)
                             encoded = encode(JSON.stringify(doc), app.password);
                             localforage.setItem(doc.uuid, encoded);
                             app.docs[doci] = doc;
+                            if (app.doc.uuid == doc.uuid) {
+                                app.doc = doc;
+                            }
                         } else {
                             // update the server with the current version
                             console.log(`incoming '${doc.title}' is older, updating server`)
