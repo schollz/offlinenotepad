@@ -36,6 +36,7 @@
 
 <body>
     <main id="app">
+        <input type="file" id="selectFiles" value="Import" /> <button id="import">Import</button>
         <div class="checkmark" v-show="showCheck">✔️</div>
         <div class="topbar" v-cloak>
             <span class="fl fonty">
@@ -494,8 +495,6 @@
                 if (val == true) {
                     console.log(`[debug] sorting ${app.docs.length} loaded docs`)
                     // TODO: set a flag to trigger load docs 
-
-                    loadDocs();
                     app.docs = app.docs.sort(function(a, b) {
                         return new Date(b.modified) - new Date(a.modified);
                     });
@@ -591,38 +590,38 @@
         socket.send(jsonData);
     }
 
+    async function parseDoc(value) {
+        decoded = decode(value, app.password);
+        if (decoded != null) {
+            try {
+                doc = JSON.parse(decoded);
+            } catch (e) {
+                console.log("[warn]: could not parse json")
+                return;
+            }
+            if (doc.title != "deleted") {
+                console.log(`[debug] loaded '${doc.uuid}'`)
+                app.docs.push(doc);
+            } else {
+                console.log(`[debug] skipping deleted '${doc.uuid}'`)
+                // TODO: remove from localstorage if it is older than 10 days
+            }
+        }
+    }
+
     function loadDocs() {
         console.log("[debug] loading docs")
         app.docs = [];
 
-        localforage.keys().then(function(keys) {
-            if (app.password != null) {
-                keys.forEach(function(key) {
-                    localforage.getItem(key).then(function(getValue) {
-                        decoded = decode(getValue,
-                            app.password);
-                        if (decoded != null) {
-                            try {
-                                doc = JSON.parse(decoded);
-                            } catch (e) {
-                                console.log("[warn]: could not parse json")
-                                return;
-                            }
-                            if (doc.title != "deleted") {
-                                console.log(`[debug] loaded '${doc.uuid}'`)
-                                app.docs.push(doc);
-                            } else {
-                                console.log(`[debug] skipping deleted '${doc.uuid}'`)
-                                // TODO: remove from localstorage if it is older than 10 days
-                            }
-                        }
-                    });
-                });
-
-            }
+        localforage.iterate(function(value, key, iterationNumber) {
+            parseDoc(value);
+        }).then(function() {
+            console.log('Iteration has completed');
         }).catch(function(err) {
+            // This code runs if there were any errors
             console.log(err);
         });
+
     }
 
     function sortDocs() {
@@ -857,6 +856,7 @@
 
 
     function startup() {
+        loadDocs();
         app.doc = new Document();
         var loadedDoc = false;
         if (window.location.pathname != "/") {
@@ -958,17 +958,38 @@
         app.showSearch = event.state.showSearch;
         app.showList = event.state.showList;
     });
+    document.getElementById('import').onclick = function() {
+        var files = document.getElementById('selectFiles').files;
+        console.log(files);
+        if (files.length <= 0) {
+
+            return false;
+        }
+        var fr = new FileReader();
+        fr.onload = function(e) {
+            console.log(e);
+            var result = JSON.parse(e.target.result);
+            console.log(result);
+            result.forEach(function(doc) {
+                console.log(doc.id);
+                console.log(doc.data);
+                newdoc = { "uuid": doc.id, "title": doc.slug, "created": doc.created, "modified": doc.modified, "markdown": doc.data, };
+                console.log(newdoc);
+                app.docs.push(newdoc);
+                sortDocs();
+                encoded = encode(JSON.stringify(newdoc), app.password);
+                localforage.setItem(newdoc.uuid, encoded);
+            })
+        }
+        fr.readAsText(files.item(0));
+    };
+
 
     window.onload = function() {
         promptUser();
-        // document.getElementById('import').onclick = function() {
-        // var files = document.getElementById('selectFiles').files;
-        // console.log(files);
-        // if (files.length <= 0) { // return false; // } // var fr=new FileReader(); // fr.onload=function(e) { // console.log(e); // var result=JSON.parse(e.target.result); // console.log(result); // result.forEach(function(doc) { // console.log(doc.id); // console.log(doc.data); // newdoc={ // "uuid" : doc.id, // "title" : doc.slug, // "created" : doc.created, // "modified" : doc.modified, // "markdown" : doc.data, // }; // console.log(newdoc); // app.docs.push(newdoc); // sortDocs(); // encoded=encode(JSON.stringify(newdoc), app.password); // localforage.setItem(newdoc.uuid, encoded); // }) // } // fr.readAsText(files.item(0)); // };
 
     }
     </script>
-    <!-- <input type="file" id="selectFiles" value="Import" /> <button id="import">Import</button> -->
 </body>
 
 </html>
