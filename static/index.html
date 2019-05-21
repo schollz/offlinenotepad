@@ -445,7 +445,6 @@
                     if (!foundDoc) {
                         console.log("adding new doc");
                         this.docs.push(this.doc);
-                        sortDocs();
                     }
                     this.flashCheck();
                 }
@@ -494,6 +493,11 @@
                     promptUser();
                 }
                 if (val == true) {
+                    console.log(`[debug] sorting ${app.docs.length} loaded docs`)
+                    app.docs = app.docs.sort(function(a, b) {
+                        return new Date(b.modified) - new Date(a.modified);
+                    });
+
                     this.showEdit = false;
                     this.showView = false;
                     this.showSearch = false;
@@ -605,7 +609,6 @@
                             if (doc.title != "deleted") {
                                 console.log(`[debug] loaded '${doc.uuid}'`)
                                 app.docs.push(doc);
-                                sortDocs();
                             } else {
                                 console.log(`[debug] skipping deleted '${doc.uuid}'`)
                                 // TODO: remove from localstorage if it is older than 10 days
