@@ -393,12 +393,13 @@
                             "hash": this.doc.hash,
                             "data": encoded,
                         });
-                        loadDocs();
-                        this.showList = true;
-                        this.doc = new Document();
-                        this.flashCheck();
+
                         localforage.setItem(this.doc.uuid, encoded).then(function() {
                             console.log(`[debug] removed ${_this.doc.uuid}`);
+                            loadDocs();
+                            _this.doc = new Document();
+                            _this.showList = true;
+                            _this.flashCheck();
                         }).catch(function(err) {
                             console.log("[error] problem removing: " + err);
                         });
@@ -602,7 +603,7 @@
                                 return;
                             }
                             if (doc.title != "deleted") {
-                                console.log(`[debug] loaded '${doc.title}'`)
+                                console.log(`[debug] loaded '${doc.uuid}'`)
                                 app.docs.push(doc);
                                 sortDocs();
                             } else {
@@ -697,18 +698,18 @@
                     }
                     if (doci == -1) {
                         // this is a new doc, push it
-                        console.log(`incoming '${doc.title}' is new`)
+                        console.log(`incoming '${doc.uuid}' is new`)
                         encoded = encode(JSON.stringify(doc), app.password);
-                        localforage.setItem(doc.uuid, encoded);
-                        app.docs.push(doc);
-                        sortDocs();
+                        localforage.setItem(doc.uuid, encoded).then(function() {
+                            loadDocs();
+                        });
                     } else {
                         // check to see if the timestamp is newer or older
                         // if newer, re-encode and update
                         incoming_doc_is_newer = doc.modified > app.docs[i].modified;
                         if (incoming_doc_is_newer) {
                             // re-encode and save and update the app
-                            console.log(`incoming '${doc.title}' is newer`)
+                            console.log(`incoming '${doc.uuid}' is newer`)
                             encoded = encode(JSON.stringify(doc), app.password);
                             localforage.setItem(doc.uuid, encoded);
                             app.docs[doci] = doc;
@@ -717,7 +718,7 @@
                             }
                         } else {
                             // update the server with the current version
-                            console.log(`incoming '${doc.title}' is older, updating server`)
+                            console.log(`incoming '${doc.uuid}' is older, updating server`)
                             encoded = encode(JSON.stringify(app.docs[doci]), app.password);
                             socketSend({
                                 "type": "update",
