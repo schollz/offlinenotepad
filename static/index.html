@@ -149,15 +149,15 @@
         return target.replace(new RegExp(search, 'g'), replacement);
     };
 
-    // create UUID
-    function create_UUID() {
-        var dt = new Date().getTime();
-        var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-            var r = (dt + Math.random() * 16) % 16 | 0;
-            dt = Math.floor(dt / 16);
-            return (c == 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-        });
-        return uuid;
+    function makeid() {
+        const length = 8;
+        var result = '';
+        var characters = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        var charactersLength = characters.length;
+        for (var i = 0; i < length; i++) {
+            result += characters.charAt(Math.floor(Math.random() * charactersLength));
+        }
+        return result;
     }
 
 
@@ -508,7 +508,7 @@
     // Constructor function for Person objects
     // a = new Document();
     Document = function() {
-        this.uuid = create_UUID();
+        this.uuid = makeid();
         this.created = moment.utc();
         this.modified = moment.utc();
         this.title = "";
