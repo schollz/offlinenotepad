@@ -39,7 +39,6 @@
         <div class="checkmark" v-show="showCheck">☑️</div>
         <div class="topbar" v-cloak>
             <span class="fl fonty">
-                <strong>nenotes</strong>&nbsp;
                 <a id='listlink' v-on:click="showList = true">📚</a>&nbsp;
                 <a id='newlink' v-on:click="makeNew">⚡</a>&nbsp;
                 <span v-show="showEdit">
@@ -52,17 +51,13 @@
                 <input id="searchbar" v-on:keyup="searchDocs" v-model="searchText" placeholder="search notes">
             </span>
         </div>
-        <div class="list">
-            <div>
-                <div><span class="link">link</span></div>
-                <div>ok</div>
+        <div class="list" v-show="showSearch" v-cloak>
+            <p>Found {{docsFound.length}} items that match '{{searchText}}':</p>
+            <div v-for="doc in docsFound">
+                <div v-bind:id="doc.uuid" v-on:click="select($event)"><span class="link" v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
+                <div>{{ formatDate(doc.created) }}</div>
+                <small>{{doc.snippet}}</small>
             </div>
-            <small>...this is something about <strong>cats</strong> that like...</small>
-            <div>
-                <div><span class="link">link</span></div>
-                <div>ok</div>
-            </div>
-            <small>...this is something about <strong>cats</strong> that like...</small>
         </div>
         <div class="list" v-show="showList" v-cloak>
             <div v-for="doc in sortedDocs">
@@ -114,7 +109,7 @@
         localforage.WEBSQL,
         localforage.INDEXEDDB,
     ]).then(function() {
-	console.log("[debug] initialized localforage");
+        console.log("[debug] initialized localforage");
     });
 
     /* 
@@ -242,37 +237,49 @@
             docs: [],
             doc: {},
             sortedItems: [],
+            docsFound: [],
             searchText: "",
+            searchIndex: {},
+            searchIndexLastModified: 0,
             showView: false,
             showEdit: false,
             showList: false,
+            showSearch: false,
             showCheck: false,
         },
         methods: {
             searchDocs: debounce(function() {
-                // TODO: indexing
-                // index documents
-                var documents = [];
-                for (i = 0; i < this.docs.length; i++) {
-                    documents.push({ "id": i, "title": this.docs[i].title, "text": this.docs[i].markdown })
-                }
-                var idx = lunr(function() {
-                    this.ref('id');
-                    this.field('title');
-                    this.field('text');
-                    this.metadataWhitelist = ['position']
+                console.log(`[debug] conducting search for ${this.searchText}`)
+                if (moment.utc() - this.searchIndexLastModified > 10000) {
+                    console.log("[debug] indexing")
+                    var documents = [];
+                    for (i = 0; i < this.docs.length; i++) {
+                        documents.push({ "id": i, "title": this.docs[i].title, "text": this.docs[i].markdown })
+                    }
+                    this.searchIndex = lunr(function() {
+                        this.ref('id');
+                        this.field('title');
+                        this.field('text');
+                        this.metadataWhitelist = ['position']
 
-                    documents.forEach(function(doc) {
-                        this.add(doc)
-                    }, this)
-                })
+                        documents.forEach(function(doc) {
+                            this.add(doc)
+                        }, this)
+                    })
+                    this.searchIndexLastModified = moment.utc();
+                }
+
                 var _this = this;
-                idx.search(this.searchText).forEach(function(el) {
+                this.showSearch = true;
+                this.docsFound = [];
+                console.log("[debug] searching")
+                this.searchIndex.search(this.searchText).forEach(function(el) {
                     console.log(el);
                     console.log(_this.docs[el.ref].title);
                     console.log(_this.docs[el.ref].markdown);
-
+                    var doc = _this.docs[el.ref];
                     // TODO: extract snippets from search
+                    _this.docsFound.push({ title: doc.title, snippet: doc.markdown, uuid: doc.uuid, modified: doc.modified, created: doc.created });
                 })
             }, 500),
             flashCheck: function() {
@@ -346,6 +353,7 @@
                             "user": globalUser,
                             "uuid": this.doc.uuid,
                         });
+
                         // delete from app
                         for (i = 0; i < this.docs.length; i++) {
                             if (this.docs[i].uuid == this.doc.uuid) {
@@ -353,8 +361,14 @@
                                 break
                             }
                         }
+
                         var _this = this;
-                        localforage.removeItem(this.doc.uuid).then(function() {
+                        this.doc.rawHTML = "";
+                        this.doc.markdown = "";
+                        this.doc.title = "deleted";
+                        this.doc.modified = moment.utc();
+                        encoded = encode(JSON.stringify(this.doc), globalPassword);
+                        localforage.setItem(this.doc.uuid, encoded).then(function() {
                             console.log(`[debug] removed ${_this.doc.uuid}`);
                         }).then(function() {
                             _this.showList = true;
@@ -450,12 +464,21 @@
                 if (val == true) {
                     this.showEdit = false;
                     this.showView = false;
+                    this.showSearch = false;
                     updateURL("/", "/");
+                }
+            },
+            showSearch: function(val) {
+                if (val) {
+                    this.showEdit = false;
+                    this.showView = false;
+                    this.showList = false;
                 }
             },
             showViewOrEdit: function(val) {
                 if (val == true) {
                     this.showList = false;
+                    this.showSearch = false;
                     updateURL(this.doc.title, this.doc.uuid);
                 }
             },
@@ -547,10 +570,14 @@
                                 console.log("[warn]: could not parse json")
                                 return;
                             }
-
-                            console.log(`[debug] loaded '${doc.title}'`)
-                            app.docs.push(doc);
-                            sortDocs();
+                            if (doc.title != "deleted") {
+                                console.log(`[debug] loaded '${doc.title}'`)
+                                app.docs.push(doc);
+                                sortDocs();
+                            } else {
+                                console.log(`[debug] skipping deleted '${doc.uuid}'`)
+                                // TODO: remove from localstorage if it is older than 10 days
+                            }
                         }
                     });
                 });
@@ -625,7 +652,7 @@
                     return;
                 }
 
-                if (doc != null) {
+                if (doc != null && doc.title != "deleted") {
                     doci = -1;
                     for (i = 0; i < app.docs.length; i++) {
                         if (app.docs[i].uuid == doc.uuid) {
@@ -635,9 +662,9 @@
                     }
                     if (doci == -1) {
                         // this is a new doc, push it
-                            console.log(`incoming '${doc.title}'' is new`)
-                            encoded = encode(JSON.stringify(doc), globalPassword);
-                            localforage.setItem(doc.uuid, encoded);
+                        console.log(`incoming '${doc.title}' is new`)
+                        encoded = encode(JSON.stringify(doc), globalPassword);
+                        localforage.setItem(doc.uuid, encoded);
                         app.docs.push(doc);
                         sortDocs();
                     } else {
