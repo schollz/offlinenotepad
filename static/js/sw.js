@@ -21,6 +21,7 @@ self.addEventListener('install', e => {
                     '/static/js/vue.js',
                     '/static/js/sweetalert.js',
                     '/static/js/moment.min.js',
+                    '/static/js/js.cookie.min.js',
                 ])
                 .then(() => self.skipWaiting());
         })
