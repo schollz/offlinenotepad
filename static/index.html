@@ -635,6 +635,9 @@
                     }
                     if (doci == -1) {
                         // this is a new doc, push it
+                            console.log(`incoming '${doc.title}'' is new`)
+                            encoded = encode(JSON.stringify(doc), globalPassword);
+                            localforage.setItem(doc.uuid, encoded);
                         app.docs.push(doc);
                         sortDocs();
                     } else {
