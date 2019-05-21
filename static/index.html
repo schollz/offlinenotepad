@@ -76,6 +76,7 @@
             {{doc.markdown}}
                         <!-- TODO: if . in title, show raw pre-formated text -->
         </textarea>
+        <img src="/static/images/background2.png" class="watermark" v-show="showListOrSearch">
     </main>
     <script src="/static/js/sweetalert.js"></script>
     <script src="/static/js/moment.min.js"></script>
@@ -440,6 +441,9 @@
             }, 200),
         },
         computed: {
+            showListOrSearch: function() {
+                return this.showList || this.showSearch;
+            },
             showViewOrEdit: function() {
                 return this.showView || this.showEdit;
             },

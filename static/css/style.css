@@ -500,3 +500,19 @@ summary {
     font-size: 85%;
     margin-bottom: 0.5em;
 }
+
+.watermark {
+    position: fixed;
+    bottom: 2em;
+    right: -1em;
+    opacity: 0.05;
+    z-index: 99;
+    width: 40em;
+    color: white;
+}
+
+@media only screen and (max-width: 600px) {
+    .watermark {
+        width: 120%;
+    }
+}
