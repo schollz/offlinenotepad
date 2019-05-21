@@ -396,7 +396,6 @@
 
                         localforage.setItem(this.doc.uuid, encoded).then(function() {
                             console.log(`[debug] removed ${_this.doc.uuid}`);
-                            loadDocs();
                             _this.doc = new Document();
                             _this.showList = true;
                             _this.flashCheck();
@@ -494,6 +493,9 @@
                 }
                 if (val == true) {
                     console.log(`[debug] sorting ${app.docs.length} loaded docs`)
+                    // TODO: set a flag to trigger load docs 
+
+                    loadDocs();
                     app.docs = app.docs.sort(function(a, b) {
                         return new Date(b.modified) - new Date(a.modified);
                     });
@@ -703,9 +705,7 @@
                         // this is a new doc, push it
                         console.log(`incoming '${doc.uuid}' is new`)
                         encoded = encode(JSON.stringify(doc), app.password);
-                        localforage.setItem(doc.uuid, encoded).then(function() {
-                            loadDocs();
-                        });
+                        localforage.setItem(doc.uuid, encoded);
                     } else {
                         // check to see if the timestamp is newer or older
                         // if newer, re-encode and update
@@ -858,7 +858,6 @@
 
     function startup() {
         app.doc = new Document();
-        loadDocs();
         var loadedDoc = false;
         if (window.location.pathname != "/") {
             titleToFind = window.location.pathname.substring(1, window.location.pathname.length);
