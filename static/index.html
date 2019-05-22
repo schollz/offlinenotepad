@@ -420,12 +420,27 @@
                     // update the URL
                     updateURL(this.doc.title, this.doc.uuid);
 
-                    // update in the local storage
                     if (this.password != null) {
                         encoded = encode(JSON.stringify(this.doc), this.password);
+
+                        // update in the local storage
                         localforage.setItem(this.doc.uuid, encoded);
 
-                        // TODO: update in the server by sending an offer
+                        // update data and hash in server
+                        var datas = {};
+                        datas[this.doc.uuid] = encoded;
+                        socketSend({
+                            type: "update-data",
+                            user: this.username,
+                            datas: datas,
+                        })
+                        var hashes = {}
+                        hashes[this.doc.uuid] = this.doc.hash;
+                        socketSend({
+                            type: "update-hashes",
+                            user: this.username,
+                            datas: hashes,
+                        })
                     };
 
 

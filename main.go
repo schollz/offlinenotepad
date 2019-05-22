@@ -303,7 +303,7 @@ func (s *server) dbHandleUpdate(p Payload, kind string) (rp Payload, err error) 
 	// got offer from user, check if the uuid exists
 	// and whether the hash for that uuid is different
 	rp.Type = "message"
-	rp.Message = fmt.Sprintf("updated %d entires", len(p.Datas))
+	rp.Message = fmt.Sprintf("updated %d entries", len(p.Datas))
 	for uuid, val := range p.Datas {
 		err = s.db.Update(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte(p.User + "-" + kind))
