@@ -242,7 +242,8 @@
         data: {
             username: "",
             password: "",
-            docs: [],
+		docs: {},
+		docList: [],
             doc: {},
             sortedItems: [],
             docsFound: [],
@@ -263,7 +264,8 @@
                 Cookies.remove("app.password");
                 this.username = "";
                 this.password = "";
-                this.docs = [];
+		    this.docs = {};
+		    this.docList = [];
                 this.doc = {};
                 this.docsFound = [];
                 this.searchIndex = {};
@@ -277,7 +279,7 @@
                 if (moment.utc() - this.searchIndexLastModified > 10000) {
                     console.log("[debug] indexing")
                     var documents = [];
-                    for (i = 0; i < this.docs.length; i++) {
+                    for (var i in docs) {
                         documents.push({ "id": i, "title": this.docs[i].title, "text": this.docs[i].markdown })
                     }
                     this.searchIndex = lunr(function() {
@@ -334,22 +336,21 @@
             formatDate: function(datestr) {
                 return moment(datestr).format("MM-DD hh:mm A")
             },
-            removeDoc: function(index) {
-                this.docs.splice(index, 1);
-            },
             makeNew: function(e) {
                 this.doc = new Document();
                 this.showEdit = true;
             },
             select: function(event) {
-                doc_uuid = event.currentTarget.id;
-                for (i = 0; i < this.docs.length; i++) {
-                    if (this.docs[i].uuid == doc_uuid) {
-                        this.doc = this.docs[i];
+                var i = event.currentTarget.id;
+		this.doc = {
+			title: this.docs[i].title,
+			markdown: this.docs[i].markdown,
+			uuid: i,
+			hash: this.docs[i].hash,
+			modified: this.docs[i].modified,
+			created: this.docs[i].created,
+		}
                         this.showView = true;
-                        break
-                    }
-                }
             },
             keyDown: function(e) {
                 var keyCode = e.keyCode || e.which;
@@ -423,29 +424,20 @@
                     if (this.password != null) {
                         encoded = encode(JSON.stringify(this.doc), this.password);
                         localforage.setItem(this.doc.uuid, encoded);
+                    
+			    // TODO: update in the server by sending an offer
                     };
 
-                    // update in the server by sending an offer
-                    console.log(`[debug] sending offer to server for '${this.doc.title}'`)
-                    socketSend({
-                        "type": "offer",
-                        "user": this.username,
-                        "hash": this.doc.hash,
-                        "uuid": this.doc.uuid,
-                    });
-                    // update in the app
-                    foundDoc = false;
-                    for (i = 0; i < this.docs.length; i++) {
-                        if (this.docs[i].uuid == this.doc.uuid) {
-                            this.docs[i] = this.doc;
-                            foundDoc = true
-                            break
-                        }
-                    }
-                    if (!foundDoc) {
-                        console.log("adding new doc");
-                        this.docs.push(this.doc);
-                    }
+                    
+		// update in the app
+		    this.docs[this.doc.uuid] = {
+			title: this.doc.title,
+			uuid: this.doc.uuid,
+			hash: this.doc.hash,
+			modified: this.doc.modified,
+			created: this.doc.created,
+			markdown: this.doc.markdown,
+		    }
                     this.flashCheck();
                 }
             }, 400),
@@ -458,7 +450,12 @@
                 return this.showView || this.showEdit;
             },
             sortedDocs: function() {
-                return this.docs.sort(function(a, b) {
+                    console.log(`[debug] sorting ${Object.keys(app.docs).length} loaded docs`)
+                var docList = [];
+		for (var i in this.docs) {
+			docList.push(docs[i]);
+		}
+		return docList.sort(function(a, b) {
                     return new Date(b.modified) - new Date(a.modified);
                 });
             },
@@ -493,11 +490,7 @@
                     promptUser();
                 }
                 if (val == true) {
-                    console.log(`[debug] sorting ${app.docs.length} loaded docs`)
                     // TODO: set a flag to trigger load docs 
-                    app.docs = app.docs.sort(function(a, b) {
-                        return new Date(b.modified) - new Date(a.modified);
-                    });
 
                     this.showEdit = false;
                     this.showView = false;
@@ -599,19 +592,21 @@
                 console.log("[warn]: could not parse json")
                 return;
             }
-            if (doc.title != "deleted") {
                 console.log(`[debug] loaded '${doc.uuid}'`)
-                app.docs.push(doc);
-            } else {
-                console.log(`[debug] skipping deleted '${doc.uuid}'`)
-                // TODO: remove from localstorage if it is older than 10 days
-            }
+		    app.docs[doc.uuid] = {
+			title: doc.title,
+			uuid: doc.uuid,
+			hash: doc.hash,
+			modified: doc.modified,
+			created: doc.created,
+			markdown: doc.markdown,
+		    };
         }
     }
 
     function loadDocs() {
         console.log("[debug] loading docs")
-        app.docs = [];
+	    app.docs = {};
 
         localforage.iterate(function(value, key, iterationNumber) {
             parseDoc(value);
@@ -622,13 +617,6 @@
             console.log(err);
         });
 
-    }
-
-    function sortDocs() {
-        console.log(`[debug] sorting ${app.docs.length} loaded docs`)
-        app.docs = app.docs.sort(function(a, b) {
-            return new Date(b.modified) - new Date(a.modified);
-        });
     }
 
     function processSocketMessage(d) {
