@@ -62,7 +62,7 @@
             </div>
         </div>
         <div class="list" v-show="showList" v-cloak>
-            <div v-for="doc in sortedDocs">
+            <div v-for="doc in docList">
                 <div v-bind:id="doc.uuid" class="link" v-on:click="select($event)"><span v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
                 <div>{{ formatDate(doc.created) }}</div>
             </div>
@@ -213,7 +213,7 @@
             hasConnected = true;
             // request hashes for syncing down
             socketSend({
-                "type": "hashes",
+                "type": "get-hashes",
                 "user": app.username,
             });
         }
@@ -449,16 +449,6 @@
             showViewOrEdit: function() {
                 return this.showView || this.showEdit;
             },
-            sortedDocs: function() {
-                console.log(`[debug] sorting ${Object.keys(app.docs).length} loaded docs`)
-                var docList = [];
-                for (var i in this.docs) {
-                    docList.push(docs[i]);
-                }
-                return docList.sort(function(a, b) {
-                    return new Date(b.modified) - new Date(a.modified);
-                });
-            },
             isCode: function() {
                 if (this.doc.title == undefined) {
                     return false;
@@ -485,12 +475,18 @@
                 }
             },
             showList: function(val) {
-                console.log(val);
                 if (this.username == "" || this.password == "") {
                     promptUser();
                 }
                 if (val == true) {
-                    // TODO: set a flag to trigger load docs 
+                    console.log(`[debug] sorting ${Object.keys(this.docs).length} loaded docs`)
+                    this.docList = [];
+                    for (var i in this.docs) {
+                        this.docList.push(this.docs[i]);
+                    }
+                    this.docList = this.docList.sort(function(a, b) {
+                        return new Date(b.modified) - new Date(a.modified);
+                    });
 
                     this.showEdit = false;
                     this.showView = false;
@@ -579,7 +575,7 @@
             return
         }
         jsonData = JSON.stringify(data);
-        console.log("[debug] uploading " + jsonData)
+        console.log("[debug] ws-> " + jsonData)
         socket.send(jsonData);
     }
 
@@ -620,24 +616,12 @@
     }
 
     function processSocketMessage(d) {
-        console.log("[debug] received: " + JSON.stringify(d))
+        console.log("[debug] ws<- " + JSON.stringify(d))
         if (!d.success) { // not a success
             console.log("error: " + d.message);
             return;
         }
-        if (d.type == "request" && d.uuid != undefined) {
-            // send the requested data to the server
-            localforage.getItem(d.uuid).then(function(getValue) {
-                socketSend({
-                    "type": "update",
-                    "user": app.username,
-                    "uuid": d.uuid,
-                    "hash": d.hash,
-                    "data": getValue,
-                });
-            });
-            return
-        } else if (d.type == "hashes") {
+        if (d.type == "hashes") {
             if (d.uuids == undefined) {
                 console.log("[debug] no documents found");
                 return;
@@ -791,6 +775,8 @@
     function promptUser() {
         app.username = Cookies.get('app.username');
         app.password = decode(Cookies.get('app.password'), app.username);
+        app.username = "zack";
+        app.password = "zack";
         if (app.username == undefined || app.username == "undefined" || app.username == "") {
             Swal.fire({
                 title: 'Enter your user name',
@@ -946,6 +932,7 @@
         app.showSearch = event.state.showSearch;
         app.showList = event.state.showList;
     });
+    /*
     document.getElementById('import').onclick = function() {
         var files = document.getElementById('selectFiles').files;
         console.log(files);
@@ -971,6 +958,7 @@
         }
         fr.readAsText(files.item(0));
     };
+    */
 
 
     window.onload = function() {
