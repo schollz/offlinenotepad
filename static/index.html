@@ -1021,13 +1021,9 @@
                 console.log(result);
                 result.forEach(function(doc) {
                     console.log(doc.id);
-                    console.log(doc.data);
-                    newdoc = { "uuid": doc.id, "title": doc.slug, "created": doc.created, "modified": doc.modified, "markdown": doc.data, };
-                    console.log(newdoc);
-                    app.docs.push(newdoc);
-                    sortDocs();
-                    encoded = encode(JSON.stringify(newdoc), app.password);
-                    localforage.setItem(newdoc.uuid, encoded);
+                    app.docs[doc.id] = { "uuid": doc.id, "title": doc.slug, "created": doc.created, "modified": doc.modified, "markdown": doc.data, };
+                    encoded = encode(JSON.stringify(app.docs[doc.id]), app.password);
+                    localforage.setItem(doc.id, encoded);
                 })
             }
             fr.readAsText(files.item(0));
