@@ -567,7 +567,7 @@
 
         app.docList = [];
         for (var i in app.docs) {
-            if (app.docs[i].title != "deleted") {
+            if (app.docs[i].title != "deleted" && i != "undefined" && i != undefined) {
                 app.docList.push(app.docs[i]);
             }
         }
