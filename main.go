@@ -262,11 +262,6 @@ func (s *server) dbHandlePayload(p Payload) (rp Payload, err error) {
 }
 
 func (s *server) dbHandleRequest(p Payload) (rp Payload, err error) {
-	if p.UUID == "" {
-		err = fmt.Errorf("need to supply UUID for " + p.Type)
-		return
-	}
-
 	// got offer from user, check if the uuid exists
 	// and whether the hash for that uuid is different
 	rp.Type = "update"
@@ -277,7 +272,7 @@ func (s *server) dbHandleRequest(p Payload) (rp Payload, err error) {
 			b := tx.Bucket([]byte(p.User + "-data"))
 			v := b.Get([]byte(uuid))
 			if v == nil {
-				return fmt.Errorf("%s not found", p.UUID)
+				return fmt.Errorf("%s not found", uuid)
 			}
 			rp.Datas[uuid] = string(v)
 			return nil
@@ -305,15 +300,10 @@ func (s *server) dbHandleGetHashes(p Payload) (rp Payload, err error) {
 }
 
 func (s *server) dbHandleUpdate(p Payload, kind string) (rp Payload, err error) {
-	if len(p.UUID) < 8 {
-		err = fmt.Errorf("need to supply UUID for " + p.Type)
-		return
-	}
-
 	// got offer from user, check if the uuid exists
 	// and whether the hash for that uuid is different
 	rp.Type = "message"
-	rp.Message = "updated"
+	rp.Message = fmt.Sprintf("updated %d entires", len(p.Datas))
 	for uuid, val := range p.Datas {
 		err = s.db.Update(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte(p.User + "-" + kind))
