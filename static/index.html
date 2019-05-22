@@ -747,9 +747,9 @@
 
 
     // encryption
-    const keySize = 256;
-    const ivSize = 128;
-    const iterations = 100;
+    const keySize = 128;
+    const ivSize = 64;
+    const iterations = 10;
 
     // http://www.adonespitogo.com/articles/encrypting-data-with-cryptojs-aes/
     function encode(msgString, pass) {
@@ -989,6 +989,31 @@
         promptUser();
 
     }
+
+s=`Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Egestas tellus rutrum tellus pellentesque. Vitae sapien pellentesque habitant morbi. Sit amet nisl purus in mollis nunc sed. Aenean et tortor at risus. Massa id neque aliquam vestibulum. Sed risus ultricies tristique nulla aliquet. Lacus vel facilisis volutpat est. Est ullamcorper eget nulla facilisi etiam dignissim diam quis enim. Curabitur gravida arcu ac tortor dignissim convallis aenean. Posuere ac ut consequat semper viverra nam. Nulla aliquet enim tortor at. Tempor id eu nisl nunc mi ipsum faucibus vitae. Arcu bibendum at varius vel. Aliquam sem et tortor consequat id porta. Felis bibendum ut tristique et. Proin nibh nisl condimentum id venenatis a condimentum vitae. Purus sit amet luctus venenatis. Tincidunt tortor aliquam nulla facilisi cras fermentum odio eu feugiat. Erat pellentesque adipiscing commodo elit at imperdiet dui accumsan.
+
+Est ullamcorper eget nulla facilisi. Molestie at elementum eu facilisis sed odio morbi quis commodo. Pellentesque nec nam aliquam sem et. Diam vulputate ut pharetra sit amet aliquam id. Magna fermentum iaculis eu non diam phasellus vestibulum lorem. Vitae tortor condimentum lacinia quis vel eros donec ac odio. Tempus egestas sed sed risus. A iaculis at erat pellentesque adipiscing commodo elit at imperdiet. Faucibus ornare suspendisse sed nisi lacus sed viverra. Enim neque volutpat ac tincidunt vitae. Massa vitae tortor condimentum lacinia. Lacus viverra vitae congue eu consequat.
+
+Faucibus turpis in eu mi. Augue ut lectus arcu bibendum at varius. Ultrices sagittis orci a scelerisque purus semper eget. Morbi non arcu risus quis varius. Id porta nibh venenatis cras sed felis eget velit aliquet. Imperdiet nulla malesuada pellentesque elit eget gravida. Malesuada fames ac turpis egestas. Lobortis elementum nibh tellus molestie nunc. Condimentum lacinia quis vel eros donec ac odio. Egestas sed tempus urna et pharetra pharetra massa massa ultricies. Lectus magna fringilla urna porttitor rhoncus dolor purus. Sed elementum tempus egestas sed sed risus pretium quam. Ut sem nulla pharetra diam sit amet nisl suscipit adipiscing. Ultrices in iaculis nunc sed augue. Nec sagittis aliquam malesuada bibendum arcu vitae elementum curabitur vitae. Leo urna molestie at elementum eu facilisis sed odio morbi. Enim nulla aliquet porttitor lacus luctus accumsan tortor. Cras fermentum odio eu feugiat pretium. Volutpat commodo sed egestas egestas fringilla phasellus faucibus.
+
+Ligula ullamcorper malesuada proin libero nunc consequat interdum varius. Egestas sed tempus urna et pharetra pharetra. Libero id faucibus nisl tincidunt. Ultrices gravida dictum fusce ut. Tellus integer feugiat scelerisque varius. Maecenas accumsan lacus vel facilisis volutpat est. Malesuada proin libero nunc consequat interdum varius. Lectus nulla at volutpat diam ut. Curabitur vitae nunc sed velit dignissim sodales ut. Nullam eget felis eget nunc lobortis mattis aliquam faucibus purus. Mattis ullamcorper velit sed ullamcorper. Neque egestas congue quisque egestas. Sed felis eget velit aliquet sagittis id consectetur purus. Molestie at elementum eu facilisis sed odio morbi. Morbi tincidunt augue interdum velit euismod. Vel facilisis volutpat est velit. Lobortis elementum nibh tellus molestie nunc non blandit massa enim. Vel turpis nunc eget lorem dolor sed viverra ipsum.
+
+Mi bibendum neque egestas congue quisque egestas. Auctor urna nunc id cursus metus aliquam. A iaculis at erat pellentesque adipiscing commodo elit at. Dignissim diam quis enim lobortis scelerisque fermentum dui. Enim ut sem viverra aliquet eget. Pellentesque elit ullamcorper dignissim cras tincidunt. Malesuada bibendum arcu vitae elementum curabitur vitae nunc. Augue interdum velit euismod in pellentesque massa placerat duis ultricies. Pellentesque elit eget gravida cum sociis natoque. Sit amet aliquam id diam maecenas ultricies mi. Tellus molestie nunc non blandit massa. Leo vel fringilla est ullamcorper eget. In fermentum posuere urna nec tincidunt praesent. A diam sollicitudin tempor id eu. Mi proin sed libero enim sed. Tempor id eu nisl nunc mi ipsum faucibus vitae. Adipiscing bibendum est ultricies integer quis auctor elit.`
+
+	    var t0 = performance.now();
+	    for (i=0;i<10;i++) {
+		encode(s,"somepassword");
+	    }
+var t1 = performance.now();
+console.log("Call to doSomething took " + (t1 - t0)/10 + " milliseconds.")
+
+var encoded = encode(s,"somepassword");
+	    var t0 = performance.now();
+	    for (i=0;i<10;i++) {
+		decode(encoded,"somepassword");
+	    }
+var t1 = performance.now();
+console.log("Call to doSomething took " + (t1 - t0)/10 + " milliseconds.")
     </script>
 </body>
 
