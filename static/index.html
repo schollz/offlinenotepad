@@ -483,11 +483,6 @@
             }
         },
         watch: {
-            username: function(val) {
-                if (val == "") {
-                    promptUser();
-                }
-            },
             showView: function(val) {
                 if (val == true) {
                     this.showEdit = false;
@@ -505,14 +500,7 @@
                     promptUser();
                 }
                 if (val == true) {
-                    console.log(`[debug] sorting ${Object.keys(this.docs).length} loaded docs`)
-                    this.docList = [];
-                    for (var i in this.docs) {
-                        this.docList.push(this.docs[i]);
-                    }
-                    this.docList = this.docList.sort(function(a, b) {
-                        return new Date(b.modified) - new Date(a.modified);
-                    });
+                    sortDocList();
 
                     this.showEdit = false;
                     this.showView = false;
@@ -556,6 +544,18 @@
         this.title = "";
         this.markdown = "";
         this.hash = CryptoJS.SHA256(this.uuid + this.title + this.markdown).toString();
+    }
+
+    const sortDocList = function() {
+        console.log(`[debug] sorting ${Object.keys(app.docs).length} loaded docs`)
+
+        app.docList = [];
+        for (var i in app.docs) {
+            app.docList.push(app.docs[i]);
+        }
+        app.docList = app.docList.sort(function(a, b) {
+            return new Date(b.modified) - new Date(a.modified);
+        });
     }
 
     syncUp = function() {
@@ -634,6 +634,7 @@
             parseDoc(value);
         }).then(function() {
             console.log('Iteration has completed');
+            sortDocList();
         }).catch(function(err) {
             // This code runs if there were any errors
             console.log(err);
@@ -663,7 +664,7 @@
             }
             if (Object.keys(to_request).length > 0) {
                 var num_requests = Object.keys(to_request).length
-                console.log("[debug] requesting update for ${num_requests} documents");
+                console.log(`[debug] requesting update for ${num_requests} documents`);
                 // send server request for differing documents
                 socketSend({
                     "type": "get-data",
@@ -685,17 +686,19 @@
 
         } else if (d.type == "update") {
             // received an update for the data in the app
+            var updated = false;
             for (var uuid in d.datas) {
+                console.log(`[debug] received ${uuid} from server`)
                 var decoded = decode(d.datas[uuid], app.password);
                 if (decoded == null || decoded == undefined) {
-                    console.log("[warn] could not decode ${uuid}");
+                    console.log(`[warn] could not decode ${uuid}: ${d.datas[uuid]}`);
                     continue
                 }
                 var doc = {};
                 try {
                     doc = JSON.parse(decoded)
                 } catch (err) {
-                    console.log("[warn] could not parse ${decoded}");
+                    console.log(`[warn] could not parse ${decoded}`);
                     continue
                 }
 
@@ -705,12 +708,12 @@
                     if (incoming_doc_is_newer) {
                         // re-encode and save and update the app
                         console.log(`incoming '${doc.uuid}' is newer`)
-                        encoded = encode(JSON.stringify(doc), app.password);
-                        localforage.setItem(doc.uuid, encoded);
+                        localforage.setItem(uuid, d.datas[uuid]);
                         app.docs[doc.uuid] = doc;
                         if (app.doc.uuid == doc.uuid) {
                             app.doc = doc;
                         }
+                        updated = true;
                     } else {
                         // update the server with the current version
                         console.log(`incoming '${doc.uuid}' is older, updating server`)
@@ -727,9 +730,16 @@
                         modified: doc.modified,
                         created: doc.created,
                     }
+
+                    // update in the local storage
+                    localforage.setItem(uuid, d.datas[uuid]);
+                    updated = true;
                 }
             }
-            // TODO: update the view?
+            // update the doc list
+            if (updated) {
+                sortDocList();
+            }
         } else if (d.type == "message") {} else {
             // console.log("[info] message: " + d.message);        } else {
             console.log(`[warn] unknown type: ${d.type}`)
