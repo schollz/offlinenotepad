@@ -398,14 +398,30 @@
                         this.doc.title = "deleted";
                         this.doc.modified = moment.utc();
                         this.doc.hash = CryptoJS.SHA256(this.doc.uuid + this.doc.title + this.doc.markdown).toString()
+                        this.docs[this.doc.uuid] = {
+                            title: this.doc.title,
+                            hash: this.doc.hash,
+                            modified: this.doc.modified,
+                            created: this.doc.created,
+                            markdown: this.doc.markdown,
+                        }
                         var encoded = encode(JSON.stringify(this.doc), this.password);
+
+                        // update data and hash in server
+                        var datas = {};
+                        datas[this.doc.uuid] = encoded;
                         socketSend({
-                            "type": "update",
-                            "user": this.username,
-                            "uuid": this.doc.uuid,
-                            "hash": this.doc.hash,
-                            "data": encoded,
-                        });
+                            type: "update-data",
+                            user: this.username,
+                            datas: datas,
+                        })
+                        var hashes = {}
+                        hashes[this.doc.uuid] = this.doc.hash;
+                        socketSend({
+                            type: "update-hashes",
+                            user: this.username,
+                            datas: hashes,
+                        })
 
                         localforage.setItem(this.doc.uuid, encoded).then(function() {
                             console.log(`[debug] removed ${_this.doc.uuid}`);
@@ -551,7 +567,9 @@
 
         app.docList = [];
         for (var i in app.docs) {
-            app.docList.push(app.docs[i]);
+            if (app.docs[i].title != "deleted") {
+                app.docList.push(app.docs[i]);
+            }
         }
         app.docList = app.docList.sort(function(a, b) {
             return new Date(b.modified) - new Date(a.modified);
@@ -614,7 +632,6 @@
                 console.log("[warn]: could not parse json")
                 return;
             }
-            console.log(`[debug] loaded '${doc.uuid}'`)
             app.docs[doc.uuid] = {
                 title: doc.title,
                 uuid: doc.uuid,
@@ -633,7 +650,6 @@
         localforage.iterate(function(value, key, iterationNumber) {
             parseDoc(value);
         }).then(function() {
-            console.log('Iteration has completed');
             sortDocList();
         }).catch(function(err) {
             // This code runs if there were any errors
@@ -711,7 +727,7 @@
                     incoming_doc_is_newer = doc.modified > app.docs[doc.uuid].modified;
                     if (incoming_doc_is_newer) {
                         // re-encode and save and update the app
-                        console.log(`incoming '${doc.uuid}' is newer`)
+                        console.log(`[debug] incoming '${doc.uuid}' is newer`)
                         localforage.setItem(uuid, d.datas[uuid]);
                         app.docs[doc.uuid] = doc;
                         if (app.doc.uuid == doc.uuid) {
@@ -720,7 +736,7 @@
                         updated = true;
                     } else {
                         // update the server with the current version
-                        console.log(`incoming '${doc.uuid}' is older, updating server`)
+                        console.log(`[debug] incoming '${doc.uuid}' is older, updating server`)
                         to_send_datas[doc.uuid] = encode(JSON.stringify(app.docs[doc.uuid]), app.password);
                         to_send_hashes[doc.uuid] = app.docs[doc.uuid].hash;
                     }
@@ -804,7 +820,7 @@
 
     function decode(transitmessage, pass) {
         if (transitmessage == null) {
-            console.log("got null transmit message")
+            console.log("[debug] got null transmit message")
             return null;
         }
         var salt = CryptoJS.enc.Hex.parse(transitmessage.substr(0, 32));
