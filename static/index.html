@@ -75,8 +75,8 @@
         </div>
         <input id="edittitle" v-show="showEdit" placeholder="Title" v-model="doc.title" v-on:keyup="updateDoc" v-bind:class="{ iscode: isCode }" v-cloak>
         <textarea class="writing" v-show="showEdit" id="editable" rows=110 placeholder="Click here and start writing" autofocus v-on:keyup="updateDoc" @keydown.tab.prevent="tabber($event)" v-model="doc.markdown" v-bind:class="{ iscode: isCode }" v-cloak>
-            {{doc.markdown}}
-                        <!-- TODO: if . in title, show raw pre-formated text -->
+        {{doc.markdown}}
+        <!-- TODO: if . in title, show raw pre-formated text -->
         </textarea>
         <img src="/static/images/background2.png" class="watermark" v-show="showListOrSearch">
     </main>
@@ -116,8 +116,8 @@
         console.log("[debug] initialized localforage");
     });
 
-    /* 
-    globals */
+    /* globals */
+    // this is a list of globals
     var socket; // websocket
     var hasConnected = false;
 
@@ -280,7 +280,11 @@
                     console.log("[debug] indexing")
                     var documents = [];
                     for (var i in docs) {
-                        documents.push({ "id": i, "title": this.docs[i].title, "text": this.docs[i].markdown })
+                        documents.push({
+                            "id": i,
+                            "title": this.docs[i].title,
+                            "text": this.docs[i].markdown
+                        })
                     }
                     this.searchIndex = lunr(function() {
                         this.ref('id');
@@ -312,7 +316,13 @@
                         }
                     }
                     snippet = getSnippet(doc.markdown, wordFound, locations);
-                    _this.docsFound.push({ title: doc.title, snippet: snippet, uuid: doc.uuid, modified: doc.modified, created: doc.created });
+                    _this.docsFound.push({
+                        title: doc.title,
+                        snippet: snippet,
+                        uuid: doc.uuid,
+                        modified: doc.modified,
+                        created: doc.created
+                    });
                 })
             }, 500),
             flashCheck: function() {
