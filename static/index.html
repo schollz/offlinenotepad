@@ -242,8 +242,8 @@
         data: {
             username: "",
             password: "",
-		docs: {},
-		docList: [],
+            docs: {},
+            docList: [],
             doc: {},
             sortedItems: [],
             docsFound: [],
@@ -264,8 +264,8 @@
                 Cookies.remove("app.password");
                 this.username = "";
                 this.password = "";
-		    this.docs = {};
-		    this.docList = [];
+                this.docs = {};
+                this.docList = [];
                 this.doc = {};
                 this.docsFound = [];
                 this.searchIndex = {};
@@ -342,15 +342,15 @@
             },
             select: function(event) {
                 var i = event.currentTarget.id;
-		this.doc = {
-			title: this.docs[i].title,
-			markdown: this.docs[i].markdown,
-			uuid: i,
-			hash: this.docs[i].hash,
-			modified: this.docs[i].modified,
-			created: this.docs[i].created,
-		}
-                        this.showView = true;
+                this.doc = {
+                    title: this.docs[i].title,
+                    markdown: this.docs[i].markdown,
+                    uuid: i,
+                    hash: this.docs[i].hash,
+                    modified: this.docs[i].modified,
+                    created: this.docs[i].created,
+                }
+                this.showView = true;
             },
             keyDown: function(e) {
                 var keyCode = e.keyCode || e.which;
@@ -424,20 +424,20 @@
                     if (this.password != null) {
                         encoded = encode(JSON.stringify(this.doc), this.password);
                         localforage.setItem(this.doc.uuid, encoded);
-                    
-			    // TODO: update in the server by sending an offer
+
+                        // TODO: update in the server by sending an offer
                     };
 
-                    
-		// update in the app
-		    this.docs[this.doc.uuid] = {
-			title: this.doc.title,
-			uuid: this.doc.uuid,
-			hash: this.doc.hash,
-			modified: this.doc.modified,
-			created: this.doc.created,
-			markdown: this.doc.markdown,
-		    }
+
+                    // update in the app
+                    this.docs[this.doc.uuid] = {
+                        title: this.doc.title,
+                        uuid: this.doc.uuid,
+                        hash: this.doc.hash,
+                        modified: this.doc.modified,
+                        created: this.doc.created,
+                        markdown: this.doc.markdown,
+                    }
                     this.flashCheck();
                 }
             }, 400),
@@ -450,12 +450,12 @@
                 return this.showView || this.showEdit;
             },
             sortedDocs: function() {
-                    console.log(`[debug] sorting ${Object.keys(app.docs).length} loaded docs`)
+                console.log(`[debug] sorting ${Object.keys(app.docs).length} loaded docs`)
                 var docList = [];
-		for (var i in this.docs) {
-			docList.push(docs[i]);
-		}
-		return docList.sort(function(a, b) {
+                for (var i in this.docs) {
+                    docList.push(docs[i]);
+                }
+                return docList.sort(function(a, b) {
                     return new Date(b.modified) - new Date(a.modified);
                 });
             },
@@ -592,21 +592,21 @@
                 console.log("[warn]: could not parse json")
                 return;
             }
-                console.log(`[debug] loaded '${doc.uuid}'`)
-		    app.docs[doc.uuid] = {
-			title: doc.title,
-			uuid: doc.uuid,
-			hash: doc.hash,
-			modified: doc.modified,
-			created: doc.created,
-			markdown: doc.markdown,
-		    };
+            console.log(`[debug] loaded '${doc.uuid}'`)
+            app.docs[doc.uuid] = {
+                title: doc.title,
+                uuid: doc.uuid,
+                hash: doc.hash,
+                modified: doc.modified,
+                created: doc.created,
+                markdown: doc.markdown,
+            };
         }
     }
 
     function loadDocs() {
         console.log("[debug] loading docs")
-	    app.docs = {};
+        app.docs = {};
 
         localforage.iterate(function(value, key, iterationNumber) {
             parseDoc(value);
@@ -978,7 +978,7 @@
 
     }
 
-s=`Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Egestas tellus rutrum tellus pellentesque. Vitae sapien pellentesque habitant morbi. Sit amet nisl purus in mollis nunc sed. Aenean et tortor at risus. Massa id neque aliquam vestibulum. Sed risus ultricies tristique nulla aliquet. Lacus vel facilisis volutpat est. Est ullamcorper eget nulla facilisi etiam dignissim diam quis enim. Curabitur gravida arcu ac tortor dignissim convallis aenean. Posuere ac ut consequat semper viverra nam. Nulla aliquet enim tortor at. Tempor id eu nisl nunc mi ipsum faucibus vitae. Arcu bibendum at varius vel. Aliquam sem et tortor consequat id porta. Felis bibendum ut tristique et. Proin nibh nisl condimentum id venenatis a condimentum vitae. Purus sit amet luctus venenatis. Tincidunt tortor aliquam nulla facilisi cras fermentum odio eu feugiat. Erat pellentesque adipiscing commodo elit at imperdiet dui accumsan.
+    s = `Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Egestas tellus rutrum tellus pellentesque. Vitae sapien pellentesque habitant morbi. Sit amet nisl purus in mollis nunc sed. Aenean et tortor at risus. Massa id neque aliquam vestibulum. Sed risus ultricies tristique nulla aliquet. Lacus vel facilisis volutpat est. Est ullamcorper eget nulla facilisi etiam dignissim diam quis enim. Curabitur gravida arcu ac tortor dignissim convallis aenean. Posuere ac ut consequat semper viverra nam. Nulla aliquet enim tortor at. Tempor id eu nisl nunc mi ipsum faucibus vitae. Arcu bibendum at varius vel. Aliquam sem et tortor consequat id porta. Felis bibendum ut tristique et. Proin nibh nisl condimentum id venenatis a condimentum vitae. Purus sit amet luctus venenatis. Tincidunt tortor aliquam nulla facilisi cras fermentum odio eu feugiat. Erat pellentesque adipiscing commodo elit at imperdiet dui accumsan.
 
 Est ullamcorper eget nulla facilisi. Molestie at elementum eu facilisis sed odio morbi quis commodo. Pellentesque nec nam aliquam sem et. Diam vulputate ut pharetra sit amet aliquam id. Magna fermentum iaculis eu non diam phasellus vestibulum lorem. Vitae tortor condimentum lacinia quis vel eros donec ac odio. Tempus egestas sed sed risus. A iaculis at erat pellentesque adipiscing commodo elit at imperdiet. Faucibus ornare suspendisse sed nisi lacus sed viverra. Enim neque volutpat ac tincidunt vitae. Massa vitae tortor condimentum lacinia. Lacus viverra vitae congue eu consequat.
 
@@ -988,20 +988,20 @@ Ligula ullamcorper malesuada proin libero nunc consequat interdum varius. Egesta
 
 Mi bibendum neque egestas congue quisque egestas. Auctor urna nunc id cursus metus aliquam. A iaculis at erat pellentesque adipiscing commodo elit at. Dignissim diam quis enim lobortis scelerisque fermentum dui. Enim ut sem viverra aliquet eget. Pellentesque elit ullamcorper dignissim cras tincidunt. Malesuada bibendum arcu vitae elementum curabitur vitae nunc. Augue interdum velit euismod in pellentesque massa placerat duis ultricies. Pellentesque elit eget gravida cum sociis natoque. Sit amet aliquam id diam maecenas ultricies mi. Tellus molestie nunc non blandit massa. Leo vel fringilla est ullamcorper eget. In fermentum posuere urna nec tincidunt praesent. A diam sollicitudin tempor id eu. Mi proin sed libero enim sed. Tempor id eu nisl nunc mi ipsum faucibus vitae. Adipiscing bibendum est ultricies integer quis auctor elit.`
 
-	    var t0 = performance.now();
-	    for (i=0;i<10;i++) {
-		encode(s,"somepassword");
-	    }
-var t1 = performance.now();
-console.log("Call to doSomething took " + (t1 - t0)/10 + " milliseconds.")
+    var t0 = performance.now();
+    for (i = 0; i < 10; i++) {
+        encode(s, "somepassword");
+    }
+    var t1 = performance.now();
+    console.log("Call to doSomething took " + (t1 - t0) / 10 + " milliseconds.")
 
-var encoded = encode(s,"somepassword");
-	    var t0 = performance.now();
-	    for (i=0;i<10;i++) {
-		decode(encoded,"somepassword");
-	    }
-var t1 = performance.now();
-console.log("Call to doSomething took " + (t1 - t0)/10 + " milliseconds.")
+    var encoded = encode(s, "somepassword");
+    var t0 = performance.now();
+    for (i = 0; i < 10; i++) {
+        decode(encoded, "somepassword");
+    }
+    var t1 = performance.now();
+    console.log("Call to doSomething took " + (t1 - t0) / 10 + " milliseconds.")
     </script>
 </body>
 
