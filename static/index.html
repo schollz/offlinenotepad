@@ -637,37 +637,40 @@
             return;
         }
         if (d.type == "hashes") {
-            if (d.uuids == undefined) {
-                console.log("[debug] no documents found");
-                return;
-            }
-            // this will sync down
-            // check to see if any hashes differ
-            for (j = 0; j < d.uuids.length; j++) {
-                // check if uuid exists
-                var needs_update = true;
-                for (i = 0; i < app.docs.length; i++) {
-                    if (app.docs[i].uuid == d.uuids[j]) {
-                        needs_update = !(app.docs[i].hash == d.hashes[j])
-                        if (needs_update) {
-                            console.log(`${app.docs[i].uuid}: ${d.hashes[j]} != ${app.docs[i].hash}`)
-                        }
-                        break
+            // check to see if any hashes differ to request from server
+            var to_request = {};
+            for (var uuid in d.datas) {
+                if (uuid in app.docs) {
+                    if (d.datas[uuid] != app.docs[uuid].hash) {
+                        to_request[uuid] = "";
                     }
-                }
-                if (needs_update) {
-                    console.log(`requesting ${d.uuids[j]} from server`)
-                    socketSend({
-                        "type": "request",
-                        "user": app.username,
-                        "uuid": d.uuids[j],
-                    });
+                } else {
+                    to_request[uuid] = "";
                 }
             }
-            // TODO: determine which ones to sync up
-            // find all hashes that the client has and the server does not
-            // the ones that need updating on the server will be checked
-            // after the "update" comes form the server
+            if (Object.keys(to_request).length > 0) {
+                console.log("[debug] requesting update for ${Object.keys(to_request).length} documents");
+                console.log(to_request);
+                // TODO: send server request for differing documents
+            } else {
+                console.log("[debug] server documents do not differ");
+            }
+
+            // see if server is missing any
+            var to_send_hashes = {};
+            var to_send_datas = {};
+            for (var uuid in app.docs) {
+                if !(uuid in d.datas) {
+                    to_send_datas[uuid] = encode(JSON.stringify(app.docs[uuid]), app.password);
+                    to_send_hashes[uuid] = app.docs[uuid].hash;
+                }
+            }
+            if (Object.keys(to_send_hashes).length > 0) {
+                console.log(`[debug] server is missing ${Object.keys(to_send_hashes).length} documents`);
+                // TODO: send server hashes, data for the documents it doesn't have
+            } else {
+                console.log("[debug] server is not missing any")
+            }
         } else if (d.type == "update") {
             // received an update for the data in the app
             decoded = decode(d.data, app.password);
@@ -721,8 +724,7 @@
                 }
             }
         } else if (d.type == "message") {
-            console.log("[info] message: " + d.message);
-        } else {
+            // console.log("[info] message: " + d.message);        } else {
             console.log(`[warn] unknown type: ${d.type}`)
         }
     }
