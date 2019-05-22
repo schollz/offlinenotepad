@@ -651,6 +651,10 @@
         var to_send_hashes = {};
         var to_send_datas = {};
         if (d.type == "hashes") {
+            if (d.datas == undefined) {
+                console.log("[warn] datas is undefined")
+                return;
+            }
             // check to see if any hashes differ to request from server
             var to_request = {};
             for (var uuid in d.datas) {

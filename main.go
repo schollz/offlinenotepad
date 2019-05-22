@@ -305,6 +305,10 @@ func (s *server) dbHandleUpdate(p Payload, kind string) (rp Payload, err error) 
 	rp.Type = "message"
 	rp.Message = fmt.Sprintf("updated %d entries", len(p.Datas))
 	for uuid, val := range p.Datas {
+		if len(val) == 0 {
+			err = fmt.Errorf("no data for " + uuid)
+			return
+		}
 		err = s.db.Update(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte(p.User + "-" + kind))
 			return b.Put([]byte(uuid), []byte(val))
