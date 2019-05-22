@@ -8,20 +8,21 @@
     <meta name='description' content='nenotes, any notes for any time.'>
     <meta name='viewport' content='width=device-width, initial-scale=1'>
     <link rel='canonical' href='https://nenotes.com/'>
-    <link rel='manifest' href='/static/manifest.json'>
+    <!-- <link rel='manifest' href='/static/manifest.json'> -->
     <meta name='mobile-web-app-capable' content='yes'>
     <meta name='apple-mobile-web-app-capable' content='yes'>
     <meta name='application-name' content='nenotes'>
     <meta name='apple-mobile-web-app-status-bar-style' content='black'>
     <meta name='apple-mobile-web-app-title' content='nenotes'>
-    <link rel='icon' sizes='192x192' href='/static/images/touch/Airhorner_192.png'>
+    <!--     <link rel='icon' sizes='192x192' href='/static/images/touch/Airhorner_192.png'>
     <link rel='apple-touch-icon' href='/static/images/touch/Airhorner_192.png'>
+    <meta property='og:image' content='https://airhorner.com/images/touch/Airhorner_192.png'>
     <meta name='msapplication-TileImage' content='/static/images/touch/Airhorner_144.png'>
+     -->
     <meta name='msapplication-TileColor' content='#2196F3'>
     <meta name='theme-color' content='#2196F3'>
     <meta property='og:title' content='nenotes'>
     <meta property='og:type' content='website'>
-    <meta property='og:image' content='https://airhorner.com/images/touch/Airhorner_192.png'>
     <meta property='og:url' content='https://nenotes.com/'>
     <meta property='og:description' content='nenotes, any notes for any time.'>
     <meta name='twitter:card' content='summary'>
@@ -62,7 +63,7 @@
             </div>
         </div>
         <div class="list" v-show="showList" v-cloak>
-            <div v-for="doc in sortedDocs">
+            <div v-for="doc in docList">
                 <div v-bind:id="doc.uuid" class="link" v-on:click="select($event)"><span v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
                 <div>{{ formatDate(doc.created) }}</div>
             </div>
@@ -75,8 +76,8 @@
         </div>
         <input id="edittitle" v-show="showEdit" placeholder="Title" v-model="doc.title" v-on:keyup="updateDoc" v-bind:class="{ iscode: isCode }" v-cloak>
         <textarea class="writing" v-show="showEdit" id="editable" rows=110 placeholder="Click here and start writing" autofocus v-on:keyup="updateDoc" @keydown.tab.prevent="tabber($event)" v-model="doc.markdown" v-bind:class="{ iscode: isCode }" v-cloak>
-            {{doc.markdown}}
-                        <!-- TODO: if . in title, show raw pre-formated text -->
+        {{doc.markdown}}
+        <!-- TODO: if . in title, show raw pre-formated text -->
         </textarea>
         <img src="/static/images/background2.png" class="watermark" v-show="showListOrSearch">
     </main>
@@ -116,8 +117,8 @@
         console.log("[debug] initialized localforage");
     });
 
-    /* 
-    globals */
+    /* globals */
+    // this is a list of globals
     var socket; // websocket
     var hasConnected = false;
 
@@ -213,7 +214,7 @@
             hasConnected = true;
             // request hashes for syncing down
             socketSend({
-                "type": "hashes",
+                "type": "get-hashes",
                 "user": app.username,
             });
         }
@@ -242,7 +243,8 @@
         data: {
             username: "",
             password: "",
-            docs: [],
+            docs: {},
+            docList: [],
             doc: {},
             sortedItems: [],
             docsFound: [],
@@ -263,7 +265,8 @@
                 Cookies.remove("app.password");
                 this.username = "";
                 this.password = "";
-                this.docs = [];
+                this.docs = {};
+                this.docList = [];
                 this.doc = {};
                 this.docsFound = [];
                 this.searchIndex = {};
@@ -277,8 +280,12 @@
                 if (moment.utc() - this.searchIndexLastModified > 10000) {
                     console.log("[debug] indexing")
                     var documents = [];
-                    for (i = 0; i < this.docs.length; i++) {
-                        documents.push({ "id": i, "title": this.docs[i].title, "text": this.docs[i].markdown })
+                    for (var i in docs) {
+                        documents.push({
+                            "id": i,
+                            "title": this.docs[i].title,
+                            "text": this.docs[i].markdown
+                        })
                     }
                     this.searchIndex = lunr(function() {
                         this.ref('id');
@@ -310,7 +317,13 @@
                         }
                     }
                     snippet = getSnippet(doc.markdown, wordFound, locations);
-                    _this.docsFound.push({ title: doc.title, snippet: snippet, uuid: doc.uuid, modified: doc.modified, created: doc.created });
+                    _this.docsFound.push({
+                        title: doc.title,
+                        snippet: snippet,
+                        uuid: doc.uuid,
+                        modified: doc.modified,
+                        created: doc.created
+                    });
                 })
             }, 500),
             flashCheck: function() {
@@ -334,22 +347,21 @@
             formatDate: function(datestr) {
                 return moment(datestr).format("MM-DD hh:mm A")
             },
-            removeDoc: function(index) {
-                this.docs.splice(index, 1);
-            },
             makeNew: function(e) {
                 this.doc = new Document();
                 this.showEdit = true;
             },
             select: function(event) {
-                doc_uuid = event.currentTarget.id;
-                for (i = 0; i < this.docs.length; i++) {
-                    if (this.docs[i].uuid == doc_uuid) {
-                        this.doc = this.docs[i];
-                        this.showView = true;
-                        break
-                    }
+                var i = event.currentTarget.id;
+                this.doc = {
+                    title: this.docs[i].title,
+                    markdown: this.docs[i].markdown,
+                    uuid: i,
+                    hash: this.docs[i].hash,
+                    modified: this.docs[i].modified,
+                    created: this.docs[i].created,
                 }
+                this.showView = true;
             },
             keyDown: function(e) {
                 var keyCode = e.keyCode || e.which;
@@ -386,14 +398,30 @@
                         this.doc.title = "deleted";
                         this.doc.modified = moment.utc();
                         this.doc.hash = CryptoJS.SHA256(this.doc.uuid + this.doc.title + this.doc.markdown).toString()
+                        this.docs[this.doc.uuid] = {
+                            title: this.doc.title,
+                            hash: this.doc.hash,
+                            modified: this.doc.modified,
+                            created: this.doc.created,
+                            markdown: this.doc.markdown,
+                        }
                         var encoded = encode(JSON.stringify(this.doc), this.password);
+
+                        // update data and hash in server
+                        var datas = {};
+                        datas[this.doc.uuid] = encoded;
                         socketSend({
-                            "type": "update",
-                            "user": this.username,
-                            "uuid": this.doc.uuid,
-                            "hash": this.doc.hash,
-                            "data": encoded,
-                        });
+                            type: "update-data",
+                            user: this.username,
+                            datas: datas,
+                        })
+                        var hashes = {}
+                        hashes[this.doc.uuid] = this.doc.hash;
+                        socketSend({
+                            type: "update-hashes",
+                            user: this.username,
+                            datas: hashes,
+                        })
 
                         localforage.setItem(this.doc.uuid, encoded).then(function() {
                             console.log(`[debug] removed ${_this.doc.uuid}`);
@@ -419,32 +447,38 @@
                     // update the URL
                     updateURL(this.doc.title, this.doc.uuid);
 
-                    // update in the local storage
                     if (this.password != null) {
                         encoded = encode(JSON.stringify(this.doc), this.password);
+
+                        // update in the local storage
                         localforage.setItem(this.doc.uuid, encoded);
+
+                        // update data and hash in server
+                        var datas = {};
+                        datas[this.doc.uuid] = encoded;
+                        socketSend({
+                            type: "update-data",
+                            user: this.username,
+                            datas: datas,
+                        })
+                        var hashes = {}
+                        hashes[this.doc.uuid] = this.doc.hash;
+                        socketSend({
+                            type: "update-hashes",
+                            user: this.username,
+                            datas: hashes,
+                        })
                     };
 
-                    // update in the server by sending an offer
-                    console.log(`[debug] sending offer to server for '${this.doc.title}'`)
-                    socketSend({
-                        "type": "offer",
-                        "user": this.username,
-                        "hash": this.doc.hash,
-                        "uuid": this.doc.uuid,
-                    });
+
                     // update in the app
-                    foundDoc = false;
-                    for (i = 0; i < this.docs.length; i++) {
-                        if (this.docs[i].uuid == this.doc.uuid) {
-                            this.docs[i] = this.doc;
-                            foundDoc = true
-                            break
-                        }
-                    }
-                    if (!foundDoc) {
-                        console.log("adding new doc");
-                        this.docs.push(this.doc);
+                    this.docs[this.doc.uuid] = {
+                        title: this.doc.title,
+                        uuid: this.doc.uuid,
+                        hash: this.doc.hash,
+                        modified: this.doc.modified,
+                        created: this.doc.created,
+                        markdown: this.doc.markdown,
                     }
                     this.flashCheck();
                 }
@@ -457,11 +491,6 @@
             showViewOrEdit: function() {
                 return this.showView || this.showEdit;
             },
-            sortedDocs: function() {
-                return this.docs.sort(function(a, b) {
-                    return new Date(b.modified) - new Date(a.modified);
-                });
-            },
             isCode: function() {
                 if (this.doc.title == undefined) {
                     return false;
@@ -470,11 +499,6 @@
             }
         },
         watch: {
-            username: function(val) {
-                if (val == "") {
-                    promptUser();
-                }
-            },
             showView: function(val) {
                 if (val == true) {
                     this.showEdit = false;
@@ -488,16 +512,11 @@
                 }
             },
             showList: function(val) {
-                console.log(val);
                 if (this.username == "" || this.password == "") {
                     promptUser();
                 }
                 if (val == true) {
-                    console.log(`[debug] sorting ${app.docs.length} loaded docs`)
-                    // TODO: set a flag to trigger load docs 
-                    app.docs = app.docs.sort(function(a, b) {
-                        return new Date(b.modified) - new Date(a.modified);
-                    });
+                    sortDocList();
 
                     this.showEdit = false;
                     this.showView = false;
@@ -543,6 +562,20 @@
         this.hash = CryptoJS.SHA256(this.uuid + this.title + this.markdown).toString();
     }
 
+    const sortDocList = function() {
+        console.log(`[debug] sorting ${Object.keys(app.docs).length} loaded docs`)
+
+        app.docList = [];
+        for (var i in app.docs) {
+            if (app.docs[i].title != "deleted") {
+                app.docList.push(app.docs[i]);
+            }
+        }
+        app.docList = app.docList.sort(function(a, b) {
+            return new Date(b.modified) - new Date(a.modified);
+        });
+    }
+
     syncUp = function() {
         if (socket.readyState != 1) {
             return
@@ -586,7 +619,7 @@
             return
         }
         jsonData = JSON.stringify(data);
-        console.log("[debug] uploading " + jsonData)
+        console.log("[debug] ws-> " + jsonData)
         socket.send(jsonData);
     }
 
@@ -599,24 +632,25 @@
                 console.log("[warn]: could not parse json")
                 return;
             }
-            if (doc.title != "deleted") {
-                console.log(`[debug] loaded '${doc.uuid}'`)
-                app.docs.push(doc);
-            } else {
-                console.log(`[debug] skipping deleted '${doc.uuid}'`)
-                // TODO: remove from localstorage if it is older than 10 days
-            }
+            app.docs[doc.uuid] = {
+                title: doc.title,
+                uuid: doc.uuid,
+                hash: doc.hash,
+                modified: doc.modified,
+                created: doc.created,
+                markdown: doc.markdown,
+            };
         }
     }
 
     function loadDocs() {
         console.log("[debug] loading docs")
-        app.docs = [];
+        app.docs = {};
 
         localforage.iterate(function(value, key, iterationNumber) {
             parseDoc(value);
         }).then(function() {
-            console.log('Iteration has completed');
+            sortDocList();
         }).catch(function(err) {
             // This code runs if there were any errors
             console.log(err);
@@ -624,119 +658,126 @@
 
     }
 
-    function sortDocs() {
-        console.log(`[debug] sorting ${app.docs.length} loaded docs`)
-        app.docs = app.docs.sort(function(a, b) {
-            return new Date(b.modified) - new Date(a.modified);
-        });
-    }
-
     function processSocketMessage(d) {
-        console.log("[debug] received: " + JSON.stringify(d))
+        console.log("[debug] ws<- " + JSON.stringify(d))
         if (!d.success) { // not a success
             console.log("error: " + d.message);
             return;
         }
-        if (d.type == "request" && d.uuid != undefined) {
-            // send the requested data to the server
-            localforage.getItem(d.uuid).then(function(getValue) {
-                socketSend({
-                    "type": "update",
-                    "user": app.username,
-                    "uuid": d.uuid,
-                    "hash": d.hash,
-                    "data": getValue,
-                });
-            });
-            return
-        } else if (d.type == "hashes") {
-            if (d.uuids == undefined) {
-                console.log("[debug] no documents found");
-                return;
+        var to_send_hashes = {};
+        var to_send_datas = {};
+        if (d.type == "hashes") {
+            if (d.datas == undefined) {
+                d.datas = {};
             }
-            // this will sync down
-            // check to see if any hashes differ
-            for (j = 0; j < d.uuids.length; j++) {
-                // check if uuid exists
-                var needs_update = true;
-                for (i = 0; i < app.docs.length; i++) {
-                    if (app.docs[i].uuid == d.uuids[j]) {
-                        needs_update = !(app.docs[i].hash == d.hashes[j])
-                        if (needs_update) {
-                            console.log(`${app.docs[i].uuid}: ${d.hashes[j]} != ${app.docs[i].hash}`)
-                        }
-                        break
+            // check to see if any hashes differ to request from server
+            var to_request = {};
+            for (var uuid in d.datas) {
+                if (uuid in app.docs) {
+                    if (d.datas[uuid] != app.docs[uuid].hash) {
+                        to_request[uuid] = "";
                     }
-                }
-                if (needs_update) {
-                    console.log(`requesting ${d.uuids[j]} from server`)
-                    socketSend({
-                        "type": "request",
-                        "user": app.username,
-                        "uuid": d.uuids[j],
-                    });
+                } else {
+                    to_request[uuid] = "";
                 }
             }
-            // TODO: determine which ones to sync up
-            // find all hashes that the client has and the server does not
-            // the ones that need updating on the server will be checked
-            // after the "update" comes form the server
+            if (Object.keys(to_request).length > 0) {
+                var num_requests = Object.keys(to_request).length
+                console.log(`[debug] requesting update for ${num_requests} documents`);
+                // send server request for differing documents
+                socketSend({
+                    "type": "get-data",
+                    "user": app.username,
+                    "datas": to_request,
+                });
+            } else {
+                console.log("[debug] server documents do not differ");
+            }
+
+            // see if server is missing any
+
+            for (var uuid in app.docs) {
+                if (uuid in d.datas) {} else {
+                    to_send_datas[uuid] = encode(JSON.stringify(app.docs[uuid]), app.password);
+                    to_send_hashes[uuid] = app.docs[uuid].hash;
+                }
+            }
+
         } else if (d.type == "update") {
             // received an update for the data in the app
-            decoded = decode(d.data, app.password);
-            if (decoded != null) {
+            var updated = false;
+            for (var uuid in d.datas) {
+                console.log(`[debug] received ${uuid} from server`)
+                var decoded = decode(d.datas[uuid], app.password);
+                if (decoded == null || decoded == undefined) {
+                    console.log(`[warn] could not decode ${uuid}: ${d.datas[uuid]}`);
+                    continue
+                }
+                var doc = {};
                 try {
                     doc = JSON.parse(decoded)
                 } catch (err) {
-                    console.log(err)
-                    return;
+                    console.log(`[warn] could not parse ${decoded}`);
+                    continue
                 }
 
-                if (doc != null) {
-                    doci = -1;
-                    for (i = 0; i < app.docs.length; i++) {
-                        if (app.docs[i].uuid == doc.uuid) {
-                            doci = i;
-                            break
+                if (doc.uuid in app.docs) {
+                    // check the modified timestamp, keep newer
+                    incoming_doc_is_newer = doc.modified > app.docs[doc.uuid].modified;
+                    if (incoming_doc_is_newer) {
+                        // re-encode and save and update the app
+                        console.log(`[debug] incoming '${doc.uuid}' is newer`)
+                        localforage.setItem(uuid, d.datas[uuid]);
+                        app.docs[doc.uuid] = doc;
+                        if (app.doc.uuid == doc.uuid) {
+                            app.doc = doc;
                         }
-                    }
-                    if (doci == -1) {
-                        // this is a new doc, push it
-                        console.log(`incoming '${doc.uuid}' is new`)
-                        encoded = encode(JSON.stringify(doc), app.password);
-                        localforage.setItem(doc.uuid, encoded);
+                        updated = true;
                     } else {
-                        // check to see if the timestamp is newer or older
-                        // if newer, re-encode and update
-                        incoming_doc_is_newer = doc.modified > app.docs[i].modified;
-                        if (incoming_doc_is_newer) {
-                            // re-encode and save and update the app
-                            console.log(`incoming '${doc.uuid}' is newer`)
-                            encoded = encode(JSON.stringify(doc), app.password);
-                            localforage.setItem(doc.uuid, encoded);
-                            app.docs[doci] = doc;
-                            if (app.doc.uuid == doc.uuid) {
-                                app.doc = doc;
-                            }
-                        } else {
-                            // update the server with the current version
-                            console.log(`incoming '${doc.uuid}' is older, updating server`)
-                            encoded = encode(JSON.stringify(app.docs[doci]), app.password);
-                            socketSend({
-                                "type": "update",
-                                "user": app.username,
-                                "uuid": app.docs[doci].uuid,
-                                "hash": app.docs[doci].hash,
-                                "data": encoded,
-                            });
-                        }
+                        // update the server with the current version
+                        console.log(`[debug] incoming '${doc.uuid}' is older, updating server`)
+                        to_send_datas[doc.uuid] = encode(JSON.stringify(app.docs[doc.uuid]), app.password);
+                        to_send_hashes[doc.uuid] = app.docs[doc.uuid].hash;
                     }
+                } else {
+                    // add new doc
+                    app.docs[doc.uuid] = {
+                        title: doc.title,
+                        markdown: doc.markdown,
+                        uuid: doc.uuid,
+                        hash: doc.hash,
+                        modified: doc.modified,
+                        created: doc.created,
+                    }
+
+                    // update in the local storage
+                    localforage.setItem(uuid, d.datas[uuid]);
+                    updated = true;
                 }
             }
-        } else if (d.type == "message") {
-            console.log("[info] message: " + d.message);
-        } else {
+            // update the doc list
+            if (updated) {
+                sortDocList();
+            }
+        } else if (d.type == "message") {} else {
+            // console.log("[info] message: " + d.message);        } else {
             console.log(`[warn] unknown type: ${d.type}`)
+        }
+        if (Object.keys(to_send_hashes).length > 0) {
+            console.log(`[debug] server is missing ${Object.keys(to_send_hashes).length} documents`);
+            // send server hashes, data for the documents it doesn't have or that needs updating
+            socketSend({
+                type: "update-data",
+                user: app.username,
+                datas: to_send_datas,
+            })
+            socketSend({
+                type: "update-hashes",
+                user: app.username,
+                datas: to_send_hashes,
+            })
+        } else {
+            console.log("[debug] server is not missing any")
         }
     }
 
@@ -778,7 +819,7 @@
 
     function decode(transitmessage, pass) {
         if (transitmessage == null) {
-            console.log("got null transmit message")
+            console.log("[debug] got null transmit message")
             return null;
         }
         var salt = CryptoJS.enc.Hex.parse(transitmessage.substr(0, 32));
@@ -803,6 +844,8 @@
     function promptUser() {
         app.username = Cookies.get('app.username');
         app.password = decode(Cookies.get('app.password'), app.username);
+        app.username = "zack";
+        app.password = "zack";
         if (app.username == undefined || app.username == "undefined" || app.username == "") {
             Swal.fire({
                 title: 'Enter your user name',
@@ -958,39 +1001,38 @@
         app.showSearch = event.state.showSearch;
         app.showList = event.state.showList;
     });
-    document.getElementById('import').onclick = function() {
-        var files = document.getElementById('selectFiles').files;
-        console.log(files);
-        if (files.length <= 0) {
 
-            return false;
-        }
-        var fr = new FileReader();
-        fr.onload = function(e) {
-            console.log(e);
-            var result = JSON.parse(e.target.result);
-            console.log(result);
-            result.forEach(function(doc) {
-                console.log(doc.id);
-                console.log(doc.data);
-                newdoc = { "uuid": doc.id, "title": doc.slug, "created": doc.created, "modified": doc.modified, "markdown": doc.data, };
-                console.log(newdoc);
-                app.docs.push(newdoc);
-                sortDocs();
-                encoded = encode(JSON.stringify(newdoc), app.password);
-                localforage.setItem(newdoc.uuid, encoded);
-            })
-        }
-        fr.readAsText(files.item(0));
-    };
+
 
 
     window.onload = function() {
+        document.getElementById('import').onclick = function() {
+            var files = document.getElementById('selectFiles').files;
+            console.log(files);
+            if (files.length <= 0) {
+
+                return false;
+            }
+            var fr = new FileReader();
+            fr.onload = function(e) {
+                console.log(e);
+                var result = JSON.parse(e.target.result);
+                console.log(result);
+                result.forEach(function(doc) {
+                    console.log(doc.id);
+                    app.docs[doc.id] = { "uuid": doc.id, "title": doc.slug, "created": doc.created, "modified": doc.modified, "markdown": doc.data, hash: CryptoJS.SHA256(doc.id + doc.slug + doc.data).toString() };
+                    encoded = encode(JSON.stringify(app.docs[doc.id]), app.password);
+                    localforage.setItem(doc.id, encoded);
+                })
+            }
+            fr.readAsText(files.item(0));
+        };
+
         promptUser();
 
     }
 
-s=`Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Egestas tellus rutrum tellus pellentesque. Vitae sapien pellentesque habitant morbi. Sit amet nisl purus in mollis nunc sed. Aenean et tortor at risus. Massa id neque aliquam vestibulum. Sed risus ultricies tristique nulla aliquet. Lacus vel facilisis volutpat est. Est ullamcorper eget nulla facilisi etiam dignissim diam quis enim. Curabitur gravida arcu ac tortor dignissim convallis aenean. Posuere ac ut consequat semper viverra nam. Nulla aliquet enim tortor at. Tempor id eu nisl nunc mi ipsum faucibus vitae. Arcu bibendum at varius vel. Aliquam sem et tortor consequat id porta. Felis bibendum ut tristique et. Proin nibh nisl condimentum id venenatis a condimentum vitae. Purus sit amet luctus venenatis. Tincidunt tortor aliquam nulla facilisi cras fermentum odio eu feugiat. Erat pellentesque adipiscing commodo elit at imperdiet dui accumsan.
+    s = `Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Egestas tellus rutrum tellus pellentesque. Vitae sapien pellentesque habitant morbi. Sit amet nisl purus in mollis nunc sed. Aenean et tortor at risus. Massa id neque aliquam vestibulum. Sed risus ultricies tristique nulla aliquet. Lacus vel facilisis volutpat est. Est ullamcorper eget nulla facilisi etiam dignissim diam quis enim. Curabitur gravida arcu ac tortor dignissim convallis aenean. Posuere ac ut consequat semper viverra nam. Nulla aliquet enim tortor at. Tempor id eu nisl nunc mi ipsum faucibus vitae. Arcu bibendum at varius vel. Aliquam sem et tortor consequat id porta. Felis bibendum ut tristique et. Proin nibh nisl condimentum id venenatis a condimentum vitae. Purus sit amet luctus venenatis. Tincidunt tortor aliquam nulla facilisi cras fermentum odio eu feugiat. Erat pellentesque adipiscing commodo elit at imperdiet dui accumsan.
 
 Est ullamcorper eget nulla facilisi. Molestie at elementum eu facilisis sed odio morbi quis commodo. Pellentesque nec nam aliquam sem et. Diam vulputate ut pharetra sit amet aliquam id. Magna fermentum iaculis eu non diam phasellus vestibulum lorem. Vitae tortor condimentum lacinia quis vel eros donec ac odio. Tempus egestas sed sed risus. A iaculis at erat pellentesque adipiscing commodo elit at imperdiet. Faucibus ornare suspendisse sed nisi lacus sed viverra. Enim neque volutpat ac tincidunt vitae. Massa vitae tortor condimentum lacinia. Lacus viverra vitae congue eu consequat.
 
@@ -1000,20 +1042,20 @@ Ligula ullamcorper malesuada proin libero nunc consequat interdum varius. Egesta
 
 Mi bibendum neque egestas congue quisque egestas. Auctor urna nunc id cursus metus aliquam. A iaculis at erat pellentesque adipiscing commodo elit at. Dignissim diam quis enim lobortis scelerisque fermentum dui. Enim ut sem viverra aliquet eget. Pellentesque elit ullamcorper dignissim cras tincidunt. Malesuada bibendum arcu vitae elementum curabitur vitae nunc. Augue interdum velit euismod in pellentesque massa placerat duis ultricies. Pellentesque elit eget gravida cum sociis natoque. Sit amet aliquam id diam maecenas ultricies mi. Tellus molestie nunc non blandit massa. Leo vel fringilla est ullamcorper eget. In fermentum posuere urna nec tincidunt praesent. A diam sollicitudin tempor id eu. Mi proin sed libero enim sed. Tempor id eu nisl nunc mi ipsum faucibus vitae. Adipiscing bibendum est ultricies integer quis auctor elit.`
 
-	    var t0 = performance.now();
-	    for (i=0;i<10;i++) {
-		encode(s,"somepassword");
-	    }
-var t1 = performance.now();
-console.log("Call to doSomething took " + (t1 - t0)/10 + " milliseconds.")
+    var t0 = performance.now();
+    for (i = 0; i < 10; i++) {
+        encode(s, "somepassword");
+    }
+    var t1 = performance.now();
+    console.log("Call to doSomething took " + (t1 - t0) / 10 + " milliseconds.")
 
-var encoded = encode(s,"somepassword");
-	    var t0 = performance.now();
-	    for (i=0;i<10;i++) {
-		decode(encoded,"somepassword");
-	    }
-var t1 = performance.now();
-console.log("Call to doSomething took " + (t1 - t0)/10 + " milliseconds.")
+    var encoded = encode(s, "somepassword");
+    var t0 = performance.now();
+    for (i = 0; i < 10; i++) {
+        decode(encoded, "somepassword");
+    }
+    var t1 = performance.now();
+    console.log("Call to doSomething took " + (t1 - t0) / 10 + " milliseconds.")
     </script>
 </body>
 
