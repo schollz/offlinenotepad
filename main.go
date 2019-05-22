@@ -169,12 +169,8 @@ type Payload struct {
 	Message string `json:"message"`
 
 	// data that can be passed
-	User   string   `json:"user,omitempty"`
-	Hash   string   `json:"hash,omitempty"`
-	Hashes []string `json:"hashes,omitempty"`
-	UUID   string   `json:"uuid,omitempty"`
-	UUIDs  []string `json:"uuids,omitempty"`
-	Data   string   `json:"data,omitempty"`
+	User  string            `json:"user,omitempty"`
+	Datas map[string]string `json:"datas,omitempty"`
 }
 
 func (p Payload) String() string {
@@ -246,21 +242,18 @@ func (s *server) dbHandlePayload(p Payload) (rp Payload, err error) {
 
 	// switch on the type of payload
 	switch p.Type {
-	case "offer":
-		// check database for hash and see if its new and should request it
-		rp, err = s.dbHandleOffer(p)
-	case "update":
-		// update the database with the specified payload
-		rp, err = s.dbHandleUpdate(p)
-	case "hashes":
-		// client requests a list of hashes
+	case "update-data":
+		// update the database with the specified encrypted data
+		rp, err = s.dbHandleUpdate(p, "data")
+	case "update-hashes":
+		// update the database of the hashes
+		rp, err = s.dbHandleUpdate(p, "hashes")
+	case "get-hashes":
+		// client requests a list of ALL hashes
 		rp, err = s.dbHandleGetHashes(p)
-	case "request":
-		// client requests the data for a uuid
+	case "get-data":
+		// client requests data for specified UUIDs
 		rp, err = s.dbHandleRequest(p)
-	case "delete":
-		// client requests the data for a uuid
-		rp, err = s.dbHandleDelete(p)
 	default:
 		log.Debug("unknown type")
 	}
@@ -277,62 +270,41 @@ func (s *server) dbHandleRequest(p Payload) (rp Payload, err error) {
 	// got offer from user, check if the uuid exists
 	// and whether the hash for that uuid is different
 	rp.Type = "update"
-	rp.UUID = p.UUID
+	rp.Datas = make(map[string]string)
 	rp.Message = "ok"
-	err = s.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(p.User + "-data"))
-		v := b.Get([]byte(p.UUID))
-		if v == nil {
-			return fmt.Errorf("%s not found", p.UUID)
+	for uuid := range p.Datas {
+		err = s.db.View(func(tx *bolt.Tx) error {
+			b := tx.Bucket([]byte(p.User + "-data"))
+			v := b.Get([]byte(uuid))
+			if v == nil {
+				return fmt.Errorf("%s not found", p.UUID)
+			}
+			rp.Datas[uuid] = string(v)
+			return nil
+		})
+		if err != nil {
+			return
 		}
-		rp.Data = string(v)
-		return nil
-	})
+	}
 	return
 }
 
 func (s *server) dbHandleGetHashes(p Payload) (rp Payload, err error) {
 	rp.Type = "hashes"
-	rp.Hashes = []string{}
-	rp.UUIDs = []string{}
+	rp.Datas = make(map[string]string)
 	err = s.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(p.User + "-hashes"))
 		c := b.Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
-			rp.UUIDs = append(rp.UUIDs, string(k))
-			rp.Hashes = append(rp.Hashes, string(v))
+			rp.Datas[string(k)] = string(v)
 		}
 		return nil
 	})
-	rp.Message = fmt.Sprintf("found %d hashes", len(rp.Hashes))
+	rp.Message = fmt.Sprintf("found %d hashes", len(rp.Datas))
 	return
 }
 
-func (s *server) dbHandleDelete(p Payload) (rp Payload, err error) {
-	if len(p.UUID) < 8 {
-		err = fmt.Errorf("need to supply UUID for " + p.Type)
-		return
-	}
-
-	// got offer from user, check if the uuid exists
-	// and whether the hash for that uuid is different
-	rp.Type = "message"
-	rp.Message = "deleted " + p.UUID[:8]
-	err = s.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(p.User + "-hashes"))
-		return b.Delete([]byte(p.UUID))
-	})
-	if err != nil {
-		return
-	}
-	err = s.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(p.User + "-data"))
-		return b.Delete([]byte(p.UUID))
-	})
-	return
-}
-
-func (s *server) dbHandleUpdate(p Payload) (rp Payload, err error) {
+func (s *server) dbHandleUpdate(p Payload, kind string) (rp Payload, err error) {
 	if len(p.UUID) < 8 {
 		err = fmt.Errorf("need to supply UUID for " + p.Type)
 		return
@@ -342,44 +314,15 @@ func (s *server) dbHandleUpdate(p Payload) (rp Payload, err error) {
 	// and whether the hash for that uuid is different
 	rp.Type = "message"
 	rp.Message = "updated"
-	err = s.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(p.User + "-hashes"))
-		return b.Put([]byte(p.UUID), []byte(p.Hash))
-	})
-	if err != nil {
-		return
-	}
-	err = s.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(p.User + "-data"))
-		return b.Put([]byte(p.UUID), []byte(p.Data))
-	})
-	if err != nil {
-		return
-	}
-	return
-}
-
-func (s *server) dbHandleOffer(p Payload) (rp Payload, err error) {
-	if len(p.UUID) < 8 {
-		err = fmt.Errorf("need to supply UUID for " + p.Type)
-		return
-	}
-
-	// got offer from user, check if the uuid exists
-	// and whether the hash for that uuid is different
-	rp.Type = "request"
-	rp.UUID = p.UUID
-	rp.Hash = p.Hash
-	rp.Message = "ok"
-	err = s.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(p.User + "-hashes"))
-		v := b.Get([]byte(p.UUID))
-		if v != nil && string(v) == p.Hash {
-			// no request needed
-			rp = Payload{Type: "message", Message: p.UUID[:8] + " ok"}
+	for uuid, val := range p.Datas {
+		err = s.db.Update(func(tx *bolt.Tx) error {
+			b := tx.Bucket([]byte(p.User + "-" + kind))
+			return b.Put([]byte(uuid), []byte(val))
+		})
+		if err != nil {
+			return
 		}
-		return nil
-	})
+	}
 	return
 }
 
