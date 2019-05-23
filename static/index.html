@@ -946,8 +946,6 @@
             var passPass = getHash(moment().format("dddd, MMMM Do YYYY, h:mm a") + Math.ceil(moment.now() / 1000 /
                 5) + app.username);
             p2 = decode(p, passPass);
-            console.log(passPass);
-            console.log("decoded: " + p2);
             if (p2 != null && p2 != undefined && p2 != "") {
                 app.password = p2;
                 return startup();
