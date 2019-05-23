@@ -1,6 +1,6 @@
 {
     "name": "Read and Write Text",
-    "short_name": "rwtxt",
+    "short_name": "nenotes",
     "icons": [{
             "src": "/images/touch/android-launchericon-48-48.png",
             "type": "image/png",
