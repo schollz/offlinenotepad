@@ -45,16 +45,16 @@
         <div class="checkmark" v-show="showCheck">✔️</div>
         <div class="topbar" v-cloak>
             <span class="fl fonty">
-                <a id='listlink' v-on:click="showList = true">📚</a>&nbsp;
+                <a id='listlink' class="link" v-on:click="showList = true">home</a>&nbsp;
                 <span v-show="showList">
-                    <a id='newlink' v-on:click="makeNew">📝</a>&nbsp;
-                    <a id="logoutlink" v-on:click="logOut">🚪</a>
+                    <a id='newlink' class="link" v-on:click="makeNew">new</a>&nbsp;
+                    <a id="logoutlink" class="link" v-on:click="logOut">logout</a>
                 </span>
                 <span v-show="showEdit">
-                    <a id='viewlink' v-on:click="showView = true">👓</a>&nbsp;
-                    <a id='deletelink' v-on:click="deleteDoc">🗑️</a>
+                    <a id='viewlink' class="link" v-on:click="showView = true">view</a>&nbsp;
+                    <a id='deletelink' class="link" v-on:click="deleteDoc">erase</a>
                 </span>
-                <a id='editlink' v-on:click="showEdit = true" v-show="showView">📝</a>
+                <a id='editlink' class="link" v-on:click="showEdit = true" v-show="showView">edit</a>
             </span>
             <span class="fr fonty">
                 <input id="searchbar" v-on:keyup="searchDocs" v-model="searchText" placeholder="Search..."

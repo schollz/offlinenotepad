@@ -477,6 +477,7 @@ summary {
     padding-top: 0.2em;
     padding-bottom: 0.2em;
     margin-bottom: 0.5em;
+    background: rgb(253, 253, 253);
 }
 
 #editable {
@@ -507,4 +508,8 @@ summary {
     .list>div {
         padding-top: 7.5px;
     }
+}
+
+.link:hover {
+    text-decoration: underline;
 }
