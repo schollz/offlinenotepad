@@ -1,34 +1,35 @@
 {
     "name": "Read and Write Text",
     "short_name": "nenotes",
-    "icons": [{
-            "src": "/images/touch/android-launchericon-48-48.png",
+    "icons": [
+        {
+            "src": "/static/images/touch/android-launchericon-48-48.png",
             "type": "image/png",
             "sizes": "48x48"
         },
 
         {
-            "src": "/images/touch/android-launchericon-72-72.png",
+            "src": "/static/images/touch/android-launchericon-72-72.png",
             "type": "image/png",
             "sizes": "72x72"
         },
         {
-            "src": "/images/touch/android-launchericon-96-96.png",
+            "src": "/static/images/touch/android-launchericon-96-96.png",
             "type": "image/png",
             "sizes": "96x96"
         },
         {
-            "src": "/images/touch/android-launchericon-144-144.png",
+            "src": "/static/images/touch/android-launchericon-144-144.png",
             "type": "image/png",
             "sizes": "144x144"
         },
         {
-            "src": "/images/touch/android-launchericon-192-192.png",
+            "src": "/static/images/touch/android-launchericon-192-192.png",
             "type": "image/png",
             "sizes": "192x192"
         },
         {
-            "src": "/images/touch/android-launchericon-512-512.png",
+            "src": "/static/images/touch/android-launchericon-512-512.png",
             "type": "image/png",
             "sizes": "512x512"
         }

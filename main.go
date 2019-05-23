@@ -106,12 +106,16 @@ Disallow: /`))
 	} else if r.URL.Path == "/sitemap.xml" {
 		// TODO
 	} else {
-		if !strings.HasPrefix(r.URL.Path, "/static") {
+		log.Trace(r.URL.Path)
+		if r.URL.Path == "/sw.js" {
+			r.URL.Path = "/static/js/sw.js"
+		} else if !strings.HasPrefix(r.URL.Path, "/static") {
 			r.URL.Path = "/static/index.html"
 		}
 		urlPath := r.URL.Path
 
 		var b []byte
+		log.Tracef("looking for '%s'", path.Join(".", path.Clean(r.URL.Path[1:])))
 		b, err = ioutil.ReadFile(path.Join(".", path.Clean(r.URL.Path[1:])))
 		if err != nil {
 			// try to see if index is nested
