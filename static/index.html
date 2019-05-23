@@ -238,7 +238,6 @@
         const socketOpenListener = (event) => {
             console.log('[debug] connected');
             if (!hasConnected) {
-                hasConnected = true;
                 // request hashes for syncing down
                 socketSend({
                     "type": "get-hashes",
@@ -736,6 +735,8 @@
                 if (d.datas == undefined) {
                     d.datas = {};
                 }
+                hasConnected = true;
+
                 // check to see if any hashes differ to request from server
                 var to_request = {};
                 for (var uuid in d.datas) {
@@ -761,7 +762,6 @@
                 }
 
                 // see if server is missing any
-
                 for (var uuid in app.docs) {
                     if (uuid in d.datas) {} else {
                         to_send_datas[uuid] = encode(JSON.stringify(app.docs[uuid]), app.password);
