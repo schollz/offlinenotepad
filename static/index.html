@@ -44,7 +44,10 @@
 
         <div class="checkmark" v-show="showCheck">✔️</div>
         <div class="topbar" v-cloak>
-            <span class="fl fonty">
+            <span class="fl font" v-if="showIntroText">
+                <a id="loginLink" class="link" v-show="showIntroText" v-on:click="logIn">login</a>
+            </span>
+            <span class="fl fonty" v-else>
                 <a id='listlink' class="link" v-on:click="showList = true">home</a>&nbsp;
                 <span v-show="showList">
                     <a id='newlink' class="link" v-on:click="makeNew">new</a>&nbsp;
@@ -79,8 +82,16 @@
         </div>
         <div v-show="showWelcomeText" v-cloak>
             <p>Welcome, {{username}}.</p>
-            <p>Click 📝 to write or an edit a new note.</p>
-            <p>Click 📚 to see all your notes.</p>
+        </div>
+        <div v-show="showIntroText" v-cloak>
+            <p>Welcome to nenotes.</p>
+            <p>nenotes is a private personal notebook for all your devices. Everything you write is encrypted and then
+                stored
+                locally and backed up to a server.</p>
+            <p>nenotes is offline-first. You can create, edit, delete, and search notes
+                without an internet connection.
+                Your notes automatically sync with server when you come online again.</p>
+            <p>Click <em>login</em> to begin.</p>
         </div>
         <div class="fonty" v-show="showView" v-bind:class="{ iscode: isCode }" v-cloak>
             <h1 v-if="doc.title">{{doc.title}}</h1>
@@ -108,7 +119,7 @@
     <script src="/static/js/lunr.min.js"></script>
     <script src="/static/js/localforage.js"></script>
     <script src="/static/js/showdown.min.js"></script>
-    <script>
+    <!-- <script>
         /* code for the service worker */
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/static/js/sw.js', {
@@ -121,7 +132,7 @@
                 console.log('Service Worker Ready');
             });
         }
-    </script>
+    </script> -->
     <script>
         /* init */
         // initialize local storage
@@ -276,6 +287,9 @@
                 searchIndexLastModified: 0,
             },
             methods: {
+                logIn: function () {
+                    promptUser();
+                },
                 logOut: function () {
 
                     Swal.fire({
@@ -299,7 +313,6 @@
                             this.doc = {};
                             this.docsFound = [];
                             this.searchIndex = {};
-                            promptUser();
                         }
                     })
                 },
@@ -524,6 +537,10 @@
                         return false;
                     }
                     return this.showList && this.docList.length == 0;
+                },
+                showIntroText: function () {
+                    return this.username == "undefined" || this.username == "" || this.username ==
+                        undefined;
                 },
                 showListOrSearch: function () {
                     return this.showList || this.showSearch;
@@ -895,9 +912,10 @@
             // app.password = "zack";
             if (app.username == undefined || app.username == "undefined" || app.username == "") {
                 Swal.fire({
-                    title: 'Enter your user name',
+                    title: 'Enter a user name',
                     input: 'text',
-                    inputPlaceholder: 'Enter your user name',
+                    html: 'If this is your first time, choose any name you will remember.',
+                    inputPlaceholder: 'Enter a user name',
                     inputAttributes: {
                         autocapitalize: 'off',
                         autocorrect: 'off',
@@ -921,6 +939,7 @@
         function promptPassword() {
             Swal.fire({
                 title: 'Welcome ' + app.username,
+                html: 'Enter a password to decrypt your data.',
                 input: 'password',
                 inputPlaceholder: 'Enter your password',
                 inputAttributes: {
@@ -1076,8 +1095,6 @@
                 }
                 fr.readAsText(files.item(0));
             };
-
-            promptUser();
 
         }
 
