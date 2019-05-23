@@ -905,11 +905,16 @@
             return LZString.decompressFromUTF16(decrypted.toString(CryptoJS.enc.Utf16));
         }
 
+	function tryPromptPassword() {
+            app.username = Cookies.get('app.username');
+            if (app.username == undefined || app.username == "undefined" || app.username == "") {
+	    } else{
+                promptPassword();
+	    }
+	}
 
         function promptUser() {
             app.username = Cookies.get('app.username');
-            // app.username = "zack";
-            // app.password = "zack";
             if (app.username == undefined || app.username == "undefined" || app.username == "") {
                 Swal.fire({
                     title: 'Enter a user name',
@@ -1095,6 +1100,8 @@
                 }
                 fr.readAsText(files.item(0));
             };
+
+	    tryPromptPassword();
 
         }
 
