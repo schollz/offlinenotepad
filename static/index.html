@@ -8,7 +8,7 @@
     <meta name='description' content='nenotes, any notes for any time.'>
     <meta name='viewport' content='width=device-width, initial-scale=1'>
     <link rel='canonical' href='https://nenotes.com/'>
-    <!-- <link rel='manifest' href='/static/manifest.json'> -->
+    <link rel='manifest' href='/static/manifest.json'>
     <meta name='mobile-web-app-capable' content='yes'>
     <meta name='apple-mobile-web-app-capable' content='yes'>
     <meta name='application-name' content='nenotes'>
@@ -119,7 +119,7 @@
     <script src="/static/js/lunr.min.js"></script>
     <script src="/static/js/localforage.js"></script>
     <script src="/static/js/showdown.min.js"></script>
-    <!-- <script>
+    <script>
         /* code for the service worker */
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/static/js/sw.js', {
@@ -132,7 +132,7 @@
                 console.log('Service Worker Ready');
             });
         }
-    </script> -->
+    </script>
     <script>
         /* init */
         // initialize local storage
@@ -268,6 +268,7 @@
         var app = new Vue({
             el: '#app',
             data: {
+                startTime: moment.now(),
                 username: "",
                 password: "",
                 docs: {},
@@ -304,7 +305,7 @@
                         if (result.value) {
                             console.log("logging out");
                             Cookies.remove("app.username");
-                            Cookies.remove("app.password");
+                            sessionStorage.removeItem("app.p");
                             localforage.clear();
                             this.username = "";
                             this.password = "";
@@ -539,8 +540,8 @@
                     return this.showList && this.docList.length == 0;
                 },
                 showIntroText: function () {
-                    return this.username == "undefined" || this.username == "" || this.username ==
-                        undefined;
+                    return (this.username == "undefined" || this.username == "" || this.username ==
+                        undefined) && moment.now() - this.startTime > 1000;
                 },
                 showListOrSearch: function () {
                     return this.showList || this.showSearch;
@@ -905,13 +906,12 @@
             return LZString.decompressFromUTF16(decrypted.toString(CryptoJS.enc.Utf16));
         }
 
-	function tryPromptPassword() {
+        function tryPromptPassword() {
             app.username = Cookies.get('app.username');
-            if (app.username == undefined || app.username == "undefined" || app.username == "") {
-	    } else{
+            if (app.username == undefined || app.username == "undefined" || app.username == "") {} else {
                 promptPassword();
-	    }
-	}
+            }
+        }
 
         function promptUser() {
             app.username = Cookies.get('app.username');
@@ -940,8 +940,30 @@
             }
         }
 
+        window.onbeforeunload = function (event) {
+            if (performance.navigation.type == performance.navigation.TYPE_RELOAD) {
+                var passPass = getHash(moment().format("dddd, MMMM Do YYYY, h:mm a") + Math.ceil(moment.now() /
+                    1000 / 3) + app.username);
+                sessionStorage.setItem("app.p", encode(app.password, passPass));
+            }
+        };
 
         function promptPassword() {
+            var p = sessionStorage.getItem("app.p");
+            if (p != null) {
+                sessionStorage.removeItem("app.p");
+                var passPass = getHash(moment().format("dddd, MMMM Do YYYY, h:mm a") + Math.ceil(moment.now() / 1000 /
+                    3) + app.username);
+                p2 = decode(p, passPass);
+                console.log(passPass);
+                console.log("decoded: " + p2);
+                if (p2 != null && p2 != undefined && p2 != "") {
+                    app.password = p2;
+                    return startup();
+                } else {
+                    console.log("[debug] could not decode password");
+                }
+            }
             Swal.fire({
                 title: 'Welcome ' + app.username,
                 html: 'Enter a password to decrypt your data.',
@@ -1071,7 +1093,6 @@
 
 
         window.onload = function () {
-
             document.getElementById('import').onclick = function () {
                 var files = document.getElementById('selectFiles').files;
                 console.log(files);
@@ -1101,7 +1122,7 @@
                 fr.readAsText(files.item(0));
             };
 
-	    tryPromptPassword();
+            tryPromptPassword();
 
         }
 
