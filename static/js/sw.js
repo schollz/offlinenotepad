@@ -1,4 +1,4 @@
-const version = "0.0.8";
+const version = "0.0.9";
 const cacheName = `nenotes-${version}`;
 self.addEventListener('install', e => {
     e.waitUntil(
@@ -6,7 +6,7 @@ self.addEventListener('install', e => {
             return cache.addAll([
                     `/`,
                     `/index.html`,
-                    `/static/style.css`,
+                    `/static/css/style.css`,
                     `/static/js/crypto-js.min.js`,
                     `/static/js/crypto-js.min.js.map`,
                     `/static/js/enc-utf16.min.js`,
