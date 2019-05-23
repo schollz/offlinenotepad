@@ -218,7 +218,7 @@ func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err er
 		}
 		timer = time.Now()
 		err = c.WriteJSON(rp)
-		log.Tracef("send: %s [%2.2fms]", rp,float64(time.Since(timer).Nanoseconds())/1000000)
+		log.Tracef("send: %s [%2.2fms]", rp, float64(time.Since(timer).Nanoseconds())/1000000)
 		if err != nil {
 			log.Debug("error writing JSON")
 			break
@@ -236,7 +236,7 @@ func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err er
 
 func (s *server) dbHandlePayload(p Payload) (rp Payload, err error) {
 	// check validity of payload
-	if p.User == "" {
+	if err = validate(p.User); err != nil {
 		err = fmt.Errorf("need to supply user")
 		return
 	}
@@ -275,6 +275,14 @@ func (s *server) dbHandleRequest(p Payload) (rp Payload, err error) {
 	rp.Datas = make(map[string]string)
 	rp.Message = "ok"
 	for uuid := range p.Datas {
+		if err = validate(uuid); err != nil {
+			log.Error(err)
+			continue
+		}
+		if err = validate(p.Datas[uuid]); err != nil {
+			log.Error(err)
+			continue
+		}
 		err = s.db.View(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte(p.User + "-data"))
 			v := b.Get([]byte(uuid))
@@ -312,6 +320,14 @@ func (s *server) dbHandleUpdate(p Payload, kind string) (rp Payload, err error) 
 	rp.Type = "message"
 	rp.Message = fmt.Sprintf("updated %d entries", len(p.Datas))
 	for uuid, val := range p.Datas {
+		if err = validate(uuid); err != nil {
+			log.Error(err)
+			continue
+		}
+		if err = validate(p.Datas[uuid]); err != nil {
+			log.Error(err)
+			continue
+		}
 		log.Tracef("%s: %s = %s", p.User, uuid, val)
 		if len(val) == 0 {
 			err = fmt.Errorf("no data for " + uuid)
@@ -364,4 +380,14 @@ func humanizeBytes(s int) string {
 	}
 
 	return fmt.Sprintf(f, val, suffix)
+}
+
+func validate(s string) (err error) {
+	if strings.TrimSpace(s) == "" {
+		return fmt.Errorf("string is empty")
+	}
+	if strings.TrimSpace(s) == "undefined" {
+		return fmt.Errorf("string is undefined")
+	}
+	return nil
 }
