@@ -502,18 +502,9 @@ summary {
     margin-bottom: 0.5em;
 }
 
-.watermark {
-    position: fixed;
-    bottom: 2em;
-    right: -1em;
-    opacity: 0.05;
-    z-index: -1;
-    width: 40em;
-    color: white;
-}
 
-@media only screen and (max-width: 600px) {
-    .watermark {
-        width: 120%;
+@media screen and (max-width: 600px) {
+    .list>div {
+        padding-top: 7.5px;
     }
 }

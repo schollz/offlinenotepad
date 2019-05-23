@@ -37,12 +37,19 @@
 
 <body>
     <main id="app">
-        <input type="file" id="selectFiles" value="Import" /> <button id="import">Import</button>
+
+        <div v-show="showImport">
+            <input type="file" id="selectFiles" value="Import" /> <button id="import">Import</button>
+        </div>
+
         <div class="checkmark" v-show="showCheck">✔️</div>
         <div class="topbar" v-cloak>
             <span class="fl fonty">
                 <a id='listlink' v-on:click="showList = true">📚</a>&nbsp;
-                <a id='newlink' v-on:click="makeNew">⚡</a>&nbsp;
+                <span v-show="showList">
+                    <a id='newlink' v-on:click="makeNew">📝</a>&nbsp;
+                    <a id="logoutlink" v-on:click="logOut">🚪</a>
+                </span>
                 <span v-show="showEdit">
                     <a id='viewlink' v-on:click="showView = true">👓</a>&nbsp;
                     <a id='deletelink' v-on:click="deleteDoc">🗑️</a>
@@ -50,9 +57,8 @@
                 <a id='editlink' v-on:click="showEdit = true" v-show="showView">📝</a>
             </span>
             <span class="fr fonty">
-                <input id="searchbar" v-on:keyup="searchDocs" v-model="searchText" placeholder="search notes"
+                <input id="searchbar" v-on:keyup="searchDocs" v-model="searchText" placeholder="Search..."
                     style="width: 8em;">
-                <a id="logoutlink" v-on:click="logOut">🚪</a>
             </span>
         </div>
         <div class="list" v-show="showSearch" v-cloak>
@@ -78,14 +84,13 @@
             <div v-html="doc.rawHTML"></div>
         </div>
         <input id="edittitle" v-show="showEdit" placeholder="Title" v-model="doc.title" v-on:keyup="updateDoc"
-            v-bind:class="{ iscode: isCode }" v-cloak autofocus>
+            v-bind:class="{ iscode: isCode }" v-cloak>
         <textarea class="writing" v-show="showEdit" id="editable" rows=110 placeholder="Click here and start writing"
             v-on:keyup="updateDoc" @keydown.tab.prevent="tabber($event)" v-model="doc.markdown"
-            v-bind:class="{ iscode: isCode }" v-cloak>
+            v-bind:class="{ iscode: isCode }" v-cloak autofocus>
         {{doc.markdown}}
         <!-- TODO: if . in title, show raw pre-formated text -->
         </textarea>
-        <img src="/static/images/background2.png" class="watermark" v-show="showListOrSearch">
     </main>
     <script src="/static/js/js.cookie.min.js"></script>
     <script src="/static/js/sweetalert.js"></script>
@@ -259,6 +264,7 @@
                 showList: false,
                 showSearch: false,
                 showCheck: false,
+                showImport: false,
                 searchText: "",
                 searchedText: "",
                 searchIndex: {},
@@ -266,16 +272,30 @@
             },
             methods: {
                 logOut: function () {
-                    console.log("logging out");
-                    Cookies.remove("app.username");
-                    Cookies.remove("app.password");
-                    this.username = "";
-                    this.password = "";
-                    this.docs = {};
-                    this.docList = [];
-                    this.doc = {};
-                    this.docsFound = [];
-                    this.searchIndex = {};
+
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: "This will clear all local data.",
+                        type: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#3085d6',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, log me out.'
+                    }).then((result) => {
+                        if (result.value) {
+                            console.log("logging out");
+                            Cookies.remove("app.username");
+                            Cookies.remove("app.password");
+                            localforage.clear();
+                            this.username = "";
+                            this.password = "";
+                            this.docs = {};
+                            this.docList = [];
+                            this.doc = {};
+                            this.docsFound = [];
+                            this.searchIndex = {};
+                        }
+                    })
                 },
                 searchDocs: debounce(function () {
                     console.log(this.searchText.length);
@@ -512,11 +532,13 @@
                         this.showEdit = false;
                         // update the html (for viewer)
                         this.doc.rawHTML = (new showdown.Converter()).makeHtml(this.doc.markdown)
+                        window.scrollTo(0, 0);
                     }
                 },
                 showEdit: function (val) {
                     if (val == true) {
                         this.showView = false;
+                        window.scrollTo(0, 0);
                     }
                 },
                 showList: function (val) {
@@ -530,6 +552,7 @@
                         this.showView = false;
                         this.showSearch = false;
                         updateURL("/", "/");
+                        window.scrollTo(0, 0);
                     }
                 },
                 showSearch: function (val) {
@@ -537,6 +560,7 @@
                         this.showEdit = false;
                         this.showView = false;
                         this.showList = false;
+                        window.scrollTo(0, 0);
                     }
                 },
                 showViewOrEdit: function (val) {
@@ -856,8 +880,8 @@
         function promptUser() {
             app.username = Cookies.get('app.username');
             app.password = decode(Cookies.get('app.password'), app.username);
-            app.username = "zack";
-            app.password = "zack";
+            // app.username = "zack";
+            // app.password = "zack";
             if (app.username == undefined || app.username == "undefined" || app.username == "") {
                 Swal.fire({
                     title: 'Enter your user name',
@@ -1019,6 +1043,7 @@
 
 
         window.onload = function () {
+
             document.getElementById('import').onclick = function () {
                 var files = document.getElementById('selectFiles').files;
                 console.log(files);
