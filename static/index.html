@@ -78,9 +78,9 @@
             <div v-html="doc.rawHTML"></div>
         </div>
         <input id="edittitle" v-show="showEdit" placeholder="Title" v-model="doc.title" v-on:keyup="updateDoc"
-            v-bind:class="{ iscode: isCode }" v-cloak>
+            v-bind:class="{ iscode: isCode }" v-cloak autofocus>
         <textarea class="writing" v-show="showEdit" id="editable" rows=110 placeholder="Click here and start writing"
-            autofocus v-on:keyup="updateDoc" @keydown.tab.prevent="tabber($event)" v-model="doc.markdown"
+            v-on:keyup="updateDoc" @keydown.tab.prevent="tabber($event)" v-model="doc.markdown"
             v-bind:class="{ iscode: isCode }" v-cloak>
         {{doc.markdown}}
         <!-- TODO: if . in title, show raw pre-formated text -->
@@ -286,12 +286,12 @@
                     if (moment.utc() - this.searchIndexLastModified > 10000) {
                         console.log("[debug] indexing")
                         var documents = [];
-                        for (var i in docs) {
+                        for (var i in this.docs) {
                             documents.push({
                                 "id": i,
                                 "title": this.docs[i].title,
-                                "text": this.docs[i].markdown
-                            })
+                                "text": this.docs[i].markdown,
+                            });
                         }
                         this.searchIndex = lunr(function () {
                             this.ref('id');
@@ -312,6 +312,7 @@
                     this.docsFound = [];
                     console.log("[debug] searching")
                     this.searchIndex.search(this.searchText).forEach(function (el) {
+                        console.log(el);
                         var doc = _this.docs[el.ref];
                         // extract snippets from search
                         var locations = [];
@@ -405,8 +406,8 @@
                             this.doc.markdown = "";
                             this.doc.title = "deleted";
                             this.doc.modified = moment.utc();
-                            this.doc.hash = CryptoJS.SHA256(this.doc.uuid + this.doc.title + this
-                                .doc.markdown).toString()
+                            this.doc.hash = getHash(this.doc.uuid + this.doc.title + this
+                                .doc.markdown);
                             this.docs[this.doc.uuid] = {
                                 title: this.doc.title,
                                 hash: this.doc.hash,
@@ -449,9 +450,7 @@
                         this.doc.modified = moment.utc();
 
                         // update the hash
-                        this.doc.hash = CryptoJS.SHA256(this.doc.uuid + this.doc.title + this.doc
-                            .markdown).toString();
-
+                        this.doc.hash = getHash(this.doc.uuid + this.doc.title + this.doc.markdown)
 
                         // update the URL
                         updateURL(this.doc.title, this.doc.uuid);
@@ -568,7 +567,7 @@
             this.modified = moment.utc();
             this.title = "";
             this.markdown = "";
-            this.hash = CryptoJS.SHA256(this.uuid + this.title + this.markdown).toString();
+            this.hash = getHash(this.uuid + this.title + this.markdown);
         }
 
         const sortDocList = function () {
@@ -619,6 +618,10 @@
             });
         }
 
+
+        const getHash = function (s) {
+            return CryptoJS.SHA256(s).toString().substring(0, 8);
+        }
 
         function socketSend(data) {
             if (socket == null) {
@@ -1036,7 +1039,7 @@
                             "created": doc.created,
                             "modified": doc.modified,
                             "markdown": doc.data,
-                            hash: CryptoJS.SHA256(doc.id + doc.slug + doc.data).toString()
+                            "hash": getHash(doc.id + doc.slug + doc.data),
                         };
                         encoded = encode(JSON.stringify(app.docs[doc.id]), app.password);
                         localforage.setItem(doc.id, encoded);
