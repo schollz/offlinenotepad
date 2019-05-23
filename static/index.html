@@ -943,7 +943,7 @@
         window.onbeforeunload = function (event) {
             if (performance.navigation.type == performance.navigation.TYPE_RELOAD) {
                 var passPass = getHash(moment().format("dddd, MMMM Do YYYY, h:mm a") + Math.ceil(moment.now() /
-                    1000 / 3) + app.username);
+                    1000 / 5) + app.username);
                 sessionStorage.setItem("app.p", encode(app.password, passPass));
             }
         };
@@ -953,7 +953,7 @@
             if (p != null) {
                 sessionStorage.removeItem("app.p");
                 var passPass = getHash(moment().format("dddd, MMMM Do YYYY, h:mm a") + Math.ceil(moment.now() / 1000 /
-                    3) + app.username);
+                    5) + app.username);
                 p2 = decode(p, passPass);
                 console.log(passPass);
                 console.log("decoded: " + p2);
