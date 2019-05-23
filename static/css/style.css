@@ -494,6 +494,7 @@ summary {
     position: fixed;
     top: 1em;
     right: 1em;
+    z-index: 99 !important;
 }
 
 .snippet {
