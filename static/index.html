@@ -57,7 +57,7 @@
                 <a id='editlink' class="link" v-on:click="showEdit = true" v-show="showView">edit</a>
             </span>
             <span class="fr fonty">
-                <input id="searchbar" v-on:keyup="searchDocs" v-model="searchText" placeholder="Search..." style="width: 8em;">
+                <input id="searchbar" autocomplete="off" v-on:input="searchDocs" v-model="searchText" placeholder="Search..." style="width: 8em;">
             </span>
         </div>
         <div class="list" v-show="showSearch" v-cloak>
@@ -93,8 +93,8 @@
             <!-- TODO: if . in title, show raw pre-formated text -->
             <div v-html="doc.rawHTML"></div>
         </div>
-        <input id="edittitle" v-show="showEdit" placeholder="Title" v-model="doc.title" v-on:keyup="updateDoc" v-bind:class="{ iscode: isCode }" v-cloak>
-        <textarea class="writing" v-show="showEdit" id="editable" rows=110 placeholder="Click here and start writing" v-on:keyup="updateDoc" @keydown.tab.prevent="tabber($event)" v-model="doc.markdown" v-bind:class="{ iscode: isCode }" v-cloak autofocus>
+        <input id="edittitle" autocomplete="off" v-show="showEdit" placeholder="Title" v-model="doc.title" v-on:input="updateDoc" v-bind:class="{ iscode: isCode }" v-cloak>
+        <textarea class="writing" autocomplete="off" v-show="showEdit" id="editable" rows=110 placeholder="Click here and start writing" v-on:input="updateDoc" @keydown.tab.prevent="tabber($event)" v-model="doc.markdown" v-bind:class="{ iscode: isCode }" v-cloak autofocus>
         {{doc.markdown}}
         <!-- TODO: if . in title, show raw pre-formated text -->
         </textarea>
