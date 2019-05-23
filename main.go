@@ -279,10 +279,6 @@ func (s *server) dbHandleRequest(p Payload) (rp Payload, err error) {
 			log.Error(err)
 			continue
 		}
-		if err = validate(p.Datas[uuid]); err != nil {
-			log.Error(err)
-			continue
-		}
 		err = s.db.View(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte(p.User + "-data"))
 			v := b.Get([]byte(uuid))
