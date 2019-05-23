@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -148,8 +149,12 @@ Disallow: /`))
 			w.Header().Set("Last-Modified", time.Now().Format(http.TimeFormat))
 			w.Header().Set("Expires", time.Now().AddDate(60, 0, 0).Format(http.TimeFormat))
 		}
+		w.Header().Set("Content-Encoding", "gzip")
 		w.Header().Set("Content-Type", kind)
-		w.Write(b)
+
+		gz := gzip.NewWriter(w)
+		defer gz.Close()
+		gz.Write(b)
 	}
 	return
 }
@@ -195,6 +200,7 @@ func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err er
 	var p Payload
 
 	// on initiation, send a hashlist
+	timer := time.Now()
 	for {
 		err := c.ReadJSON(&p)
 		if err != nil {
@@ -210,8 +216,9 @@ func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err er
 		} else {
 			rp.Success = true
 		}
-		log.Tracef("send: %s", rp)
+		timer = time.Now()
 		err = c.WriteJSON(rp)
+		log.Tracef("send: %s [%2.2fms]", rp,float64(time.Since(timer).Nanoseconds())/1000000)
 		if err != nil {
 			log.Debug("error writing JSON")
 			break
@@ -305,9 +312,11 @@ func (s *server) dbHandleUpdate(p Payload, kind string) (rp Payload, err error) 
 	rp.Type = "message"
 	rp.Message = fmt.Sprintf("updated %d entries", len(p.Datas))
 	for uuid, val := range p.Datas {
+		log.Tracef("%s: %s = %s", p.User, uuid, val)
 		if len(val) == 0 {
 			err = fmt.Errorf("no data for " + uuid)
-			return
+			log.Error(err)
+			continue
 		}
 		err = s.db.Update(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte(p.User + "-" + kind))

@@ -38,7 +38,7 @@
 <body>
     <main id="app">
 
-        <div v-show="showImport">
+        <div v-show="showImport" v-cloak>
             <input type="file" id="selectFiles" value="Import" /> <button id="import">Import</button>
         </div>
 
@@ -76,6 +76,11 @@
                         v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
                 <div>{{ formatDate(doc.created) }}</div>
             </div>
+        </div>
+        <div v-show="showWelcomeText" v-cloak>
+            <p>Welcome, {{username}}.</p>
+            <p>Click 📝 to write or an edit a new note.</p>
+            <p>Click 📚 to see all your notes.</p>
         </div>
         <div class="fonty" v-show="showView" v-bind:class="{ iscode: isCode }" v-cloak>
             <h1 v-if="doc.title">{{doc.title}}</h1>
@@ -294,6 +299,7 @@
                             this.doc = {};
                             this.docsFound = [];
                             this.searchIndex = {};
+                            promptUser();
                         }
                     })
                 },
@@ -513,6 +519,12 @@
                 }, 400),
             },
             computed: {
+                showWelcomeText: function () {
+                    if (this.username == "undefined" || this.username == "" || this.username == undefined) {
+                        return false;
+                    }
+                    return this.showList && this.docList.length == 0;
+                },
                 showListOrSearch: function () {
                     return this.showList || this.showSearch;
                 },
@@ -879,7 +891,6 @@
 
         function promptUser() {
             app.username = Cookies.get('app.username');
-            app.password = decode(Cookies.get('app.password'), app.username);
             // app.username = "zack";
             // app.password = "zack";
             if (app.username == undefined || app.username == "undefined" || app.username == "") {
@@ -899,23 +910,17 @@
                 }).then(result => {
                     app.username = result.value;
                     Cookies.set('app.username', app.username);
-                    app.password = decode(Cookies.get('app.password'), app.username);
-                    if (app.password == undefined || app.password == null) {
-                        promptPassword();
-                    }
+                    promptPassword();
                 })
-            } else if (app.password == undefined || app.password == null || app.password == "undefined" || app
-                .password == "") {
-                promptPassword();
             } else {
-                startup();
+                promptPassword();
             }
         }
 
 
         function promptPassword() {
             Swal.fire({
-                title: 'Enter your password',
+                title: 'Welcome ' + app.username,
                 input: 'password',
                 inputPlaceholder: 'Enter your password',
                 inputAttributes: {
@@ -929,7 +934,6 @@
                 }
             }).then(result => {
                 app.password = result.value;
-                Cookies.set('app.password', encode(app.password, app.username));
                 startup();
             });
         }
