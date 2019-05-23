@@ -1,5 +1,5 @@
-const version = "0.0.6";
-const cacheName = `rwtxtoffline-${version}`;
+const version = "0.0.7";
+const cacheName = `nenotes-${version}`;
 self.addEventListener('install', e => {
     e.waitUntil(
         caches.open(cacheName).then(cache => {
