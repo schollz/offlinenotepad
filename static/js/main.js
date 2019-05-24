@@ -438,7 +438,6 @@ var app = new Vue({
         this.$nextTick(function() {
             // Code that will run only after the
             // entire view has been re-rendered
-            console.log("[debug] finished render");
             if (_this.showSearch) {
                 _this.markSearchResults();
             }
@@ -518,7 +517,6 @@ var app = new Vue({
             if (val) {
                 this.showEdit = false;
                 this.showView = false;
-                this.markSearchResults();
                 window.scrollTo(0, 0);
             }
         },
