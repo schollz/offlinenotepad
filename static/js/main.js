@@ -153,6 +153,7 @@ var app = new Vue({
         searchIndex: {},
         searchIndexLastModified: 0,
         indexing: false,
+        markInstance: {},
     },
     methods: {
         install: function() {
@@ -214,6 +215,7 @@ var app = new Vue({
                 var locations = [];
                 var wordFound = "";
                 for (var word in el.matchData.metadata) {
+                    console.log(word);
                     wordFound = word;
                     for (var pos in el.matchData.metadata[word].text.position) {
                         locations.push(el.matchData.metadata[word].text.position[pos][
@@ -221,6 +223,7 @@ var app = new Vue({
                         ]);
                     }
                 }
+                console.log(wordFound);
                 snippet = getSnippet(doc.markdown, wordFound, locations);
                 _this.docsFound.push({
                     title: doc.title,
@@ -229,7 +232,8 @@ var app = new Vue({
                     modified: doc.modified,
                     created: doc.created
                 });
-            })
+                _this.markSearchResults();
+            });
         }, 500),
         flashCheck: function() {
             this.showCheck = true;
@@ -366,6 +370,11 @@ var app = new Vue({
                 this.indexing = false;
             }
         },
+        markSearchResults: function() {
+            console.log("[debug] marking")
+            this.markInstance = new Mark(document.querySelector("#searchResults"));
+            this.markInstance.mark("ristocetin", {});
+        },
         updateDoc: debounce(function() {
             if (this.showEdit) { // only update if in edit mode
                 // update the modified timestamp
@@ -490,6 +499,7 @@ var app = new Vue({
             if (val) {
                 this.showEdit = false;
                 this.showView = false;
+                this.markSearchResults();
                 window.scrollTo(0, 0);
             }
         },
@@ -667,7 +677,7 @@ function processSocketMessage(d) {
         // see if server is missing any
         for (var uuid in app.docs) {
             if (uuid in d.datas) {} else {
-                app.docs[uuid].hash = getHash(uuid + app.docs[uuid].title + app.docs[uuid].doc.markdown)
+                app.docs[uuid].hash = getHash(uuid + app.docs[uuid].title + app.docs[uuid].markdown)
                 to_send_datas[uuid] = encode(JSON.stringify(app.docs[uuid]), app.password);
                 to_send_hashes[uuid] = app.docs[uuid].hash;
             }
