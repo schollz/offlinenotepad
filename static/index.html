@@ -70,8 +70,8 @@
                 <q v-html="doc.snippet" class="snippet"></q>
             </div>
         </div>
-        <div v-show="showList" v-if="docList.length > 0" v-cloak>
-            <p class="small">Welcome, {{username}} ({{appHash(password)}}). Decrypted {{docList.length}}/{{Object.keys(docs).length}} documents:</p>
+        <div v-show="showList" v-if="!showIntroText" v-cloak>
+            <p class="small">Welcome, {{username}} ({{appHash(password)}}).</p>
         </div>
         <div class="list" v-show="showList" v-cloak>
             <div v-for="doc in docList">
