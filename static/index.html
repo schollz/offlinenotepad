@@ -70,14 +70,14 @@
                 <q v-html="doc.snippet" class="snippet"></q>
             </div>
         </div>
+        <div v-show="showList" v-cloak>
+            <p class="small">Welcome, {{username}} ({{appHash(password)}}). Decrypted {{docList.length}}/{{Object.keys(docs).length}} documents:</p>
+        </div>
         <div class="list" v-show="showList" v-cloak>
             <div v-for="doc in docList">
                 <div v-bind:id="doc.uuid" class="link" v-on:click="select($event)"><span v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
                 <div>{{ formatDate(doc.created) }}</div>
             </div>
-        </div>
-        <div v-show="showWelcomeText" v-cloak>
-            <p>Welcome, {{username}}.</p>
         </div>
         <div v-show="showIntroText" v-cloak>
             <p>Welcome to nenotes.</p>
@@ -281,6 +281,9 @@
             searchIndexLastModified: 0,
         },
         methods: {
+            appHash: function(s) {
+                return CryptoJS.SHA256(s).toString().substring(0, 8);
+            },
             logIn: function() {
                 promptUser();
             },
