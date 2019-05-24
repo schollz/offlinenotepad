@@ -62,7 +62,7 @@
         <p v-show="showSearchBar" v-cloak>
             <input id="searchbar" autocomplete="off" v-on:input="searchDocs" v-model="searchText" placeholder="Search..." style="width: 100%;" autofocus>
         </p>
-        <div v-show="showSearch" id="searchResults" v-cloak>
+        <div v-show="showSearch" v-cloak>
             <p>Found {{docsFound.length}} items that match '{{searchedText}}':</p>
             <div v-for="doc in docsFound" class="pb5">
                 <div class="list">

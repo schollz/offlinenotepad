@@ -154,6 +154,7 @@ var app = new Vue({
         searchIndexLastModified: 0,
         indexing: false,
         markInstance: {},
+        markWords: [],
     },
     methods: {
         install: function() {
@@ -208,6 +209,7 @@ var app = new Vue({
                 searchTerm = "*" + searchTerm + "*";
             }
             console.log("[debug] searching")
+            wordsFound = {}
             this.searchIndex.search(searchTerm).forEach(function(el) {
                 console.log(el);
                 var doc = _this.docs[el.ref];
@@ -215,7 +217,7 @@ var app = new Vue({
                 var locations = [];
                 var wordFound = "";
                 for (var word in el.matchData.metadata) {
-                    console.log(word);
+                    wordsFound[word] = true;
                     wordFound = word;
                     for (var pos in el.matchData.metadata[word].text.position) {
                         locations.push(el.matchData.metadata[word].text.position[pos][
@@ -232,8 +234,11 @@ var app = new Vue({
                     modified: doc.modified,
                     created: doc.created
                 });
-                _this.markSearchResults();
             });
+            this.markWords = [];
+            for (var word in wordsFound) {
+                this.markWords.push(word);
+            }
         }, 500),
         flashCheck: function() {
             this.showCheck = true;
@@ -372,8 +377,11 @@ var app = new Vue({
         },
         markSearchResults: function() {
             console.log("[debug] marking")
-            this.markInstance = new Mark(document.querySelector("#searchResults"));
-            this.markInstance.mark("ristocetin", {});
+            this.markInstance = new Mark(document.querySelectorAll(".snippet"));
+            _this = this;
+            this.markWords.forEach(function(el) {
+                _this.markInstance.mark(el, {});
+            });
         },
         updateDoc: debounce(function() {
             if (this.showEdit) { // only update if in edit mode
@@ -424,6 +432,17 @@ var app = new Vue({
                 this.flashCheck();
             }
         }, 400),
+    },
+    updated: function() {
+        _this = this;
+        this.$nextTick(function() {
+            // Code that will run only after the
+            // entire view has been re-rendered
+            console.log("[debug] finished render");
+            if (_this.showSearch) {
+                _this.markSearchResults();
+            }
+        })
     },
     computed: {
         isChrome: function() {
