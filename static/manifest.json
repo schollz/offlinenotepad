@@ -1,6 +1,6 @@
 {
-    "name": "Read and Write Text",
-    "short_name": "nenotes",
+    "name": "Offline Notepad",
+    "short_name": "Offline Notepad",
     "icons": [
         {
             "src": "/static/images/touch/android-launchericon-48-48.png",

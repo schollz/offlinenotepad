@@ -3,31 +3,31 @@
 
 <head>
     <meta charset='utf-8'>
-    <title>nenotes</title>
+    <title>Offline Notepad</title>
     <meta http-equiv='X-UA-Compatible' content='IE=edge'>
-    <meta name='description' content='nenotes, any notes for any time.'>
+    <meta name='description' content='Offline Notepad, any notes for any time.'>
     <meta name='viewport' content='width=device-width, initial-scale=1'>
-    <link rel='canonical' href='https://nenotes.com/'>
+    <link rel='canonical' href='https://offlinenotepad.com/'>
     <link rel='manifest' href='/static/manifest.json'>
     <meta name='mobile-web-app-capable' content='yes'>
     <meta name='apple-mobile-web-app-capable' content='yes'>
-    <meta name='application-name' content='nenotes'>
+    <meta name='application-name' content='Offline Notepad'>
     <meta name='apple-mobile-web-app-status-bar-style' content='black'>
-    <meta name='apple-mobile-web-app-title' content='nenotes'>
+    <meta name='apple-mobile-web-app-title' content='Offline Notepad'>
     <link rel='icon' sizes='192x192' href='/static/images/touch/Airhorner_192.png'>
     <link rel='apple-touch-icon' href='/static/images/touch/Airhorner_192.png'>
     <meta property='og:image' content='https://airhorner.com/images/touch/Airhorner_192.png'>
     <meta name='msapplication-TileImage' content='/static/images/touch/Airhorner_144.png'>
     <meta name='msapplication-TileColor' content='#2196F3'>
     <meta name='theme-color' content='#2196F3'>
-    <meta property='og:title' content='nenotes'>
+    <meta property='og:title' content='Offline Notepad'>
     <meta property='og:type' content='website'>
-    <meta property='og:url' content='https://nenotes.com/'>
-    <meta property='og:description' content='nenotes, any notes for any time.'>
+    <meta property='og:url' content='https://offlinenotepad.com/'>
+    <meta property='og:description' content='An offline-first, secure, private notepad for writing and reading notes.'>
     <meta name='twitter:card' content='summary'>
-    <meta name='twitter:url' content='https://nenotes.com/'>
-    <meta name='twitter:title' content='nenotes'>
-    <meta name='twitter:description' content='nenotes, any notes for any time.'>
+    <meta name='twitter:url' content='https://offlinenotepad.com/'>
+    <meta name='twitter:title' content='Offline Notepad'>
+    <meta name='twitter:description' content='OAn offline-first, secure, private notepad for writing and reading notes.'>
     <meta name='twitter:image' content='https://airhorner.com/images/touch/Airhorner_192.png'>
     <meta name='twitter:creator' content='@yakczar'>
     <link rel='stylesheet' href='/static/css/style.css'>
@@ -80,11 +80,11 @@
             </div>
         </div>
         <div v-show="showIntroText" v-cloak>
-            <p>Welcome to nenotes.</p>
-            <p>nenotes is a private personal notebook for all your devices. Everything you write is encrypted and then
+            <p>Welcome to Offline Notepad.</p>
+            <p>Offline Notepad is a private personal notebook for all your devices. Everything you write is encrypted and then
                 stored
                 locally and backed up to a server.</p>
-            <p>nenotes is offline-first. You can create, edit, delete, and search notes
+            <p>Offline Notepad is offline-first. You can create, edit, delete, and search notes
                 without an internet connection.
                 Your notes automatically sync with server when you come online again.</p>
             <p>Click <em>login</em> to begin.</p>
@@ -217,7 +217,7 @@
                 showSearch: app.showSearch,
             }, newwindowname, newwindowname);
             if (url1 == "/") {
-                url1 = "nenotes"
+                url1 = "Offline Notepad"
             }
             document.title = url1;
         }
