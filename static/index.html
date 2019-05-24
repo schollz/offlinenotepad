@@ -46,10 +46,10 @@
                 <a id="installer" class="link" v-show="isChrome" v-cloak>install</a>
             </span>
             <span class="fl fonty" v-else>
-                <a id='listlink' class="link" v-on:click="showList = true">home</a>&nbsp;
+                <a id='listlink' class="link" v-on:click="showList = true; showSearch = false; showSearchBar=false;">home</a>&nbsp;
                 <span v-show="showList">
                     <a id='newlink' class="link" v-on:click="makeNew">new</a>&nbsp;
-                    <a id='searfhbarLink' class="link" v-on:click="showSearchBar = true">search</a>&nbsp;
+                    <a id='searfhbarLink' class="link" v-on:click="showSearchBar = true; searchText=''">search</a>&nbsp;
                     <a id="logoutlink" class="link" v-on:click="logOut">logout</a>
                 </span>
                 <span v-show="showEdit">
@@ -58,10 +58,10 @@
                 </span>
                 <a id='editlink' class="link" v-on:click="showEdit = true" v-show="showView">edit</a>
             </span>
-            <span class="fr fonty">
-                <input id="searchbar" autocomplete="off" v-on:input="searchDocs" v-model="searchText" placeholder="Search..." style="width: 8em;" v-show="showSearchBar" v-cloak>
-            </span>
         </div>
+        <p v-show="showSearchBar" v-cloak>
+            <input id="searchbar" autocomplete="off" v-on:input="searchDocs" v-model="searchText" placeholder="Search..." style="width: 100%;" autofocus>
+        </p>
         <div class="list" v-show="showSearch" v-cloak>
             <p>Found {{docsFound.length}} items that match '{{searchedText}}':</p>
             <div v-for="doc in docsFound">
@@ -70,10 +70,10 @@
                 <q v-html="doc.snippet" class="snippet"></q>
             </div>
         </div>
-        <div v-show="showList" v-if="!showIntroText" v-cloak>
+        <div v-show="showList" v-if="!showIntroText && !showSearch" v-cloak>
             <p class="small">Welcome, {{username}} ({{appHash(password)}}).</p>
         </div>
-        <div class="list" v-show="showList" v-cloak>
+        <div class="list" v-show="showList && !showSearch" v-cloak>
             <div v-for="doc in docList">
                 <div v-bind:id="doc.uuid" class="link" v-on:click="select($event)"><span v-if="doc.title">{{doc.title}}</span><span v-else>{{doc.uuid}}</span></div>
                 <div>{{ formatDate(doc.created) }}</div>
@@ -578,7 +578,6 @@
                 }
                 if (val == true) {
                     sortDocList();
-
                     this.showSearchBar = false;
                     this.showEdit = false;
                     this.showView = false;
@@ -591,7 +590,6 @@
                 if (val) {
                     this.showEdit = false;
                     this.showView = false;
-                    this.showList = false;
                     window.scrollTo(0, 0);
                 }
             },
@@ -1155,7 +1153,10 @@ Mi bibendum neque egestas congue quisque egestas. Auctor urna nunc id cursus met
 
 
     const Installer = function(root) {
+        console.log('root: ' + root);
+        console.log(root.innerHTML)
         let promptEvent;
+
 
         const install = function(e) {
             if (promptEvent) {
