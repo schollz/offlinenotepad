@@ -201,11 +201,11 @@ func (s *server) handleWebsocket(w http.ResponseWriter, r *http.Request) (err er
 	}()
 
 	var sentBytes, receivedBytes int
-	var p Payload
 
 	// on initiation, send a hashlist
 	timer := time.Now()
 	for {
+		var p Payload
 		err := c.ReadJSON(&p)
 		if err != nil {
 			break
