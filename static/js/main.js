@@ -992,6 +992,8 @@ window.onload = function() {
 
 }
 
+
+/* some basic benchmarking */
 s = `Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Egestas tellus rutrum tellus pellentesque. Vitae sapien pellentesque habitant morbi. Sit amet nisl purus in mollis nunc sed. Aenean et tortor at risus. Massa id neque aliquam vestibulum. Sed risus ultricies tristique nulla aliquet. Lacus vel facilisis volutpat est. Est ullamcorper eget nulla facilisi etiam dignissim diam quis enim. Curabitur gravida arcu ac tortor dignissim convallis aenean. Posuere ac ut consequat semper viverra nam. Nulla aliquet enim tortor at. Tempor id eu nisl nunc mi ipsum faucibus vitae. Arcu bibendum at varius vel. Aliquam sem et tortor consequat id porta. Felis bibendum ut tristique et. Proin nibh nisl condimentum id venenatis a condimentum vitae. Purus sit amet luctus venenatis. Tincidunt tortor aliquam nulla facilisi cras fermentum odio eu feugiat. Erat pellentesque adipiscing commodo elit at imperdiet dui accumsan.
 
 Est ullamcorper eget nulla facilisi. Molestie at elementum eu facilisis sed odio morbi quis commodo. Pellentesque nec nam aliquam sem et. Diam vulputate ut pharetra sit amet aliquam id. Magna fermentum iaculis eu non diam phasellus vestibulum lorem. Vitae tortor condimentum lacinia quis vel eros donec ac odio. Tempus egestas sed sed risus. A iaculis at erat pellentesque adipiscing commodo elit at imperdiet. Faucibus ornare suspendisse sed nisi lacus sed viverra. Enim neque volutpat ac tincidunt vitae. Massa vitae tortor condimentum lacinia. Lacus viverra vitae congue eu consequat.
@@ -1007,7 +1009,7 @@ for (i = 0; i < 10; i++) {
     encode(s, "somepassword");
 }
 var t1 = performance.now();
-console.log("Call to doSomething took " + (t1 - t0) / 10 + " milliseconds.")
+console.log("[debug] encode speed: " + Math.round((t1 - t0) / 10 * 1000) + " op/s.")
 
 var encoded = encode(s, "somepassword");
 var t0 = performance.now();
@@ -1015,9 +1017,10 @@ for (i = 0; i < 10; i++) {
     decode(encoded, "somepassword");
 }
 var t1 = performance.now();
-console.log("Call to doSomething took " + (t1 - t0) / 10 + " milliseconds.")
+console.log("[debug] decoded speed: " + Math.round((t1 - t0) / 10 * 1000) + " op/s.")
 
 
+/* basics for the installation */
 var promptEvent;
 
 const install = function() {
@@ -1053,14 +1056,11 @@ const beforeinstallprompt = function(e) {
 };
 
 
-
-
-
-
 window.addEventListener('beforeinstallprompt', beforeinstallprompt);
 window.addEventListener('appinstalled', installed);
 
 
+/* listen to the history */
 window.addEventListener('popstate', (event) => {
     console.log("[debug] location: " + document.location + ", state: " + JSON.stringify(event.state));
     app.showView = event.state.showView;

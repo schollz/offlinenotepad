@@ -80,14 +80,15 @@
             </div>
         </div>
         <div v-show="showIntroText" v-cloak>
-            <p>Welcome to Offline Notepad.</p>
+            <p>Welcome to the Offline Notepad.</p>
             <p>Offline Notepad is a private personal notebook for all your devices. Everything you write is encrypted and then
                 stored
                 locally and backed up to a server.</p>
-            <p>Offline Notepad is offline-first. You can create, edit, delete, and search notes
+            <p>Offline Notepad is offline-first, which means you can create, edit, delete, and search notes
                 without an internet connection.
-                Your notes automatically sync with server when you come online again.</p>
-            <p>Click <em>login</em> to begin.</p>
+                Your notes automatically sync with a server using end-to-end encryption when you come online.</p>
+            <p>Click <em>login</em> to begin. <span v-if="isChrome">Click <em>install</em> to add this app to your device</span><span v-else>Click the upper right and "Add to home screen" to add this app to your device.</span>.
+            </p>
         </div>
         <div class="fonty" v-show="showView" v-bind:class="{ iscode: isCode }" v-cloak>
             <h1 v-if="doc.title">{{doc.title}}</h1>
