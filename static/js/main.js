@@ -384,6 +384,7 @@ var app = new Vue({
                     hashes[this.doc.uuid] = this.doc.hash;
                     socketSend({
                         type: "update-hashes",
+                        message: "updateDoc",
                         user: this.username,
                         datas: hashes,
                     })
