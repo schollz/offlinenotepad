@@ -608,6 +608,7 @@ function processSocketMessage(d) {
     }
     var to_send_hashes = {};
     var to_send_datas = {};
+    var message = d.type;
     if (d.type == "hashes") {
         if (d.datas == undefined) {
             d.datas = {};
@@ -641,6 +642,7 @@ function processSocketMessage(d) {
         // see if server is missing any
         for (var uuid in app.docs) {
             if (uuid in d.datas) {} else {
+                app.docs[uuid].hash = getHash(uuid + app.docs[uuid].title + app.docs[uuid].doc.markdown)
                 to_send_datas[uuid] = encode(JSON.stringify(app.docs[uuid]), app.password);
                 to_send_hashes[uuid] = app.docs[uuid].hash;
             }
@@ -711,11 +713,13 @@ function processSocketMessage(d) {
         // send server hashes, data for the documents it doesn't have or that needs updating
         socketSend({
             type: "update-data",
+            message: message,
             user: app.username,
             datas: to_send_datas,
         })
         socketSend({
             type: "update-hashes",
+            message: message,
             user: app.username,
             datas: to_send_hashes,
         })
