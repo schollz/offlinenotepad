@@ -1,5 +1,5 @@
-const version = "0.0.10";
-const cacheName = `nenotes-${version}`;
+const version = "0.0.11";
+const cacheName = `offlinenotepad-${version}`;
 self.addEventListener('install', e => {
     e.waitUntil(
         caches.open(cacheName).then(cache => {
@@ -22,6 +22,7 @@ self.addEventListener('install', e => {
                     '/static/js/sweetalert.js',
                     '/static/js/moment.min.js',
                     '/static/js/js.cookie.min.js',
+                    '/static/js/main.js',
                 ])
                 .then(() => self.skipWaiting());
         })
