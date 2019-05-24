@@ -514,3 +514,7 @@ summary {
 .link:hover {
     text-decoration: underline;
 }
+
+.pb5 {
+    padding-bottom: 0.5em;
+}

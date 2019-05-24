@@ -62,14 +62,18 @@
         <p v-show="showSearchBar" v-cloak>
             <input id="searchbar" autocomplete="off" v-on:input="searchDocs" v-model="searchText" placeholder="Search..." style="width: 100%;" autofocus>
         </p>
-        <div class="list" v-show="showSearch" v-cloak>
+        <div v-show="showSearch" v-cloak>
             <p>Found {{docsFound.length}} items that match '{{searchedText}}':</p>
-            <div v-for="doc in docsFound">
-                <div v-bind:id="doc.uuid" class="link" v-on:click="select($event)">
-                    <span v-if="doc.title">{{doc.title}}</span>
-                    <span v-else>{{doc.uuid}}</span>
+            <div v-for="doc in docsFound" class="pb5">
+                <div class="list">
+                    <div>
+                        <div v-bind:id="doc.uuid" class="link" v-on:click="select($event)">
+                            <span v-if="doc.title">{{doc.title}}</span>
+                            <span v-else>{{doc.uuid}}</span>
+                        </div>
+                        <div>{{ formatDate(doc.created) }}</div>
+                    </div>
                 </div>
-                <div>{{ formatDate(doc.created) }}</div>
                 <q v-html="doc.snippet" class="snippet"></q>
             </div>
         </div>
