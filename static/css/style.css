@@ -514,25 +514,3 @@ summary {
 .link:hover {
     text-decoration: underline;
 }
-
-
-#installer {
-    position: absolute;
-    opacity: 100;
-    top: 0;
-    right: 0;
-    text-align: center;
-    transition: opacity 300ms ease-in-out
-}
-
-#installer.available {
-    opacity: 1
-}
-
-#installer .button {
-    border: #000 1px solid;
-    margin: 10px;
-    padding: 10px;
-    color: #000;
-    background-color: transparent
-}

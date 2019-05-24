@@ -35,7 +35,6 @@
 </head>
 
 <body>
-    <div id=installer><button class=button>Install</button></div>
     <main id="app">
         <div v-show="showImport" v-cloak>
             <input type="file" id="selectFiles" value="Import" /> <button id="import">Import</button>
@@ -44,6 +43,7 @@
         <div class="topbar" v-cloak>
             <span class="fl font" v-if="showIntroText">
                 <a id="loginLink" class="link" v-show="showIntroText" v-on:click="logIn">login</a>
+                <a id="installer" class="link" v-show="isChrome" v-cloak>install</a>
             </span>
             <span class="fl fonty" v-else>
                 <a id='listlink' class="link" v-on:click="showList = true">home</a>&nbsp;
@@ -70,7 +70,7 @@
                 <q v-html="doc.snippet" class="snippet"></q>
             </div>
         </div>
-        <div v-show="showList" v-cloak>
+        <div v-show="showList" v-if="docList.length > 0" v-cloak>
             <p class="small">Welcome, {{username}} ({{appHash(password)}}). Decrypted {{docList.length}}/{{Object.keys(docs).length}} documents:</p>
         </div>
         <div class="list" v-show="showList" v-cloak>
@@ -529,6 +529,9 @@
             }, 400),
         },
         computed: {
+            isChrome: function() {
+                return navigator.userAgent.toLowerCase().indexOf('chrome') > -1;
+            },
             showWelcomeText: function() {
                 if (this.username == "undefined" || this.username == "" || this.username == undefined) {
                     return false;
@@ -932,9 +935,11 @@
                     }
                 }
             }).then(result => {
-                app.username = result.value;
-                Cookies.set('app.username', app.username);
-                promptPassword();
+                if (result.value != undefined && result.value != "undefined") {
+                    app.username = result.value;
+                    Cookies.set('app.username', app.username);
+                    promptPassword();
+                }
             })
         } else {
             promptPassword();
