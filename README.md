@@ -10,7 +10,6 @@ src="https://img.shields.io/travis/schollz/offlinenotepad.svg?style=flat-square"
 Status"></a> 
 </p>
 
-
 <p align="center"><code><a href="https://offlinenotepad.com">https://offlinenotepad.com</a></code></p>
 
 offlinenotepad is an open-source server for implementing a private, offline-first, minimalistic note-writing experience that can be accessed anywhere, anytime. 
@@ -21,11 +20,26 @@ offlinenotepad is an open-source server for implementing a private, offline-firs
 
 **Minimal.** This offline notepad aims to do as much as possible with as little as possible.
 
+This writing tool is largely based of its predecessors: [cowyo](https://cowyo.com) and [rwtxt.com](https://rwtxt.com) (both also available on Github).
+
 ## Install
 
+To run your own server for backing up notes you can simply install with Go.
 
-## Usage
+```
+$ git clone https://github.com/schollz/offlinenotepad
+$ cd offlinenotepad
+$ go build -v
+```
 
+And then you can run
+
+```
+
+$ ./offlinenotepad
+```
+
+Log into `localhost:8251` to see the site.
 
 ## Acknowledgements
 
