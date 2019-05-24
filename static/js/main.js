@@ -373,20 +373,21 @@ var app = new Vue({
                     localforage.setItem(this.doc.uuid, encoded);
 
                     // update data and hash in server
-                    var datas = {};
-                    datas[this.doc.uuid] = encoded;
+                    var datas_to_send = {};
+                    datas_to_send[this.doc.uuid] = encoded;
                     socketSend({
                         type: "update-data",
+                        message: "updateDoc",
                         user: this.username,
-                        datas: datas,
+                        datas: datas_to_send,
                     })
-                    var hashes = {}
-                    hashes[this.doc.uuid] = this.doc.hash;
+                    var hashes_to_send = {}
+                    hashes_to_send[this.doc.uuid] = this.doc.hash;
                     socketSend({
                         type: "update-hashes",
                         message: "updateDoc",
                         user: this.username,
-                        datas: hashes,
+                        datas: hashes_to_send,
                     })
                 };
 
