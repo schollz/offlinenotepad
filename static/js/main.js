@@ -152,6 +152,7 @@ var app = new Vue({
         searchedText: "",
         searchIndex: {},
         searchIndexLastModified: 0,
+        indexing: false,
     },
     methods: {
         install: function() {
@@ -195,35 +196,18 @@ var app = new Vue({
                 return;
             }
             console.log(`[debug] conducting search for ${this.searchText}`)
-            if (moment.utc() - this.searchIndexLastModified > 10000) {
-                console.log("[debug] indexing")
-                var documents = [];
-                for (var i in this.docs) {
-                    documents.push({
-                        "id": i,
-                        "title": this.docs[i].title,
-                        "text": this.docs[i].markdown,
-                    });
-                }
-                this.searchIndex = lunr(function() {
-                    this.ref('id');
-                    this.field('title');
-                    this.field('text');
-                    this.metadataWhitelist = ['position']
-
-                    documents.forEach(function(doc) {
-                        this.add(doc)
-                    }, this)
-                })
-                this.searchIndexLastModified = moment.utc();
-            }
+            this.updateIndex();
 
             var _this = this;
             this.showSearch = true;
             this.searchedText = this.searchText;
             this.docsFound = [];
+            var searchTerm = this.searchText
+            if (!searchTerm.includes(" ")) {
+                searchTerm = "*" + searchTerm + "*";
+            }
             console.log("[debug] searching")
-            this.searchIndex.search(this.searchText).forEach(function(el) {
+            this.searchIndex.search(searchTerm).forEach(function(el) {
                 console.log(el);
                 var doc = _this.docs[el.ref];
                 // extract snippets from search
@@ -356,6 +340,32 @@ var app = new Vue({
                 }
             })
         },
+        updateIndex: function() {
+            if (moment.utc() - this.searchIndexLastModified > 10000 && !this.indexing) {
+                this.indexing = true;
+                console.log("[debug] indexing")
+                var documents = [];
+                for (var i in this.docs) {
+                    documents.push({
+                        "id": i,
+                        "title": this.docs[i].title,
+                        "text": this.docs[i].markdown,
+                    });
+                }
+                this.searchIndex = lunr(function() {
+                    this.ref('id');
+                    this.field('title');
+                    this.field('text');
+                    this.metadataWhitelist = ['position']
+
+                    documents.forEach(function(doc) {
+                        this.add(doc)
+                    }, this)
+                })
+                this.searchIndexLastModified = moment.utc();
+                this.indexing = false;
+            }
+        },
         updateDoc: debounce(function() {
             if (this.showEdit) { // only update if in edit mode
                 // update the modified timestamp
@@ -434,6 +444,11 @@ var app = new Vue({
         }
     },
     watch: {
+        showSearchBar: function(val) {
+            if (val) {
+                this.updateIndex();
+            }
+        },
         username: function() {
             if (this.username == undefined || this.username == "undefined" || this.username == "") {
                 this.usernameHash = "";
