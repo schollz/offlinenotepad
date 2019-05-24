@@ -105,7 +105,7 @@ const socketOpenListener = (event) => {
         // request hashes for syncing down
         socketSend({
             "type": "get-hashes",
-            "user": app.username,
+            "user": app.usernameHash,
         });
     }
 };
@@ -134,6 +134,7 @@ var app = new Vue({
         installed: false,
         startTime: moment.now(),
         username: "",
+        usernameHash: "",
         password: "",
         docs: {},
         docList: [],
@@ -333,14 +334,14 @@ var app = new Vue({
                     datas[this.doc.uuid] = encoded;
                     socketSend({
                         type: "update-data",
-                        user: this.username,
+                        user: this.usernameHash,
                         datas: datas,
                     })
                     var hashes = {}
                     hashes[this.doc.uuid] = this.doc.hash;
                     socketSend({
                         type: "update-hashes",
-                        user: this.username,
+                        user: this.usernameHash,
                         datas: hashes,
                     })
 
@@ -378,7 +379,7 @@ var app = new Vue({
                     socketSend({
                         type: "update-data",
                         message: "updateDoc",
-                        user: this.username,
+                        user: this.usernameHash,
                         datas: datas_to_send,
                     })
                     var hashes_to_send = {}
@@ -386,7 +387,7 @@ var app = new Vue({
                     socketSend({
                         type: "update-hashes",
                         message: "updateDoc",
-                        user: this.username,
+                        user: this.usernameHash,
                         datas: hashes_to_send,
                     })
                 };
@@ -433,6 +434,13 @@ var app = new Vue({
         }
     },
     watch: {
+        username: function() {
+            if (this.username == undefined || this.username == "undefined" || this.username == "") {
+                this.usernameHash = "";
+            } else {
+                this.usernameHash = getHash(this.username);
+            }
+        },
         showView: function(val) {
             if (val == true) {
                 this.showSearchBar = false;
@@ -536,7 +544,7 @@ syncUp = function() {
 
                         socketSend({
                             "type": "offer",
-                            "user": app.username,
+                            "user": app.usernameHash,
                             "hash": doc.hash,
                             "uuid": doc.uuid,
                         });
@@ -634,7 +642,7 @@ function processSocketMessage(d) {
             // send server request for differing documents
             socketSend({
                 "type": "get-data",
-                "user": app.username,
+                "user": app.usernameHash,
                 "datas": to_request,
             });
         } else {
@@ -716,13 +724,13 @@ function processSocketMessage(d) {
         socketSend({
             type: "update-data",
             message: message,
-            user: app.username,
+            user: app.usernameHash,
             datas: to_send_datas,
         })
         socketSend({
             type: "update-hashes",
             message: message,
-            user: app.username,
+            user: app.usernameHash,
             datas: to_send_hashes,
         })
     } else {
