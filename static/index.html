@@ -49,6 +49,7 @@
                 <a id='listlink' class="link" v-on:click="showList = true">home</a>&nbsp;
                 <span v-show="showList">
                     <a id='newlink' class="link" v-on:click="makeNew">new</a>&nbsp;
+                    <a id='searfhbarLink' class="link" v-on:click="showSearchBar = true">search</a>&nbsp;
                     <a id="logoutlink" class="link" v-on:click="logOut">logout</a>
                 </span>
                 <span v-show="showEdit">
@@ -58,7 +59,7 @@
                 <a id='editlink' class="link" v-on:click="showEdit = true" v-show="showView">edit</a>
             </span>
             <span class="fr fonty">
-                <input id="searchbar" autocomplete="off" v-on:input="searchDocs" v-model="searchText" placeholder="Search..." style="width: 8em;">
+                <input id="searchbar" autocomplete="off" v-on:input="searchDocs" v-model="searchText" placeholder="Search..." style="width: 8em;" v-show="showSearchBar" v-cloak>
             </span>
         </div>
         <div class="list" v-show="showSearch" v-cloak>
@@ -273,6 +274,7 @@
             showSearch: false,
             showCheck: false,
             showImport: false,
+            showSearchBar: false,
             searchText: "",
             searchedText: "",
             searchIndex: {},
@@ -550,6 +552,7 @@
         watch: {
             showView: function(val) {
                 if (val == true) {
+                    this.showSearchBar = false;
                     this.showEdit = false;
                     // update the html (for viewer)
                     this.doc.rawHTML = (new showdown.Converter()).makeHtml(this.doc.markdown)
@@ -558,6 +561,7 @@
             },
             showEdit: function(val) {
                 if (val == true) {
+                    this.showSearchBar = false;
                     this.showView = false;
                     window.scrollTo(0, 0);
                 }
@@ -569,6 +573,7 @@
                 if (val == true) {
                     sortDocList();
 
+                    this.showSearchBar = false;
                     this.showEdit = false;
                     this.showView = false;
                     this.showSearch = false;
@@ -586,6 +591,7 @@
             },
             showViewOrEdit: function(val) {
                 if (val == true) {
+                    this.showSearchBar = false;
                     this.showList = false;
                     this.showSearch = false;
                     updateURL(this.doc.title, this.doc.uuid);
@@ -1071,18 +1077,12 @@
 
 
 
-    window.addEventListener('popstate', (event) => {
-        console.log("[debug] location: " + document.location + ", state: " + JSON.stringify(event.state));
-        app.showView = event.state.showView;
-        app.showEdit = event.state.showEdit;
-        app.showSearch = event.state.showSearch;
-        app.showList = event.state.showList;
-    });
-
-
-
-
     window.onload = function() {
+
+        const installEl = document.getElementById('installer');
+        const installer = new Installer(installEl);
+
+
         document.getElementById('import').onclick = function() {
             var files = document.getElementById('selectFiles').files;
             console.log(files);
@@ -1157,13 +1157,11 @@ Mi bibendum neque egestas congue quisque egestas. Auctor urna nunc id cursus met
                         // The user actioned the prompt (good or bad).
                         // good is handled in 
                         promptEvent = null;
-                        ga('send', 'event', 'install', choiceResult);
                         root.classList.remove('available');
                     })
                     .catch(function(installError) {
                         // Boo. update the UI.
                         promptEvent = null;
-                        ga('send', 'event', 'install', 'errored');
                         root.classList.remove('available');
                     });
             }
@@ -1172,14 +1170,12 @@ Mi bibendum neque egestas congue quisque egestas. Auctor urna nunc id cursus met
         const installed = function(e) {
             promptEvent = null;
             // This fires after onbeforinstallprompt OR after manual add to homescreen.
-            ga('send', 'event', 'install', 'installed');
             root.classList.remove('available');
         };
 
         const beforeinstallprompt = function(e) {
             promptEvent = e;
             promptEvent.preventDefault();
-            ga('send', 'event', 'install', 'available');
             root.classList.add('available');
             return false;
         };
@@ -1191,10 +1187,13 @@ Mi bibendum neque egestas congue quisque egestas. Auctor urna nunc id cursus met
         root.addEventListener('touchend', install.bind(this));
     };
 
-    window.addEventListener('load', function() {
-        const installEl = document.getElementById('installer');
-        const installer = new Installer(installEl);
-    })();
+    window.addEventListener('popstate', (event) => {
+        console.log("[debug] location: " + document.location + ", state: " + JSON.stringify(event.state));
+        app.showView = event.state.showView;
+        app.showEdit = event.state.showEdit;
+        app.showSearch = event.state.showSearch;
+        app.showList = event.state.showList;
+    });
     </script>
 </body>
 
