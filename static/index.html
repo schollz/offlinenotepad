@@ -43,7 +43,7 @@
         <div class="topbar" v-cloak>
             <span class="fl font" v-if="showIntroText">
                 <a id="loginLink" class="link" v-show="showIntroText" v-on:click="logIn">login</a>
-                <a id="installer" class="link" v-show="isChrome" v-cloak>install</a>
+                <a id="installer" class="link" v-show="isChrome && !installed" v-on:click="install" v-cloak>install</a>
             </span>
             <span class="fl fonty" v-else>
                 <a id='listlink' class="link" v-on:click="showList = true; showSearch = false; showSearchBar=false;">home</a>&nbsp;
@@ -260,6 +260,7 @@
     var app = new Vue({
         el: '#app',
         data: {
+            installed: false,
             startTime: moment.now(),
             username: "",
             password: "",
@@ -281,6 +282,9 @@
             searchIndexLastModified: 0,
         },
         methods: {
+            install: function() {
+                install();
+            },
             appHash: function(s) {
                 return CryptoJS.SHA256(s).toString().substring(0, 8);
             },
@@ -1084,11 +1088,6 @@
 
 
     window.onload = function() {
-
-        const installEl = document.getElementById('installer');
-        const installer = new Installer(installEl);
-
-
         document.getElementById('import').onclick = function() {
             var files = document.getElementById('selectFiles').files;
             console.log(files);
@@ -1148,53 +1147,48 @@ Mi bibendum neque egestas congue quisque egestas. Auctor urna nunc id cursus met
     console.log("Call to doSomething took " + (t1 - t0) / 10 + " milliseconds.")
 
 
+    var promptEvent;
 
-
-
-
-    const Installer = function(root) {
-        console.log('root: ' + root);
-        console.log(root.innerHTML)
-        let promptEvent;
-
-
-        const install = function(e) {
-            if (promptEvent) {
-                promptEvent.prompt();
-                promptEvent.userChoice
-                    .then(function(choiceResult) {
-                        // The user actioned the prompt (good or bad).
-                        // good is handled in 
-                        promptEvent = null;
-                        root.classList.remove('available');
-                    })
-                    .catch(function(installError) {
-                        // Boo. update the UI.
-                        promptEvent = null;
-                        root.classList.remove('available');
-                    });
-            }
-        };
-
-        const installed = function(e) {
-            promptEvent = null;
-            // This fires after onbeforinstallprompt OR after manual add to homescreen.
-            root.classList.remove('available');
-        };
-
-        const beforeinstallprompt = function(e) {
-            promptEvent = e;
-            promptEvent.preventDefault();
-            root.classList.add('available');
-            return false;
-        };
-
-        window.addEventListener('beforeinstallprompt', beforeinstallprompt);
-        window.addEventListener('appinstalled', installed);
-
-        root.addEventListener('click', install.bind(this));
-        root.addEventListener('touchend', install.bind(this));
+    const install = function() {
+        if (promptEvent) {
+            promptEvent.prompt();
+            promptEvent.userChoice
+                .then(function(choiceResult) {
+                    // The user actioned the prompt (good or bad).
+                    // good is handled in 
+                    promptEvent = null;
+                    app.installed = true;
+                })
+                .catch(function(installError) {
+                    // Boo. update the UI.
+                    promptEvent = null;
+                    app.installed = true;
+                });
+        } else {
+            app.installed = true;
+        }
     };
+
+    const installed = function() {
+        promptEvent = null;
+        app.installed = true;
+        // This fires after onbeforinstallprompt OR after manual add to homescreen.
+    };
+
+    const beforeinstallprompt = function(e) {
+        promptEvent = e;
+        promptEvent.preventDefault();
+        return false;
+    };
+
+
+
+
+
+
+    window.addEventListener('beforeinstallprompt', beforeinstallprompt);
+    window.addEventListener('appinstalled', installed);
+
 
     window.addEventListener('popstate', (event) => {
         console.log("[debug] location: " + document.location + ", state: " + JSON.stringify(event.state));
