@@ -525,3 +525,7 @@ summary {
 .topbar>span>a {
     padding-right: 0.8em;
 }
+
+.small {
+    font-size: 90%;
+}
