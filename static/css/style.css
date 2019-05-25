@@ -397,9 +397,6 @@ figcaption {
 
 
 
-.link:hover {
-    cursor: pointer;
-}
 
 .smaller {
     font-size: 85%;
@@ -513,8 +510,18 @@ summary {
 
 .link:hover {
     text-decoration: underline;
+    cursor: pointer;
 }
 
 .pb5 {
     padding-top: 0.5em;
+}
+
+.feather {
+    vertical-align: middle;
+    margin-right: 2px;
+}
+
+.topbar>span>a {
+    padding-right: 0.8em;
 }
