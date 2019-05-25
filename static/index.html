@@ -42,8 +42,20 @@
         <div class="checkmark" v-show="showCheck">✔️</div>
         <div class="topbar" v-cloak>
             <span class="fl font" v-if="showIntroText">
-                <a id="loginLink" class="link" v-show="showIntroText" v-on:click="logIn">login</a>
-                <a id="installer" class="link" v-show="isChrome && !installed" v-on:click="install" v-cloak>install</a>
+                <a id="loginLink" class="link" v-show="showIntroText" v-on:click="logIn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-log-in">
+                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+                        <polyline points="10 17 15 12 10 7"></polyline>
+                        <line x1="15" y1="12" x2="3" y2="12"></line>
+                    </svg>
+                    login
+                </a>
+                <a id="installer" class="link" v-show="isChrome && !installed" v-on:click="install" v-cloak><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-download">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    install
+                </a>
             </span>
             <span class="fl fonty" v-else>
                 <a id='listlink' class="link" v-on:click="showList = true; showSearch = false; showSearchBar=false;"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-home">
