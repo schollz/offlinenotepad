@@ -2,6 +2,7 @@ package main
 
 import (
 	"compress/gzip"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -10,12 +11,20 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/gorilla/websocket"
 	log "github.com/schollz/logger"
 	bolt "go.etcd.io/bbolt"
 )
+
+type Document struct {
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	HTML     string `json:"html"`
+	Markdown string `json:"markdown"`
+}
 
 func main() {
 	log.SetLevel("trace")
@@ -40,6 +49,13 @@ func New() (s *server, err error) {
 	if err != nil {
 		return
 	}
+	err = s.db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("published"))
+		if err != nil {
+			return fmt.Errorf("create bucket: %s", err)
+		}
+		return nil
+	})
 	return
 }
 
@@ -94,6 +110,29 @@ func (s *server) handle(w http.ResponseWriter, r *http.Request) (err error) {
 	if r.Method == http.MethodPost {
 		return s.handlePost(w, r)
 	}
+
+	// check to see if path is in the database
+	doc, err := s.handleGetPublished(r.URL.Path)
+	if err == nil {
+		if strings.Contains(r.URL.Path, "raw") {
+			_, err = w.Write([]byte(doc.Markdown))
+			return
+		}
+		// use template
+		var t *template.Template
+		log.Tracef("found doc: %+v", doc)
+		t, err = template.ParseFiles("static/view.html")
+		if err != nil {
+			log.Error(err)
+			return err
+		}
+		type view struct {
+			Title string
+			HTML  string
+		}
+		return t.Execute(w, view{doc.Title, doc.HTML})
+	}
+
 	// very special paths
 	if r.URL.Path == "/robots.txt" {
 		// special path
@@ -265,10 +304,118 @@ func (s *server) dbHandlePayload(p Payload) (rp Payload, err error) {
 	case "get-data":
 		// client requests data for specified UUIDs
 		rp, err = s.dbHandleRequest(p)
+	case "update-publish":
+		// client requests data for specified UUIDs
+		rp, err = s.dbHandlePublishUpdate(p)
+	case "delete-publish":
+		// client requests data for specified UUIDs
+		rp, err = s.dbHandlePublishDelete(p)
 	default:
 		log.Debug("unknown type")
 	}
 
+	return
+}
+
+func (s *server) handleGetPublished(urlpath string) (d Document, err error) {
+	fields := strings.Split(urlpath, "/")
+	if len(fields) < 2 {
+		err = fmt.Errorf("not a valid url")
+		return
+	}
+	uuid := strings.TrimSpace(fields[1])
+	log.Tracef("looking for '%s'", uuid)
+	err = s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("published"))
+		v := b.Get([]byte(uuid))
+		if v == nil {
+			return fmt.Errorf("not found")
+		} else {
+			return json.Unmarshal(v, &d)
+		}
+		return nil
+	})
+	return
+}
+
+func (s *server) dbHandlePublishUpdate(p Payload) (rp Payload, err error) {
+	rp.Type = "published"
+	rp.Datas = make(map[string]string)
+	for uuid, val := range p.Datas {
+		if err = validate(uuid); err != nil {
+			log.Error(err)
+			continue
+		}
+		if err = validate(val); err != nil {
+			log.Error(err)
+			continue
+		}
+		var document Document
+		err = json.Unmarshal([]byte(val), &document)
+		if err != nil {
+			log.Errorf("could not unmarshal: %s", val)
+			continue
+		}
+		// make sure its a valid user's document
+		err = s.db.View(func(tx *bolt.Tx) error {
+			b := tx.Bucket([]byte(p.User + "-data"))
+			v := b.Get([]byte(uuid))
+			if v == nil {
+				return fmt.Errorf("%s not found", uuid)
+			}
+			return nil
+		})
+		if err != nil {
+			log.Error(err)
+			return
+		}
+
+		h := sha256.New()
+		h.Write([]byte("offlinenotepad" + uuid))
+		document.ID = fmt.Sprintf("%x", h.Sum(nil))[:8]
+		rp.Message += fmt.Sprintf("published %s as %s; ", uuid, document.ID)
+		documentBytes, err := json.Marshal(document)
+		if err != nil {
+			log.Error(err)
+			continue
+		}
+		err = s.db.Update(func(tx *bolt.Tx) error {
+			b := tx.Bucket([]byte("published"))
+			return b.Put([]byte(document.ID), documentBytes)
+		})
+		if err != nil {
+			log.Error(err)
+			return rp, err
+		} else {
+			rp.Datas[document.ID] = ""
+		}
+	}
+	return
+}
+
+func (s *server) dbHandlePublishDelete(p Payload) (rp Payload, err error) {
+	rp.Type = "message"
+	for uuid := range p.Datas {
+		if err = validate(uuid); err != nil {
+			log.Error(err)
+			continue
+		}
+
+		h := sha256.New()
+		h.Write([]byte("offlinenotepad" + uuid))
+		hashedUUID := fmt.Sprintf("%x", h.Sum(nil))[:8]
+		log.Tracef("deleting %s (%s)", uuid, hashedUUID)
+		err = s.db.Update(func(tx *bolt.Tx) error {
+			b := tx.Bucket([]byte("published"))
+			return b.Delete([]byte(hashedUUID))
+		})
+		if err != nil {
+			log.Error(err)
+			return rp, err
+		} else {
+			rp.Message += fmt.Sprintf("deleted %s ", uuid)
+		}
+	}
 	return
 }
 

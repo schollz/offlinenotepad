@@ -337,6 +337,13 @@ var app = new Vue({
                         user: this.usernameHash,
                         datas: hashes,
                     })
+                    var datas2 = {};
+                    datas2[this.doc.uuid] = "";
+                    socketSend({
+                        type: "delete-publish",
+                        user: this.usernameHash,
+                        datas: datas2,
+                    })
 
                     localforage.setItem(this.doc.uuid, encoded).then(function() {
                         console.log(`[debug] removed ${_this.doc.uuid}`);
@@ -348,6 +355,20 @@ var app = new Vue({
                     });
                 }
             })
+        },
+        publishDocument: function() {
+            var datas = {};
+            datas[this.doc.uuid] = JSON.stringify({
+                ID: this.doc.uuid,
+                Title: this.doc.title,
+                HTML: (new showdown.Converter()).makeHtml(this.doc.markdown),
+                Markdown: this.doc.markdown,
+            });
+            socketSend({
+                type: "update-publish",
+                user: this.usernameHash,
+                datas: datas,
+            });
         },
         updateIndex: function() {
             if (moment.utc() - this.searchIndexLastModified > 10000 && !this.indexing) {
@@ -699,7 +720,10 @@ function processSocketMessage(d) {
                 to_send_hashes[uuid] = app.docs[uuid].hash;
             }
         }
-
+    } else if (d.type == "published") {
+        for (var uuid in d.datas) {
+            window.open("/" + uuid, "_blank");
+        }
     } else if (d.type == "update") {
         // received an update for the data in the app
         var updated = false;
