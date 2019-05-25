@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang=en-US>
+
+<head>
+    <meta charset='utf-8'>
+    <title>{{.Title}}</title>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+    <meta name='description' content='Offline Notepad, any notes for any time.'>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <link rel='canonical' href='https://offlinenotepad.com/'>
+    <link rel='manifest' href='/static/manifest.json'>
+    <meta name='mobile-web-app-capable' content='yes'>
+    <meta name='apple-mobile-web-app-capable' content='yes'>
+    <meta name='application-name' content='Offline Notepad'>
+    <meta name='apple-mobile-web-app-status-bar-style' content='black'>
+    <meta name='apple-mobile-web-app-title' content='Offline Notepad'>
+    <link rel='icon' sizes='192x192' href='/static/images/touch/Airhorner_192.png'>
+    <link rel='apple-touch-icon' href='/static/images/touch/Airhorner_192.png'>
+    <meta property='og:image' content='https://airhorner.com/images/touch/Airhorner_192.png'>
+    <meta name='msapplication-TileImage' content='/static/images/touch/Airhorner_144.png'>
+    <meta name='msapplication-TileColor' content='#2196F3'>
+    <meta name='theme-color' content='#2196F3'>
+    <meta property='og:title' content='Offline Notepad'>
+    <meta property='og:type' content='website'>
+    <meta property='og:url' content='https://offlinenotepad.com/'>
+    <meta property='og:description' content='An offline-first, secure, private notepad for writing and reading notes.'>
+    <meta name='twitter:card' content='summary'>
+    <meta name='twitter:url' content='https://offlinenotepad.com/'>
+    <meta name='twitter:title' content='Offline Notepad'>
+    <meta name='twitter:description' content='OAn offline-first, secure, private notepad for writing and reading notes.'>
+    <meta name='twitter:image' content='https://airhorner.com/images/touch/Airhorner_192.png'>
+    <meta name='twitter:creator' content='@yakczar'>
+    <link rel='stylesheet' href='/static/css/style.css'>
+</head>
+
+<body>
+    <main id="app">
+        <h1>{{.Title}}</h1>
+        {{.HTML}}
+    </main>
+</body>
+
+</html>
