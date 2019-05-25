@@ -357,18 +357,30 @@ var app = new Vue({
             })
         },
         publishDocument: function() {
-            var datas = {};
-            datas[this.doc.uuid] = JSON.stringify({
-                ID: this.doc.uuid,
-                Title: this.doc.title,
-                HTML: (new showdown.Converter()).makeHtml(this.doc.markdown),
-                Markdown: this.doc.markdown,
-            });
-            socketSend({
-                type: "update-publish",
-                user: this.usernameHash,
-                datas: datas,
-            });
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "This will publish a public version of this document that anyone can view.",
+                type: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Yes, publish.'
+            }).then((result) => {
+                if (result.value) {
+                    var datas = {};
+                    datas[this.doc.uuid] = JSON.stringify({
+                        ID: this.doc.uuid,
+                        Title: this.doc.title,
+                        HTML: (new showdown.Converter()).makeHtml(this.doc.markdown),
+                        Markdown: this.doc.markdown,
+                    });
+                    socketSend({
+                        type: "update-publish",
+                        user: this.usernameHash,
+                        datas: datas,
+                    });
+                }
+            })
         },
         updateIndex: function() {
             if (moment.utc() - this.searchIndexLastModified > 10000 && !this.indexing) {
