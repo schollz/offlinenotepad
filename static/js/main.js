@@ -155,6 +155,7 @@ var app = new Vue({
         indexing: false,
         markInstance: {},
         markWords: [],
+        hasData: false,
     },
     methods: {
         install: function() {
@@ -170,7 +171,7 @@ var app = new Vue({
 
             Swal.fire({
                 title: 'Are you sure?',
-                text: "This will clear all local data.",
+                text: "This will clear log you out, but your encrypted data is saved.",
                 type: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#3085d6',
@@ -178,7 +179,31 @@ var app = new Vue({
                 confirmButtonText: 'Yes, log me out.'
             }).then((result) => {
                 if (result.value) {
-                    console.log("logging out");
+                    console.log("[debug] logging out");
+                    Cookies.remove("app.username");
+                    sessionStorage.removeItem("app.p");
+                    this.username = "";
+                    this.password = "";
+                    this.docs = {};
+                    this.docList = [];
+                    this.doc = {};
+                    this.docsFound = [];
+                    this.searchIndex = {};
+                }
+            })
+        },
+        clearAllData: function() {
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "This will clear all local data, but your encrypted data is safely stored on the server.",
+                type: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Yes, clear all.'
+            }).then((result) => {
+                if (result.value) {
+                    console.log("[debug] clearing data");
                     Cookies.remove("app.username");
                     sessionStorage.removeItem("app.p");
                     localforage.clear();
@@ -189,6 +214,7 @@ var app = new Vue({
                     this.doc = {};
                     this.docsFound = [];
                     this.searchIndex = {};
+                    this.hasData = false;
                 }
             })
         },
@@ -514,6 +540,13 @@ var app = new Vue({
                 this.usernameHash = "";
             } else {
                 this.usernameHash = getHash(this.username);
+                // check is has data
+                this.hasData = false;
+                localforage.keys().then((keys) => {
+                    this.hasData = (keys.length > 0);
+                }).catch(function(err) {
+                    console.log(`[error] ` + err);
+                });
             }
         },
         showView: function(val) {
