@@ -463,18 +463,20 @@ summary {
 
 .topbar {
     margin-top: 0em;
-    padding-bottom: 1em;
-    margin-bottom: 1em;
+    margin-bottom: 1.1em;
+    padding-bottom: 1.1em;
+    font-size: 90%;
 }
 
 #edittitle {
     width: 100%;
-    font-size: 24px;
+    font-size: 1.7em;
     border: none;
     padding-top: 0.2em;
     padding-bottom: 0.2em;
-    margin-bottom: 0.5em;
+    margin-bottom: 0.2em;
     background: rgb(253, 253, 253);
+    font-weight: bold;
 }
 
 #editable {
@@ -519,7 +521,7 @@ a {
     cursor: pointer;
 }
 
-.pb5 {
+.pt5 {
     padding-top: 0.5em;
 }
 

@@ -7,7 +7,7 @@
 
 <p align="center"><code><a href="https://offlinenotepad.com">https://offlinenotepad.com</a></code></p>
 
-offlinenotepad is an open-source server for implementing a private, offline-first, minimalistic note-writing experience that can be accessed anywhere, anytime. 
+offlinenotepad is an open-source server and client for implementing a private, offline-first, minimalistic note-writing experience that can be accessed anywhere, anytime. 
 
 **Offline-first.** All data and functions are available on the client. Storage uses localstorage, and there are client-side libraries for search and encryption.
 

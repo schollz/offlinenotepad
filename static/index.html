@@ -66,7 +66,7 @@
                     clear
                 </a>
             </span>
-            <span class="fl fonty" v-else>
+            <span class="fl" v-else>
                 <a id='listlink' class="link" v-on:click="showList = true; showSearch = false; showSearchBar=false;" v-show="!showList"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-home">
                         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                         <polyline points="9 22 9 12 15 12 15 22"></polyline>
@@ -128,7 +128,7 @@
         </p>
         <div v-show="showSearch" v-cloak>
             <p>Found {{docsFound.length}} items that match '{{searchedText}}':</p>
-            <div v-for="doc in docsFound" class="pb5">
+            <div v-for="doc in docsFound" class="pt5">
                 <div class="list">
                     <div>
                         <div v-bind:id="doc.uuid" class="link" v-on:click="select($event)">
@@ -141,7 +141,7 @@
                 <q v-html="doc.snippet" class="snippet"></q>
             </div>
         </div>
-        <div v-show="showList" v-if="!showIntroText && !showSearch" v-cloak>
+        <div v-show="showList" v-if="!showIntroText && !showSearch && password != ''" v-cloak>
             <p class="small">Welcome, {{username}} ({{appHash(password)}}).</p>
         </div>
         <div class="list" v-show="showList && !showSearch" v-cloak>
@@ -156,20 +156,23 @@
             <p>Offline Notepad is offline-first, which means you can create, edit, delete, and search notes
                 without an internet connection.
                 Your notes automatically sync with a server using end-to-end encryption when you come online.</p>
-            <p>Click <em>login</em> to begin. <span v-if="isChrome">Click <em>install</em> to add this app to your device</span><span v-else>Click the upper right and "Add to home screen" to add this app to your device.</span>.
-            </p>
+            <p>Click <em>login</em> to begin.</p>
+            <p><span v-if="isChrome">Click <em>install</em> to add this app to your device</span><span v-else>Click the upper right of your browser and "Add to home screen" to add this app to your device</span>.</p>
+            <p v-if="hasData">Click <em>clear</em> to erase all the current local data (which is encrypted and backed up to the server).</p>
         </div>
-        <div class="fonty" v-show="showView" v-bind:class="{ iscode: isCode }" v-cloak>
+        <div class="pt5" v-show="showView" v-bind:class="{ iscode: isCode }" v-cloak>
             <h1 v-if="doc.title">{{doc.title}}</h1>
             <h1 v-else>{{doc.uuid}}</h1>
             <!-- TODO: if . in title, show raw pre-formated text -->
             <div v-html="doc.rawHTML"></div>
         </div>
-        <input id="edittitle" autocomplete="off" v-show="showEdit" placeholder="Title" v-model="doc.title" v-on:input="updateDoc" v-bind:class="{ iscode: isCode }" v-cloak>
-        <textarea class="writing" autocomplete="off" v-show="showEdit" id="editable" rows=110 placeholder="Click here and start writing" v-on:input="updateDoc" @keydown.tab.prevent="tabber($event)" v-model="doc.markdown" v-bind:class="{ iscode: isCode }" v-cloak autofocus>
+        <div class="pt5" v-show="showEdit" v-cloak>
+            <input id="edittitle" autocomplete="off" placeholder="Title" v-model="doc.title" v-on:input="updateDoc" v-bind:class="{ iscode: isCode }" v-cloak>
+            <textarea class="writing" autocomplete="off" id="editable" rows=110 placeholder="Click here and start writing" v-on:input="updateDoc" @keydown.tab.prevent="tabber($event)" v-model="doc.markdown" v-bind:class="{ iscode: isCode }" v-cloak autofocus>
         {{doc.markdown}}
         <!-- TODO: if . in title, show raw pre-formated text -->
         </textarea>
+        </div>
     </main>
     <script src="/static/js/mark.min.js"></script>
     <script src="/static/js/js.cookie.min.js"></script>
