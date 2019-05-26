@@ -140,14 +140,14 @@ func (s *server) handle(w http.ResponseWriter, r *http.Request) (err error) {
 Disallow: /`))
 	} else if r.URL.Path == "/ws" {
 		return s.handleWebsocket(w, r)
-	} else if r.URL.Path == "/favicon.ico" {
-		// TODO
 	} else if r.URL.Path == "/sitemap.xml" {
 		// TODO
 	} else {
 		log.Trace(r.URL.Path)
 		if r.URL.Path == "/sw.js" {
 			r.URL.Path = "/static/js/sw.js"
+		} else if r.URL.Path == "/favicon.ico" {
+			r.URL.Path = "/static/images/favicon.ico"
 		} else if !strings.HasPrefix(r.URL.Path, "/static") {
 			r.URL.Path = "/static/index.html"
 		}

@@ -508,6 +508,12 @@ summary {
     }
 }
 
+
+.link,
+a {
+    color: #5858f1;
+}
+
 .link:hover {
     text-decoration: underline;
     cursor: pointer;

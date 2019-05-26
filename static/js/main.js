@@ -397,7 +397,7 @@ var app = new Vue({
                     datas[this.doc.uuid] = JSON.stringify({
                         ID: this.doc.uuid,
                         Title: this.doc.title,
-                        HTML: (new showdown.Converter()).makeHtml(this.doc.markdown),
+                        HTML: (new showdown.Converter({ simplifiedAutoLink: true })).makeHtml(this.doc.markdown),
                         Markdown: this.doc.markdown,
                     });
                     socketSend({
@@ -554,7 +554,7 @@ var app = new Vue({
                 this.showSearchBar = false;
                 this.showEdit = false;
                 // update the html (for viewer)
-                this.doc.rawHTML = (new showdown.Converter()).makeHtml(this.doc.markdown)
+                this.doc.rawHTML = (new showdown.Converter({ simplifiedAutoLink: true })).makeHtml(this.doc.markdown)
                 window.scrollTo(0, 0);
             }
         },
