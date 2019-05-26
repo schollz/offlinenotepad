@@ -1,13 +1,8 @@
 
 <p align="center">
 <img
-    src=""
+    src="https://user-images.githubusercontent.com/6550035/58387410-d2e33780-7fc2-11e9-8823-ce290b1cce7a.png"
     width="408px" border="0" alt="offlinenotepad">
-<br>
-<a href="https://github.com/schollz/offlinenotepad/releases/latest"><img src="https://img.shields.io/badge/version-v1.0.5-brightgreen.svg?style=flat-square" alt="Version"></a>
-<a href="https://travis-ci.org/schollz/offlinenotepad"><img
-src="https://img.shields.io/travis/schollz/offlinenotepad.svg?style=flat-square" alt="Build
-Status"></a> 
 </p>
 
 <p align="center"><code><a href="https://offlinenotepad.com">https://offlinenotepad.com</a></code></p>
