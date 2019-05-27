@@ -15,6 +15,18 @@ var hasConnected = false;
 
 
 /* generic functions */
+
+// export JSON (from SO https://stackoverflow.com/a/30800715)
+function downloadObjectAsJson(exportObj, exportName) {
+    var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj));
+    var downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", exportName + ".json");
+    document.body.appendChild(downloadAnchorNode); // required for firefox
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+}
+
 // expand text area
 var autoExpand = function(field) {
     // Get the computed styles for the element
@@ -176,6 +188,9 @@ var app = new Vue({
         hasData: false,
     },
     methods: {
+        exportDocs: function() {
+            downloadObjectAsJson(this.docs, "offlinenotepad_" + this.username);
+        },
         getHash: function(s) {
             return CryptoJS.SHA256("offlinenotepad" + s).toString().substring(0, 8);
         },
