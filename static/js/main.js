@@ -419,7 +419,8 @@ var app = new Vue({
             })
         },
         publishDocument: function() {
-            if (!doc.published) {
+            _this = this;
+            if (!this.doc.published) {
                 Swal.fire({
                     title: 'Are you sure?',
                     text: "This will publish a public version of this document that anyone can view.",
@@ -431,15 +432,15 @@ var app = new Vue({
                 }).then((result) => {
                     if (result.value) {
                         var datas = {};
-                        datas[this.doc.uuid] = JSON.stringify({
-                            ID: this.doc.uuid,
-                            Title: this.doc.title,
+                        datas[_this.doc.uuid] = JSON.stringify({
+                            ID: _this.doc.uuid,
+                            Title: _this.doc.title,
                             HTML: (new showdown.Converter({ simplifiedAutoLink: true })).makeHtml(this.doc.markdown),
-                            Markdown: this.doc.markdown,
+                            Markdown: _this.doc.markdown,
                         });
                         socketSend({
                             type: "update-publish",
-                            user: this.usernameHash,
+                            user: _this.usernameHash,
                             datas: datas,
                         });
                     }
