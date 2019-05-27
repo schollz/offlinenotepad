@@ -264,9 +264,10 @@ var app = new Vue({
             this.searchedText = this.searchText;
             this.docsFound = [];
             var searchTerm = this.searchText
-            if (!searchTerm.includes(" ")) {
-                searchTerm = "*" + searchTerm + "*";
-            }
+            // if (!searchTerm.includes(" ")) {
+            //     searchTerm = "*" + searchTerm + "*";
+            // }
+
             console.log(`[debug] searching ${searchTerm}`)
             wordsFound = {}
             this.searchIndex.search(searchTerm).forEach(function(el) {
