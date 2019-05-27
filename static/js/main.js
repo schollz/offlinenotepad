@@ -158,11 +158,11 @@ var app = new Vue({
         hasData: false,
     },
     methods: {
+        getHash: function(s) {
+            return CryptoJS.SHA256("offlinenotepad" + s).toString().substring(0, 8);
+        },
         install: function() {
             install();
-        },
-        appHash: function(s) {
-            return CryptoJS.SHA256(s).toString().substring(0, 8);
         },
         logIn: function() {
             promptUser();
@@ -258,7 +258,8 @@ var app = new Vue({
                     snippet: snippet,
                     uuid: doc.uuid,
                     modified: doc.modified,
-                    created: doc.created
+                    created: doc.created,
+                    published: doc.published,
                 });
             });
             this.markWords = [];
@@ -300,6 +301,7 @@ var app = new Vue({
                 hash: this.docs[i].hash,
                 modified: this.docs[i].modified,
                 created: this.docs[i].created,
+                published: this.docs[i].published,
             }
             this.showView = true;
         },
@@ -345,6 +347,7 @@ var app = new Vue({
                         modified: this.doc.modified,
                         created: this.doc.created,
                         markdown: this.doc.markdown,
+                        published: this.doc.published,
                     }
                     var encoded = encode(JSON.stringify(this.doc), this.password);
 
@@ -383,30 +386,46 @@ var app = new Vue({
             })
         },
         publishDocument: function() {
-            Swal.fire({
-                title: 'Are you sure?',
-                text: "This will publish a public version of this document that anyone can view.",
-                type: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Yes, publish.'
-            }).then((result) => {
-                if (result.value) {
-                    var datas = {};
-                    datas[this.doc.uuid] = JSON.stringify({
-                        ID: this.doc.uuid,
-                        Title: this.doc.title,
-                        HTML: (new showdown.Converter({ simplifiedAutoLink: true })).makeHtml(this.doc.markdown),
-                        Markdown: this.doc.markdown,
-                    });
-                    socketSend({
-                        type: "update-publish",
-                        user: this.usernameHash,
-                        datas: datas,
-                    });
-                }
-            })
+            if (!doc.published) {
+                Swal.fire({
+                    title: 'Are you sure?',
+                    text: "This will publish a public version of this document that anyone can view.",
+                    type: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Yes, publish.'
+                }).then((result) => {
+                    if (result.value) {
+                        var datas = {};
+                        datas[this.doc.uuid] = JSON.stringify({
+                            ID: this.doc.uuid,
+                            Title: this.doc.title,
+                            HTML: (new showdown.Converter({ simplifiedAutoLink: true })).makeHtml(this.doc.markdown),
+                            Markdown: this.doc.markdown,
+                        });
+                        socketSend({
+                            type: "update-publish",
+                            user: this.usernameHash,
+                            datas: datas,
+                        });
+                    }
+                })
+            } else {
+                var datas = {};
+                datas[this.doc.uuid] = JSON.stringify({
+                    ID: this.doc.uuid,
+                    Title: this.doc.title,
+                    HTML: (new showdown.Converter({ simplifiedAutoLink: true })).makeHtml(this.doc.markdown),
+                    Markdown: this.doc.markdown,
+                });
+                socketSend({
+                    type: "update-publish",
+                    user: this.usernameHash,
+                    datas: datas,
+                });
+                this.flashCheck();
+            }
         },
         updateIndex: function() {
             if (moment.utc() - this.searchIndexLastModified > 10000 && !this.indexing) {
@@ -487,6 +506,7 @@ var app = new Vue({
                     modified: this.doc.modified,
                     created: this.doc.created,
                     markdown: this.doc.markdown,
+                    published: this.doc.published,
                 }
                 this.flashCheck();
             }
@@ -616,6 +636,7 @@ Document = function() {
     this.title = "";
     this.markdown = "";
     this.hash = getHash(this.uuid + this.title + this.markdown);
+    this.published = false;
 }
 
 const sortDocList = function() {
@@ -668,7 +689,7 @@ syncUp = function() {
 
 
 const getHash = function(s) {
-    return CryptoJS.SHA256(s).toString().substring(0, 8);
+    return CryptoJS.SHA256("offlinenotepad" + s).toString().substring(0, 8);
 }
 
 function socketSend(data) {
@@ -699,6 +720,7 @@ async function parseDoc(value) {
             modified: doc.modified,
             created: doc.created,
             markdown: doc.markdown,
+            published: doc.published,
         };
     }
 }
@@ -767,7 +789,31 @@ function processSocketMessage(d) {
         }
     } else if (d.type == "published") {
         for (var uuid in d.datas) {
-            window.open("/" + uuid, "_blank");
+            app.docs[uuid].published = true;
+            if (uuid == app.doc.uuid) {
+                app.doc.published = true;
+            }
+
+            // update in the server and locally
+            var encoded = encode(JSON.stringify(app.docs[uuid]), app.password);
+
+            localforage.setItem(uuid, encoded);
+
+            // update data and hash in server
+            var datas = {};
+            datas[uuid] = encoded;
+            socketSend({
+                type: "update-data",
+                user: app.usernameHash,
+                datas: datas,
+            });
+            var hashes = {}
+            hashes[uuid] = app.docs[uuid].hash;
+            socketSend({
+                type: "update-hashes",
+                user: app.usernameHash,
+                datas: hashes,
+            });
         }
     } else if (d.type == "update") {
         // received an update for the data in the app
@@ -814,6 +860,7 @@ function processSocketMessage(d) {
                     hash: doc.hash,
                     modified: doc.modified,
                     created: doc.created,
+                    published: doc.published,
                 }
 
                 // update in the local storage
@@ -1104,6 +1151,7 @@ window.onload = function() {
                     "created": doc.created,
                     "modified": doc.modified,
                     "markdown": doc.data,
+                    "published": doc.published,
                     "hash": getHash(doc.id + doc.slug + doc.data),
                 };
                 encoded = encode(JSON.stringify(app.docs[doc.id]), app.password);

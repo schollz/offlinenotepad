@@ -373,7 +373,7 @@ func (s *server) dbHandlePublishUpdate(p Payload) (rp Payload, err error) {
 		h := sha256.New()
 		h.Write([]byte("offlinenotepad" + uuid))
 		document.ID = fmt.Sprintf("%x", h.Sum(nil))[:8]
-		rp.Message += fmt.Sprintf("published %s as %s; ", uuid, document.ID)
+		rp.Datas[uuid] = document.ID
 		documentBytes, err := json.Marshal(document)
 		if err != nil {
 			log.Error(err)
@@ -386,10 +386,10 @@ func (s *server) dbHandlePublishUpdate(p Payload) (rp Payload, err error) {
 		if err != nil {
 			log.Error(err)
 			return rp, err
-		} else {
-			rp.Datas[document.ID] = ""
 		}
 	}
+	rp.Message += fmt.Sprintf("published %d documents", len(rp.Datas))
+
 	return
 }
 
