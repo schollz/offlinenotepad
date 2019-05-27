@@ -267,7 +267,7 @@ var app = new Vue({
             if (!searchTerm.includes(" ")) {
                 searchTerm = "*" + searchTerm + "*";
             }
-            console.log("[debug] searching")
+            console.log(`[debug] searching ${searchTerm}`)
             wordsFound = {}
             this.searchIndex.search(searchTerm).forEach(function(el) {
                 console.log(el);
@@ -278,13 +278,14 @@ var app = new Vue({
                 for (var word in el.matchData.metadata) {
                     wordsFound[word] = true;
                     wordFound = word;
-                    for (var pos in el.matchData.metadata[word].text.position) {
-                        locations.push(el.matchData.metadata[word].text.position[pos][
-                            0
-                        ]);
+                    if ("text" in el.matchData.metadata[word]) {
+                        for (var pos in el.matchData.metadata[word].text.position) {
+                            locations.push(el.matchData.metadata[word].text.position[pos][
+                                0
+                            ]);
+                        }
                     }
                 }
-                console.log(wordFound);
                 snippet = getSnippet(doc.markdown, wordFound, locations);
                 _this.docsFound.push({
                     title: doc.title,
