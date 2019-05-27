@@ -15,6 +15,8 @@ offlinenotepad is an open-source server and client for implementing a private, o
 
 **Minimal.** This offline notepad aims to do as much as possible with as little as possible.
 
+**Publish.** Any page can be "published" so that is accessible by anyone with a simple random link, like [`/502629ff`](offlinenotepad.com/502629ff). The raw data can easily be easily cURLed by adding `/raw` to the end, e.g. [`/502629ff/raw`](offlinenotepad.com/502629ff/raw).
+
 This writing tool is largely based of its predecessors: [cowyo](https://cowyo.com) and [rwtxt.com](https://rwtxt.com) (both also available on Github).
 
 ## Install

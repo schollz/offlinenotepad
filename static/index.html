@@ -171,7 +171,8 @@
             <h1 v-if="doc.title">{{doc.title}}</h1>
             <h1 v-else>{{doc.uuid}}</h1>
             <!-- TODO: if . in title, show raw pre-formated text -->
-            <div v-html="doc.rawHTML"></div>
+            <div v-html="doc.rawHTML" v-if="!isCode"></div>
+            <pre v-else>{{doc.markdown}}</pre>
         </div>
         <div class="pt5" v-show="showEdit" v-cloak>
             <input id="edittitle" autocomplete="off" placeholder="Title" v-model="doc.title" v-on:input="updateDoc" v-bind:class="{ iscode: isCode }" v-cloak>
