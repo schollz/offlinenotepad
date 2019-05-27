@@ -310,7 +310,6 @@ var app = new Vue({
 
             if (keyCode == 9) {
                 e.preventDefault();
-                console.log(e.currentTarget);
                 var start = e.currentTarget.selectionStart;
                 var end = e.currentTarget.selectionEnd;
                 this.doc.markdown = [this.doc.markdown.slice(0, start), "\t", this.doc.markdown
@@ -318,7 +317,6 @@ var app = new Vue({
                 ].join('');
                 e.currentTarget.selectionStart = start;
                 e.currentTarget.selectionEnd = end;
-
             }
         },
         deleteDoc: function(e) {
@@ -1133,7 +1131,6 @@ function getSnippet(text, word, locations) {
 window.onload = function() {
     document.getElementById('import').onclick = function() {
         var files = document.getElementById('selectFiles').files;
-        console.log(files);
         if (files.length <= 0) {
 
             return false;
