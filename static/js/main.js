@@ -15,6 +15,24 @@ var hasConnected = false;
 
 
 /* generic functions */
+// expand text area
+var autoExpand = function(field) {
+    // Get the computed styles for the element
+    var computed = window.getComputedStyle(field);
+    // Calculate the height
+    var height = parseInt(computed.getPropertyValue('border-top-width'), 10) +
+        parseInt(computed.getPropertyValue('padding-top'), 10) +
+        field.scrollHeight +
+        parseInt(computed.getPropertyValue('padding-bottom'), 10) +
+        parseInt(computed.getPropertyValue('border-bottom-width'), 10);
+    if (field.style.height != height + 'px') {
+        // Reset field height
+        field.style.height = 'inherit';
+        field.style.height = height + 'px';
+    }
+};
+
+
 // debounce function
 const debounce = function(func, wait, immediate) {
     var timeout;
@@ -460,6 +478,7 @@ var app = new Vue({
             });
         },
         updateDoc: debounce(function() {
+            autoExpand(document.getElementById("editable"));
             if (this.showEdit) { // only update if in edit mode
                 // update the modified timestamp
                 this.doc.modified = moment.utc();
@@ -517,6 +536,9 @@ var app = new Vue({
             // entire view has been re-rendered
             if (_this.showSearch) {
                 _this.markSearchResults();
+            }
+            if (_this.showEdit) {
+                autoExpand(document.getElementById("editable"));
             }
         })
     },
