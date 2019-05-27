@@ -7,7 +7,7 @@
 
 <p align="center"><code><a href="https://offlinenotepad.com">https://offlinenotepad.com</a></code></p>
 
-offlinenotepad is an open-source server and client for implementing a private, offline-first, minimalistic note-writing experience that can be accessed anywhere, anytime. 
+offlinenotepad is an open-source server and client for implementing a offline-first notepad that securely syncs across your devices. Its an ideal minimalistic note-writing experience that can be accessed anywhere, anytime. 
 
 **Offline-first.** All data and functions are available on the client. Storage uses localstorage, and there are client-side libraries for search and encryption.
 
@@ -15,7 +15,7 @@ offlinenotepad is an open-source server and client for implementing a private, o
 
 **Minimal.** This offline notepad aims to do as much as possible with as little as possible.
 
-**Publish.** Any page can be "published" so that is accessible by anyone with a simple random link, like [`offlinenotepad.com/502629ff`](https://offlinenotepad.com/502629ff). The raw data can easily be easily cURLed by adding `/raw` to the end, e.g. [`offlinenotepad.com/502629ff/raw`](https://offlinenotepad.com/502629ff/raw).
+**Publish.** Any page can be "published" so that is accessible by anyone with a simple random link, like [`offlinenotepad.com/50e5791a`](https://offlinenotepad.com/50e5791a). The raw data can easily be easily cURLed by adding `/raw` to the end, e.g. [`offlinenotepad.com/50e5791a/raw`](https://offlinenotepad.com/50e5791a/raw).
 
 **Code.** If the title of any document contains a period (".") then it will force the editor to be monospace and it will show the plain text in the viewer instead of transformed Markdown to HTML.
 
