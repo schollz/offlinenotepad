@@ -143,7 +143,6 @@ Disallow: /`))
 	} else if r.URL.Path == "/sitemap.xml" {
 		// TODO
 	} else {
-		log.Trace(r.URL.Path)
 		if r.URL.Path == "/sw.js" {
 			r.URL.Path = "/static/js/sw.js"
 		} else if r.URL.Path == "/favicon.ico" {
@@ -154,7 +153,6 @@ Disallow: /`))
 		urlPath := r.URL.Path
 
 		var b []byte
-		log.Tracef("looking for '%s'", path.Join(".", path.Clean(r.URL.Path[1:])))
 		b, err = ioutil.ReadFile(path.Join(".", path.Clean(r.URL.Path[1:])))
 		if err != nil {
 			// try to see if index is nested
@@ -324,7 +322,6 @@ func (s *server) handleGetPublished(urlpath string) (d Document, err error) {
 		return
 	}
 	uuid := strings.TrimSpace(fields[1])
-	log.Tracef("looking for '%s'", uuid)
 	err = s.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("published"))
 		v := b.Get([]byte(uuid))
