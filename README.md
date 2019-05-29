@@ -7,11 +7,11 @@
 
 <p align="center"><code><a href="https://offlinenotepad.com">https://offlinenotepad.com</a></code></p>
 
-*offlinenotepad* is an [open-source](https://github.com/schollz/offlinenotepad) offline note taking app. It is a browser-based offline-first notepad that securely syncs across your devices: including smartphones, laptops, and chromebooks. Ideally, its a minimalist note-writing experience that can be accessed anywhere, anytime. 
+*offlinenotepad* is an [open-source](https://github.com/schollz/offlinenotepad) offline note taking app. It is a browser-based offline-first notepad that securely syncs across your devices - including smartphones, laptops, and chromebooks. Ideally, its a minimalist note-writing experience that can be accessed anywhere, anytime. 
 
-**Offline-first.** All information is stored as encrypted data in the browser, by utilizing the local storage. There are client-side libraries for search and encryption so that everything happens in the browser.
+**Offline-first.** All information is stored as encrypted data in the browser. Saving, editing, viewing, and searching are all done on the client.
 
-**Secure.** offlinenotepad uses [crypto-js](https://github.com/brix/crypto-js) to encrypt data on the client using AES with the PBE algorithm (PBKDF2).
+**Secure.** offlinenotepad uses AES with the PBE algorithm (PBKDF2) with the [crypto-js library](https://github.com/brix/crypto-js) to encrypt data on the client and the server.
 
 **Minimal.** This offline notepad aims to do as much as possible with as little as possible.
 
