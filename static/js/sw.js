@@ -1,4 +1,4 @@
-const version = "1.0.1";
+const version = "1.0.2";
 const cacheName = `offlinenotepad-${version}`;
 self.addEventListener('install', e => {
     e.waitUntil(
@@ -18,7 +18,7 @@ self.addEventListener('install', e => {
                     `/static/js/showdown.min.js`,
                     `/static/js/showdown.min.js.map`,
                     '/static/js/pwacompat.min.js',
-                    '/static/js/vue.js',
+                    '/static/js/vue.min.js',
                     '/static/js/sweetalert.js',
                     '/static/js/moment.min.js',
                     '/static/js/js.cookie.min.js',
