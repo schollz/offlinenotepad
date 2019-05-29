@@ -435,7 +435,7 @@ var app = new Vue({
                         datas[_this.doc.uuid] = JSON.stringify({
                             ID: _this.doc.uuid,
                             Title: _this.doc.title,
-                            HTML: (new showdown.Converter({ simplifiedAutoLink: true })).makeHtml(this.doc.markdown),
+                            HTML: (new showdown.Converter({ simplifiedAutoLink: true, strikethrough: true })).makeHtml(this.doc.markdown),
                             Markdown: _this.doc.markdown,
                         });
                         socketSend({
@@ -450,7 +450,7 @@ var app = new Vue({
                 datas[this.doc.uuid] = JSON.stringify({
                     ID: this.doc.uuid,
                     Title: this.doc.title,
-                    HTML: (new showdown.Converter({ simplifiedAutoLink: true })).makeHtml(this.doc.markdown),
+                    HTML: (new showdown.Converter({ simplifiedAutoLink: true, strikethrough: true })).makeHtml(this.doc.markdown),
                     Markdown: this.doc.markdown,
                 });
                 socketSend({
@@ -612,7 +612,7 @@ var app = new Vue({
                 this.showSearchBar = false;
                 this.showEdit = false;
                 // update the html (for viewer)
-                this.doc.rawHTML = (new showdown.Converter({ simplifiedAutoLink: true })).makeHtml(this.doc.markdown)
+                this.doc.rawHTML = (new showdown.Converter({ simplifiedAutoLink: true, strikethrough: true })).makeHtml(this.doc.markdown)
                 window.scrollTo(0, 0);
             }
         },
@@ -1030,19 +1030,21 @@ function promptUser() {
 }
 
 window.onbeforeunload = function(event) {
-    if (performance.navigation.type == performance.navigation.TYPE_RELOAD) {
-        var passPass = getHash(moment().format("dddd, MMMM Do YYYY, h:mm a") + Math.ceil(moment.now() /
-            1000 / 5) + app.username);
-        sessionStorage.setItem("app.p", encode(app.password, passPass));
-    }
+    var passPass = getHash(moment().format("dddd, MMMM Do YYYY, h:mm a") + app.username);
+    sessionStorage.setItem("app.p", encode(app.password, passPass));
+};
+
+window.onunload = function() {
+    var passPass = getHash(moment().format("dddd, MMMM Do YYYY, h:mm a") + app.username);
+    sessionStorage.setItem("app.p", encode(app.password, passPass));
 };
 
 function promptPassword() {
     var p = sessionStorage.getItem("app.p");
     if (p != null) {
+        console.log(`[debug] got sesions password: ${p}`)
         sessionStorage.removeItem("app.p");
-        var passPass = getHash(moment().format("dddd, MMMM Do YYYY, h:mm a") + Math.ceil(moment.now() / 1000 /
-            5) + app.username);
+        var passPass = getHash(moment().format("dddd, MMMM Do YYYY, h:mm a") + app.username);
         p2 = decode(p, passPass);
         if (p2 != null && p2 != undefined && p2 != "") {
             app.password = p2;

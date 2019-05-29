@@ -11,10 +11,6 @@ main {
     display: block
 }
 
-h1 {
-    font-size: 2em;
-}
-
 hr {
     box-sizing: content-box;
     height: 0;
@@ -251,7 +247,7 @@ h5 {
 }
 
 h1 {
-    font-size: 1.6em;
+    font-size: 1.4em;
     letter-spacing: .004em
 }
 
@@ -470,7 +466,7 @@ summary {
 
 #edittitle {
     width: 100%;
-    font-size: 1.7em;
+    font-size: 1.4em;
     border: none;
     padding-top: 0.2em;
     padding-bottom: 0.2em;
@@ -554,4 +550,8 @@ main {
     -moz-hyphens: auto;
     -webkit-hyphens: auto;
     hyphens: auto;
+}
+
+.checkmark {
+    color: #5858f1;
 }
