@@ -36,7 +36,7 @@
     ],
     "start_url": "/",
     "scope": "/",
-    "display": "browser",
+    "display": "standalone",
     "background_color": "#375EAB",
     "theme_color": "#375EAB"
 }
