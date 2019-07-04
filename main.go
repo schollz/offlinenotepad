@@ -37,7 +37,7 @@ func main() {
 	flag.Parse()
 
 	if debug {
-		log.SetLevel("trace")
+		log.SetLevel("debug")
 	} else {
 		log.SetLevel("info")
 	}
