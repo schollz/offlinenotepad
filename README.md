@@ -41,6 +41,14 @@ $ ./offlinenotepad
 
 Log into `localhost:8251` to see the site.
 
+### Docker
+
+Alternatively you can run with docker:
+
+```
+$ docker run -v /location/to/save/data:/data -p 8152:8152 schollz/offlinenotepad
+```
+
 ## Acknowledgements
 
 I took a lot of help from @GoogleChromeLabs with their [airhorn](https://github.com/GoogleChromeLabs/airhorn).
