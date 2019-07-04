@@ -1,9 +1,13 @@
 package main
 
+//go:generate go get -v github.com/jteeuwen/go-bindata/go-bindata
+//go:generate go-bindata static/ static/css/ static/images/ static/js/ static/images/touch/ static/images/icons/
+
 import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"math"
 	"net/http"
@@ -26,8 +30,19 @@ type Document struct {
 }
 
 func main() {
-	log.SetLevel("trace")
-	s, err := New()
+	var debug bool
+	var dbname string
+	flag.StringVar(&dbname, "db", "data.db", "location to database")
+	flag.BoolVar(&debug, "debug", false, "debug mode")
+	flag.Parse()
+
+	if debug {
+		log.SetLevel("trace")
+	} else {
+		log.SetLevel("info")
+	}
+
+	s, err := New(dbname)
 	if err != nil {
 		log.Error(err)
 	}
@@ -41,10 +56,10 @@ type server struct {
 	db *bolt.DB
 }
 
-func New() (s *server, err error) {
+func New(dbname string) (s *server, err error) {
 	s = new(server)
-	log.Debug("opening database")
-	s.db, err = bolt.Open("data.db", 0666, nil)
+	log.Debug("opening database " + dbname)
+	s.db, err = bolt.Open(dbname, 0666, nil)
 	if err != nil {
 		return
 	}
