@@ -1,11 +1,14 @@
 package main
 
+//go:generate go get -v github.com/jteeuwen/go-bindata/go-bindata
+//go:generate go-bindata static/ static/css/ static/images/ static/js/ static/images/touch/ static/images/icons/
+
 import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/json"
+	"flag"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"net/http"
 	"path"
@@ -27,8 +30,19 @@ type Document struct {
 }
 
 func main() {
-	log.SetLevel("trace")
-	s, err := New()
+	var debug bool
+	var dbname string
+	flag.StringVar(&dbname, "db", "data.db", "location to database")
+	flag.BoolVar(&debug, "debug", false, "debug mode")
+	flag.Parse()
+
+	if debug {
+		log.SetLevel("debug")
+	} else {
+		log.SetLevel("info")
+	}
+
+	s, err := New(dbname)
 	if err != nil {
 		log.Error(err)
 	}
@@ -42,10 +56,10 @@ type server struct {
 	db *bolt.DB
 }
 
-func New() (s *server, err error) {
+func New(dbname string) (s *server, err error) {
 	s = new(server)
-	log.Debug("opening database")
-	s.db, err = bolt.Open("data.db", 0666, nil)
+	log.Debug("opening database " + dbname)
+	s.db, err = bolt.Open(dbname, 0666, nil)
 	if err != nil {
 		return
 	}
@@ -121,7 +135,8 @@ func (s *server) handle(w http.ResponseWriter, r *http.Request) (err error) {
 		// use template
 		var t *template.Template
 		log.Tracef("found doc: %+v", doc)
-		t, err = template.ParseFiles("static/view.html")
+		b, _ := Asset("static/view.html")
+		t, err = template.New("view").Parse(string(b))
 		if err != nil {
 			log.Error(err)
 			return err
@@ -153,10 +168,10 @@ Disallow: /`))
 		urlPath := r.URL.Path
 
 		var b []byte
-		b, err = ioutil.ReadFile(path.Join(".", path.Clean(r.URL.Path[1:])))
+		b, err = Asset(path.Clean(r.URL.Path[1:]))
 		if err != nil {
 			// try to see if index is nested
-			b, err = ioutil.ReadFile(path.Join(".", path.Clean(r.URL.Path[1:]), "index.html"))
+			b, err = Asset(path.Join(path.Clean(r.URL.Path[1:]), "index.html"))
 			if err != nil {
 				err = fmt.Errorf("could not find file")
 				return

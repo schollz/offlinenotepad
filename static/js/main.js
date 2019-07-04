@@ -1030,12 +1030,12 @@ function promptUser() {
 }
 
 window.onbeforeunload = function(event) {
-    var passPass = getHash(moment().format("dddd, MMMM Do YYYY, h:mm a") + app.username);
+    var passPass = getHash(moment().format("dddd, MMMM Do YYYY") + app.username);
     sessionStorage.setItem("app.p", encode(app.password, passPass));
 };
 
 window.onunload = function() {
-    var passPass = getHash(moment().format("dddd, MMMM Do YYYY, h:mm a") + app.username);
+    var passPass = getHash(moment().format("dddd, MMMM Do YYYY") + app.username);
     sessionStorage.setItem("app.p", encode(app.password, passPass));
 };
 
@@ -1044,7 +1044,7 @@ function promptPassword() {
     if (p != null) {
         console.log(`[debug] got sesions password: ${p}`)
         sessionStorage.removeItem("app.p");
-        var passPass = getHash(moment().format("dddd, MMMM Do YYYY, h:mm a") + app.username);
+        var passPass = getHash(moment().format("dddd, MMMM Do YYYY") + app.username);
         p2 = decode(p, passPass);
         if (p2 != null && p2 != undefined && p2 != "") {
             app.password = p2;
@@ -1068,6 +1068,8 @@ function promptPassword() {
             }
         }
     }).then(result => {
+        var passPass = getHash(moment().format("dddd, MMMM Do YYYY") + app.username);
+        sessionStorage.setItem("app.p", encode(app.password, passPass));
         app.password = result.value;
         startup();
     });

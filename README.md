@@ -28,6 +28,7 @@ To run your own server for backing up notes you can simply install with Go.
 ```
 $ git clone https://github.com/schollz/offlinenotepad
 $ cd offlinenotepad
+$ go generate -v -x
 $ go build -v
 ```
 
