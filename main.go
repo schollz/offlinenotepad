@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"net/http"
 	"path"
@@ -121,7 +120,8 @@ func (s *server) handle(w http.ResponseWriter, r *http.Request) (err error) {
 		// use template
 		var t *template.Template
 		log.Tracef("found doc: %+v", doc)
-		t, err = template.ParseFiles("static/view.html")
+		b, _ := Asset("static/view.html")
+		t, err = template.New("view").Parse(string(b))
 		if err != nil {
 			log.Error(err)
 			return err
@@ -153,10 +153,10 @@ Disallow: /`))
 		urlPath := r.URL.Path
 
 		var b []byte
-		b, err = ioutil.ReadFile(path.Join(".", path.Clean(r.URL.Path[1:])))
+		b, err = Asset(path.Clean(r.URL.Path[1:]))
 		if err != nil {
 			// try to see if index is nested
-			b, err = ioutil.ReadFile(path.Join(".", path.Clean(r.URL.Path[1:]), "index.html"))
+			b, err = Asset(path.Join(path.Clean(r.URL.Path[1:]), "index.html"))
 			if err != nil {
 				err = fmt.Errorf("could not find file")
 				return
