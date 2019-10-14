@@ -46,7 +46,7 @@ Log into `localhost:8251` to see the site.
 Alternatively you can run with docker:
 
 ```
-$ docker run -v /location/to/save/data:/data -p 8152:8152 schollz/offlinenotepad
+$ docker run -v /location/to/save/data:/data -p 8251:8251 schollz/offlinenotepad
 ```
 
 ## Acknowledgements
