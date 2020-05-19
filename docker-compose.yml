@@ -1,0 +1,10 @@
+version: '3'
+
+services:
+
+  offlinenotepad:
+    build: .
+    volumes:
+      - "./data:/data"
+    ports:
+      - "8080:8251"
