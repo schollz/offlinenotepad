@@ -29,11 +29,15 @@ type Document struct {
 	Markdown string `json:"markdown"`
 }
 
+// http server port
+var port int
+
 func main() {
 	var debug bool
 	var dbname string
 	flag.StringVar(&dbname, "db", "data.db", "location to database")
 	flag.BoolVar(&debug, "debug", false, "debug mode")
+	flag.IntVar(&port, "port", 8251, "listen port")
 	flag.Parse()
 
 	if debug {
@@ -46,7 +50,7 @@ func main() {
 	if err != nil {
 		log.Error(err)
 	}
-	err = s.Serve()
+	err = s.Serve(port)
 	if err != nil {
 		log.Error(err)
 	}
@@ -73,8 +77,7 @@ func New(dbname string) (s *server, err error) {
 	return
 }
 
-func (s *server) Serve() (err error) {
-	port := 8251
+func (s *server) Serve(port int) (err error) {
 	log.Infof("listening on :%d", port)
 	http.HandleFunc("/", s.handler)
 	return http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
