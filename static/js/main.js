@@ -186,6 +186,8 @@ var app = new Vue({
         markInstance: {},
         markWords: [],
         hasData: false,
+        loginUser: "",
+        loginPass: "",
     },
     methods: {
         exportDocs: function() {
@@ -198,7 +200,15 @@ var app = new Vue({
             install();
         },
         logIn: function() {
-            promptUser();
+            if (this.loginPass != "" && this.loginUser != "") {
+                app.password = this.loginPass;
+                app.username = this.loginUser;
+                Cookies.set('app.username', app.username);
+                var passPass = getHash(moment().format("dddd, MMMM Do YYYY") + app.username);
+                sessionStorage.setItem("app.p", encode(app.password, passPass));
+                return startup();
+            }
+            // promptUser();
         },
         logOut: function() {
 

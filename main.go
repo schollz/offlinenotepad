@@ -1,6 +1,6 @@
 package main
 
-//go:generate go get -v github.com/jteeuwen/go-bindata/go-bindata
+//go:generate go install -v github.com/jteeuwen/go-bindata/go-bindata@latest
 //go:generate go-bindata static/ static/css/ static/images/ static/js/ static/images/touch/ static/images/icons/
 
 import (
