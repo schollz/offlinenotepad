@@ -36,8 +36,9 @@ func testServerWithConfig(t *testing.T, config Config) (*database.Store, *httpte
 		t.Fatal(err)
 	}
 	content := fstest.MapFS{
-		"index.html":                     &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><main>app</main>`)},
-		"public.html":                    &fstest.MapFile{Data: []byte(`<title>{{.Title}}</title><a href="{{.RawURL}}">raw</a><article>{{.Content}}</article>`)},
+		"index.html":                     &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:title" content="{{.PageTitle}}"><meta name="twitter:card" content="summary_large_image">{{if .StructuredData}}<script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>{{end}}{{if .IsHomepage}}<main>Private notes that work offline. <a href="/blog">Blog</a></main>{{else}}<main>app</main>{{end}}`)},
+		"blog.html":                      &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:type" content="{{.OpenGraphType}}"><meta name="twitter:card" content="summary_large_image">{{if .PublishedAt}}<meta property="article:published_time" content="{{.PublishedAt}}">{{end}}<script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>{{if .IsIndex}}<h1>Offline Notepad blog</h1>{{range .Posts}}<a href="/blog/{{.Slug}}">{{.Title}}</a>{{end}}{{else}}<h1>{{.Post.Title}}</h1><time datetime="{{.Post.PublishedAt}}">{{.Post.PublishedDisplay}}</time><article>{{.Post.Body}}</article>{{end}}`)},
+		"public.html":                    &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:title" content="{{.PageTitle}}"><meta name="twitter:card" content="summary_large_image"><script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script><a href="{{.RawURL}}">raw</a><article>{{.Content}}</article>`)},
 		"static/app.js":                  &fstest.MapFile{Data: []byte(`console.log("app")`)},
 		"fonts/OpenAISans-Regular.woff2": &fstest.MapFile{Data: []byte("font")},
 	}
@@ -61,6 +62,158 @@ func TestEmbeddedFontRoute(t *testing.T) {
 	body, _ := io.ReadAll(response.Body)
 	if response.StatusCode != http.StatusOK || string(body) != "font" {
 		t.Fatalf("font response status=%d body=%q", response.StatusCode, body)
+	}
+}
+
+func TestHomepageAndBlogSEO(t *testing.T) {
+	_, server := testServerWithConfig(t, Config{SiteURL: "https://notes.example", LegacyMigrationEnabled: true})
+
+	homeResponse, err := http.Get(server.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	homeBody, _ := io.ReadAll(homeResponse.Body)
+	homeResponse.Body.Close()
+	home := string(homeBody)
+	for _, expected := range []string{
+		`<title>` + homeTitle + `</title>`,
+		`name="description" content="` + homeDescription + `"`,
+		`name="robots" content="index, follow`,
+		`rel="canonical" href="https://notes.example/"`,
+		`property="og:title"`,
+		`name="twitter:card" content="summary_large_image"`,
+		`"@type":"WebApplication"`,
+		`Private notes that work offline`,
+		`href="/blog"`,
+	} {
+		if !strings.Contains(home, expected) {
+			t.Errorf("homepage missing %q", expected)
+		}
+	}
+	nonceMarker := `nonce="`
+	nonceStart := strings.Index(home, nonceMarker)
+	if nonceStart < 0 {
+		t.Fatal("homepage JSON-LD has no CSP nonce")
+	}
+	nonceStart += len(nonceMarker)
+	nonceEnd := strings.Index(home[nonceStart:], `"`)
+	if nonceEnd < 0 || !strings.Contains(homeResponse.Header.Get("Content-Security-Policy"), "'nonce-"+home[nonceStart:nonceStart+nonceEnd]+"'") {
+		t.Fatalf("CSP does not authorize homepage JSON-LD: %q", homeResponse.Header.Get("Content-Security-Policy"))
+	}
+
+	appResponse, err := http.Get(server.URL + "/app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	appBody, _ := io.ReadAll(appResponse.Body)
+	appResponse.Body.Close()
+	if !strings.Contains(string(appBody), `name="robots" content="noindex, nofollow, noarchive"`) || !strings.Contains(string(appBody), `href="https://notes.example/app"`) {
+		t.Fatalf("private app SEO metadata is incorrect: %s", appBody)
+	}
+
+	blogResponse, err := http.Get(server.URL + "/blog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	blogBody, _ := io.ReadAll(blogResponse.Body)
+	blogResponse.Body.Close()
+	blog := string(blogBody)
+	for _, expected := range []string{blogTitle, `https://notes.example/blog`, `"@type":"Blog"`, howItWorksPost.Title, `/blog/` + howItWorksPost.Slug, releasePost.Title, `/blog/` + releasePost.Slug} {
+		if !strings.Contains(blog, expected) {
+			t.Errorf("blog index missing %q", expected)
+		}
+	}
+	if strings.Index(blog, howItWorksPost.Title) > strings.Index(blog, releasePost.Title) {
+		t.Error("how-it-works post should appear before the v2 release post")
+	}
+
+	howResponse, err := http.Get(server.URL + "/blog/" + howItWorksPost.Slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	howBody, _ := io.ReadAll(howResponse.Body)
+	howResponse.Body.Close()
+	for _, expected := range []string{howItWorksPost.Title, howItWorksPost.Description, `"@type":"BlogPosting"`, `Argon2id`, `https://github.com/schollz/offlinenotepad`} {
+		if !strings.Contains(string(howBody), expected) {
+			t.Errorf("how-it-works post missing %q", expected)
+		}
+	}
+
+	postResponse, err := http.Get(server.URL + "/blog/" + releasePost.Slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	postBody, _ := io.ReadAll(postResponse.Body)
+	postResponse.Body.Close()
+	for _, expected := range []string{releasePost.Title, releasePost.Description, `"@type":"BlogPosting"`, `article:published_time`, `Every private note is encrypted in your browser`} {
+		if !strings.Contains(string(postBody), expected) {
+			t.Errorf("blog post missing %q", expected)
+		}
+	}
+	missingResponse, err := http.Get(server.URL + "/blog/not-a-post")
+	if err != nil {
+		t.Fatal(err)
+	}
+	missingResponse.Body.Close()
+	if missingResponse.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing blog post status = %d", missingResponse.StatusCode)
+	}
+}
+
+func TestSitemapAndRobotsIncludeCrawlablePages(t *testing.T) {
+	store, server := testServerWithConfig(t, Config{SiteURL: "https://notes.example", LegacyMigrationEnabled: true})
+	workspace, _ := createTestWorkspace(t, store)
+	document := database.Document{WorkspaceID: workspace.ID, DocumentID: "document-one", Ciphertext: "encrypted", CiphertextHash: base64.RawURLEncoding.EncodeToString(sha256.New().Sum(nil))}
+	if _, err := store.PutDocument(context.Background(), document, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.PutPublication(context.Background(), database.Publication{PublicID: "public-document-one", WorkspaceID: workspace.ID, DocumentID: document.DocumentID, Title: "Public", Content: "Public note", ContentMode: "plaintext"}); err != nil {
+		t.Fatal(err)
+	}
+	legacyArchive := database.LegacyArchive{
+		Workspaces:   []database.LegacyWorkspace{{LegacyID: "1234abcd", Documents: []database.LegacyDocument{{DocumentID: "abc12345", Ciphertext: "legacy ciphertext", DocumentHash: "bb33cf65"}}}},
+		Publications: []database.LegacyPublication{{PublicID: "abcd1234", LegacyID: "1234abcd", DocumentID: "abc12345", Title: "Legacy", Content: "Legacy public note", ContentMode: "plaintext"}},
+	}
+	if _, err := store.StageLegacyArchive(context.Background(), legacyArchive, false); err != nil {
+		t.Fatal(err)
+	}
+
+	sitemapResponse, err := http.Get(server.URL + "/sitemap.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sitemapBody, _ := io.ReadAll(sitemapResponse.Body)
+	sitemapResponse.Body.Close()
+	if sitemapResponse.Header.Get("Content-Type") != "application/xml; charset=utf-8" {
+		t.Fatalf("sitemap Content-Type = %q", sitemapResponse.Header.Get("Content-Type"))
+	}
+	for _, expected := range []string{
+		`<loc>https://notes.example/</loc>`,
+		`<loc>https://notes.example/blog</loc>`,
+		`<loc>https://notes.example/blog/` + howItWorksPost.Slug + `</loc>`,
+		`<loc>https://notes.example/blog/` + releasePost.Slug + `</loc>`,
+		`<loc>https://notes.example/p/public-document-one</loc>`,
+		`<loc>https://notes.example/abcd1234</loc>`,
+	} {
+		if !strings.Contains(string(sitemapBody), expected) {
+			t.Errorf("sitemap missing %q", expected)
+		}
+	}
+
+	robotsResponse, err := http.Get(server.URL + "/robots.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	robotsBody, _ := io.ReadAll(robotsResponse.Body)
+	robotsResponse.Body.Close()
+	robots := string(robotsBody)
+	for _, expected := range []string{"User-agent: *", "Allow: /", "Disallow: /app", "Disallow: /api/", "Sitemap: https://notes.example/sitemap.xml"} {
+		if !strings.Contains(robots, expected) {
+			t.Errorf("robots.txt missing %q", expected)
+		}
+	}
+	if strings.Contains(robots, "Disallow: /blog") {
+		t.Error("robots.txt blocks the blog")
 	}
 }
 
@@ -216,8 +369,16 @@ func TestPublicSnapshotIsSanitizedAndNotAppCached(t *testing.T) {
 	}
 	defer response.Body.Close()
 	body, _ := io.ReadAll(response.Body)
-	if response.Header.Get("Cache-Control") != "public, max-age=60" || strings.Contains(string(body), "<script") || !strings.Contains(string(body), "Safe") {
+	if response.Header.Get("Cache-Control") != "public, max-age=60" || strings.Contains(string(body), "<script>alert") || !strings.Contains(string(body), "Safe") || !strings.Contains(string(body), `type="application/ld+json"`) {
 		t.Fatalf("public response headers=%v body=%q", response.Header, body)
+	}
+	rawResponse, err := http.Get(server.URL + "/p/" + url.PathEscape(publication.PublicID) + "/raw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawResponse.Body.Close()
+	if rawResponse.Header.Get("X-Robots-Tag") != "noindex, nofollow" {
+		t.Fatalf("raw public X-Robots-Tag = %q", rawResponse.Header.Get("X-Robots-Tag"))
 	}
 	appResponse, err := http.Get(server.URL + "/app/notes/document-one")
 	if err != nil {
@@ -258,7 +419,7 @@ func TestStagedLegacyWorkspaceAndPublicationRoutes(t *testing.T) {
 	}
 	publicBody, _ := io.ReadAll(publicResponse.Body)
 	publicResponse.Body.Close()
-	if publicResponse.StatusCode != http.StatusOK || strings.Contains(string(publicBody), "<script") || !strings.Contains(string(publicBody), "Safe") {
+	if publicResponse.StatusCode != http.StatusOK || strings.Contains(string(publicBody), "<script>alert") || !strings.Contains(string(publicBody), "Safe") || !strings.Contains(string(publicBody), `type="application/ld+json"`) {
 		t.Fatalf("legacy publication response status=%d body=%q", publicResponse.StatusCode, publicBody)
 	}
 

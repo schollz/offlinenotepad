@@ -35,6 +35,9 @@ describe('landing and notebook access experience', () => {
     expect(screen.getByRole('region', { name: 'Sign in or create a notebook' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sign in or create notebook' })).toBeInTheDocument()
     expect(screen.getByText(/existing details sign you in; new details create a private notebook/i)).toBeInTheDocument()
+    expect(screen.getByText(/made by/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'github' })).toHaveAttribute('href', 'https://github.com/schollz/offlinenotepad')
+    expect(screen.getByText('other tools')).toBeInTheDocument()
   })
 
   it('accepts a short password and attempts to create an unknown notebook', async () => {

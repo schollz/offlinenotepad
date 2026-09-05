@@ -45,6 +45,18 @@ FROM publications WHERE public_id = ?1;
 SELECT public_id, workspace_id, document_id, title, content, content_mode, legacy, updated_at
 FROM publications WHERE workspace_id = ?1 AND document_id = ?2;
 
+-- name: ListSitemapPublications :many
+SELECT public_id, legacy, updated_at
+FROM (
+    SELECT public_id, legacy, updated_at FROM publications
+    UNION ALL
+    SELECT legacy_publications.public_id, CAST(1 AS INTEGER) AS legacy, legacy_publications.imported_at AS updated_at
+    FROM legacy_publications
+    WHERE NOT EXISTS (SELECT 1 FROM publications WHERE publications.public_id = legacy_publications.public_id)
+) AS crawlable_publications
+ORDER BY updated_at DESC, public_id
+LIMIT ?1;
+
 -- name: RotateWorkspace :execrows
 UPDATE workspaces SET kdf_salt = ?2, kdf_memory = ?3, kdf_iterations = ?4, kdf_parallelism = ?5,
     auth_public_key = ?6, updated_at = CURRENT_TIMESTAMP

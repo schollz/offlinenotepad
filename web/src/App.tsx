@@ -55,6 +55,14 @@ const credentialSchema = z.object({
 
 const defaultKdf = { kdf_version: 1, kdf_memory: 65_536, kdf_iterations: 3, kdf_parallelism: 1 }
 const MarkdownEditor = lazy(() => import('./editor/MarkdownEditor').then((module) => ({ default: module.MarkdownEditor })))
+const otherTools = [
+  { name: 'croc', description: 'fast, simple, secure file transfer', href: 'https://getcroc.com' },
+  { name: 'wthrtxt', description: 'weather without clutter', href: 'https://wthrtxt.com' },
+  { name: 'cowyo', description: 'write together, without the setup', href: 'https://cowyo.com' },
+  { name: 'yesnotice', description: 'yes/no alerts when websites change', href: 'https://yesnotice.com' },
+  { name: 'makemydrivefun', description: 'strange roadside detours', href: 'https://makemydrivefun.com' },
+  { name: 'makestopmotion', description: 'claymation in browsers', href: 'https://makestopmotion.com' },
+]
 
 interface LegacyPromotion {
   metadata: KdfMetadata
@@ -876,36 +884,53 @@ export default function App() {
   )
 }
 
+function ProjectFooter() {
+  return <footer className="project-footer">
+    <nav className="project-footer-links" aria-label="Footer navigation">
+      <span>made by <a href="https://github.com/sponsors/schollz" rel="noreferrer" target="_blank">schollz</a></span>
+      <span aria-hidden="true">·</span>
+      <a href="https://github.com/schollz/offlinenotepad" rel="noreferrer" target="_blank">github</a>
+    </nav>
+    <details className="tools-menu">
+      <summary>other tools</summary>
+      <ul>{otherTools.map((tool) => <li key={tool.href}><a href={tool.href} rel="noreferrer" target="_blank"><strong>{tool.name}</strong><span>{tool.description}</span></a></li>)}</ul>
+    </details>
+  </footer>
+}
+
 function Welcome({ restoring, busy, error, onAuthenticate }: { restoring: boolean; busy: boolean; error: string; onAuthenticate: (username: string, password: string) => Promise<void> }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const submit = (event: FormEvent) => { event.preventDefault(); void onAuthenticate(username, password) }
-  return <main className="welcome">
+  return <div className="welcome">
     <div className="welcome-shell">
-      <nav className="welcome-nav"><a className="brand" href="/"><span className="brand-mark"><NotebookPen aria-hidden="true" /></span><span>Offline Notepad</span></a></nav>
-      <section className="auth-section" aria-labelledby="notebook-access-title">
-        <div className="auth-heading">
-          <h1 id="notebook-access-title">Sign in or create a notebook</h1>
-          <p className="auth-intro">Enter a notebook name and password. Existing details sign you in; new details create a private notebook.</p>
-        </div>
-        {restoring ? <div className="auth-restoring" role="status"><span className="spinner" /><span>Opening your saved notebook…</span></div> : <>
-          <form onSubmit={submit}>
-            <div className="auth-fields">
-              <label>Notebook name<input autoFocus autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="e.g. north-star" /></label>
-              <label>Password<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Your password" /></label>
-            </div>
-            {error && <p className="form-error" role="alert">{error}</p>}
-            <button className="button primary auth-submit" disabled={busy}>{busy ? <span className="spinner" /> : <LockKeyhole />}{busy ? 'Deriving encryption keys…' : 'Sign in or create notebook'}</button>
-          </form>
-          <p className="no-recovery"><ShieldCheck /> Your password never leaves this browser. There is no recovery.</p>
-        </>}
-      </section>
-      <section className="welcome-details" aria-label="About Offline Notepad">
-        <p>Write, edit, search, and delete private notes without an internet connection. Changes are saved on this device first.</p>
-        <p>Encrypted synchronization makes the same notebook available on your other devices without sending readable notes or your password to the server.</p>
-      </section>
+      <nav className="welcome-nav"><a className="brand" href="/"><span className="brand-mark"><NotebookPen aria-hidden="true" /></span><span>Offline Notepad</span></a><a className="welcome-blog-link" href="/blog">Blog</a></nav>
+      <main>
+        <section className="auth-section" aria-labelledby="notebook-access-title">
+          <div className="auth-heading">
+            <h1 id="notebook-access-title">Sign in or create a notebook</h1>
+            <p className="auth-intro">Enter a notebook name and password. Existing details sign you in; new details create a private notebook.</p>
+          </div>
+          {restoring ? <div className="auth-restoring" role="status"><span className="spinner" /><span>Opening your saved notebook…</span></div> : <>
+            <form onSubmit={submit}>
+              <div className="auth-fields">
+                <label>Notebook name<input autoFocus autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="e.g. north-star" /></label>
+                <label>Password<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Your password" /></label>
+              </div>
+              {error && <p className="form-error" role="alert">{error}</p>}
+              <button className="button primary auth-submit" disabled={busy}>{busy ? <span className="spinner" /> : <LockKeyhole />}{busy ? 'Deriving encryption keys…' : 'Sign in or create notebook'}</button>
+            </form>
+            <p className="no-recovery"><ShieldCheck /> Your password never leaves this browser. There is no recovery.</p>
+          </>}
+        </section>
+        <section className="welcome-details" aria-label="About Offline Notepad">
+          <p>Write, edit, search, and delete private notes without an internet connection. Changes are saved on this device first.</p>
+          <p>Encrypted synchronization makes the same notebook available on your other devices without sending readable notes or your password to the server.</p>
+        </section>
+      </main>
+      <ProjectFooter />
     </div>
-  </main>
+  </div>
 }
 
 function Connection({ status }: { status: ConnectionState }) {

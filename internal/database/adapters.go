@@ -87,6 +87,17 @@ func (a postgresAdapter) GetPublicationByDocument(ctx context.Context, wid, did 
 	}
 	return postgresPublication(p), nil
 }
+func (a postgresAdapter) ListSitemapPublications(ctx context.Context, limit int) ([]SitemapPublication, error) {
+	rows, err := a.q.ListSitemapPublications(ctx, int32(limit))
+	if err != nil {
+		return nil, err
+	}
+	publications := make([]SitemapPublication, len(rows))
+	for i, row := range rows {
+		publications[i] = SitemapPublication{PublicID: row.PublicID, Legacy: row.Legacy, UpdatedAt: row.UpdatedAt}
+	}
+	return publications, nil
+}
 
 type sqliteAdapter struct{ q *sqlitedb.Queries }
 
@@ -180,4 +191,15 @@ func (a sqliteAdapter) GetPublicationByDocument(ctx context.Context, wid, did st
 		return Publication{}, err
 	}
 	return sqlitePublication(p), nil
+}
+func (a sqliteAdapter) ListSitemapPublications(ctx context.Context, limit int) ([]SitemapPublication, error) {
+	rows, err := a.q.ListSitemapPublications(ctx, int64(limit))
+	if err != nil {
+		return nil, err
+	}
+	publications := make([]SitemapPublication, len(rows))
+	for i, row := range rows {
+		publications[i] = SitemapPublication{PublicID: row.PublicID, Legacy: row.Legacy != 0, UpdatedAt: parseSQLiteTime(row.UpdatedAt)}
+	}
+	return publications, nil
 }

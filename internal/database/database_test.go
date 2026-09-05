@@ -132,6 +132,9 @@ func runStoreContract(t *testing.T, store *Store, workspaceID string) {
 	if got, err := store.GetPublication(ctx, publication.PublicID); err != nil || got.Content != publication.Content {
 		t.Fatalf("publication = %#v err=%v", got, err)
 	}
+	if sitemapPublications, err := store.ListSitemapPublications(ctx, 100); err != nil || len(sitemapPublications) != 1 || sitemapPublications[0].PublicID != publication.PublicID {
+		t.Fatalf("sitemap publications = %#v err=%v", sitemapPublications, err)
+	}
 	document.Deleted, document.Ciphertext, document.CiphertextHash = true, "", ""
 	saved, err = store.PutDocument(ctx, document, 2)
 	if err != nil || !saved.Deleted || saved.Revision != 3 {

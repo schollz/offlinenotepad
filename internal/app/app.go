@@ -56,6 +56,7 @@ type App struct {
 	content   fs.FS
 	index     *template.Template
 	public    *template.Template
+	blog      *template.Template
 	markdown  goldmark.Markdown
 	sanitizer *bluemonday.Policy
 	hub       *hub
@@ -86,8 +87,12 @@ func New(store *database.Store, content fs.FS, logger *slog.Logger, config Confi
 	if err != nil {
 		return nil, fmt.Errorf("parse public template: %w", err)
 	}
+	blog, err := template.ParseFS(content, "blog.html")
+	if err != nil {
+		return nil, fmt.Errorf("parse blog template: %w", err)
+	}
 	analytics := newAnalyticsRelay(config.UmamiURL, config.UmamiWebsiteID, logger)
-	return &App{store: store, logger: logger, content: content, index: index, public: public, markdown: goldmark.New(goldmark.WithExtensions(extension.GFM)), sanitizer: bluemonday.UGCPolicy(), hub: newHub(), config: config, analytics: analytics}, nil
+	return &App{store: store, logger: logger, content: content, index: index, public: public, blog: blog, markdown: goldmark.New(goldmark.WithExtensions(extension.GFM)), sanitizer: bluemonday.UGCPolicy(), hub: newHub(), config: config, analytics: analytics}, nil
 }
 
 func (a *App) Handler() http.Handler {
@@ -99,6 +104,10 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("GET /sw.js", http.FileServer(http.FS(a.content)))
 	mux.HandleFunc("GET /healthz", a.handleHealth)
 	mux.HandleFunc("GET /robots.txt", a.handleRobots)
+	mux.HandleFunc("GET /sitemap.xml", a.handleSitemap)
+	mux.HandleFunc("GET /blog", a.handleBlogIndex)
+	mux.HandleFunc("GET /blog/{slug}", a.handleBlogPost)
+	mux.HandleFunc("GET /blog/", a.handleBlogSlash)
 	mux.HandleFunc("GET /api/v1/workspaces/{id}", a.handleGetWorkspace)
 	mux.HandleFunc("POST /api/v1/workspaces", a.handleCreateWorkspace)
 	mux.HandleFunc("POST /api/v1/analytics", a.handleAnalytics)
@@ -125,7 +134,13 @@ func (a *App) middleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
+		nonce, err := randomID(18)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		r = r.WithContext(context.WithValue(r.Context(), requestNonceKey{}, nonce))
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'nonce-"+nonce+"'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
 		if strings.HasPrefix(a.origin(r), "https://") {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
@@ -144,24 +159,23 @@ func (a *App) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	io.WriteString(w, "ok\n")
 }
-func (a *App) handleRobots(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	io.WriteString(w, "User-agent: *\nAllow: /\nDisallow: /app\nDisallow: /api\n")
-}
 
 type appTemplateData struct {
-	SiteURL   string
-	PageTitle string
+	metaTemplateData
+	IsHomepage bool
 }
 
 func (a *App) renderApp(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	title := "Offline Notepad"
-	if strings.HasPrefix(r.URL.Path, "/app") {
-		title = "Notebook · Offline Notepad"
+	isHomepage := r.URL.Path == "/" || r.URL.Path == "/index.html"
+	meta := a.pageMetadata(r, "/", homeTitle, homeDescription,
+		"offline notepad, private notes, encrypted notes, offline notes, secure notepad, local-first notes",
+		"index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1", "website", "", "", homeStructuredData(a.origin(r)))
+	if !isHomepage {
+		meta = a.pageMetadata(r, "/app", "Notebook · Offline Notepad", "Open your private Offline Notepad notebook.", "", "noindex, nofollow, noarchive", "website", "", "", nil)
 	}
-	if err := a.index.Execute(w, appTemplateData{SiteURL: a.origin(r), PageTitle: title}); err != nil {
+	if err := a.index.Execute(w, appTemplateData{metaTemplateData: meta, IsHomepage: isHomepage}); err != nil {
 		a.logger.Error("render app", "error", err)
 	}
 }
@@ -214,6 +228,7 @@ func (a *App) handleNewPublicationRaw(w http.ResponseWriter, r *http.Request) {
 }
 
 type publicTemplateData struct {
+	metaTemplateData
 	Title        string
 	Content      template.HTML
 	RawURL       string
@@ -243,6 +258,7 @@ func (a *App) renderPublication(w http.ResponseWriter, r *http.Request, id strin
 	if raw {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("Cache-Control", "public, max-age=60")
+		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 		io.WriteString(w, p.Content)
 		return
 	}
@@ -257,9 +273,17 @@ func (a *App) renderPublication(w http.ResponseWriter, r *http.Request, id strin
 	}
 	safe := a.sanitizer.Sanitize(rendered.String())
 	canonical := a.origin(r) + r.URL.Path
+	modifiedAt := ""
+	if !p.UpdatedAt.IsZero() {
+		modifiedAt = p.UpdatedAt.UTC().Format(time.RFC3339)
+	}
+	description := publicationDescription(p.Title)
+	meta := a.pageMetadata(r, r.URL.Path, strings.TrimSpace(p.Title)+" · Offline Notepad", description,
+		"public note, shared note, Offline Notepad", "index, follow, max-image-preview:large, max-snippet:-1", "article", "", modifiedAt,
+		publicStructuredData(a.origin(r), canonical, p.Title, description, modifiedAt))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=60")
-	if err := a.public.Execute(w, publicTemplateData{Title: p.Title, Content: template.HTML(safe), RawURL: r.URL.Path + "/raw", CanonicalURL: canonical, Plaintext: p.ContentMode == "plaintext"}); err != nil {
+	if err := a.public.Execute(w, publicTemplateData{metaTemplateData: meta, Title: p.Title, Content: template.HTML(safe), RawURL: r.URL.Path + "/raw", CanonicalURL: canonical, Plaintext: p.ContentMode == "plaintext"}); err != nil {
 		a.logger.Error("render publication", "error", err)
 	}
 }

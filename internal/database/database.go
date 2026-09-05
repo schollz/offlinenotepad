@@ -77,6 +77,12 @@ type Publication struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+type SitemapPublication struct {
+	PublicID  string
+	Legacy    bool
+	UpdatedAt time.Time
+}
+
 type RotationDocument struct {
 	DocumentID     string `json:"document_id"`
 	Ciphertext     string `json:"ciphertext"`
@@ -132,6 +138,7 @@ type queryAdapter interface {
 	DeletePublication(context.Context, string, string) (bool, error)
 	GetPublication(context.Context, string) (Publication, error)
 	GetPublicationByDocument(context.Context, string, string) (Publication, error)
+	ListSitemapPublications(context.Context, int) ([]SitemapPublication, error)
 }
 
 type Store struct {
@@ -216,6 +223,9 @@ func (s *Store) GetPublication(ctx context.Context, id string) (Publication, err
 }
 func (s *Store) GetPublicationByDocument(ctx context.Context, wid, did string) (Publication, error) {
 	return s.q.GetPublicationByDocument(ctx, wid, did)
+}
+func (s *Store) ListSitemapPublications(ctx context.Context, limit int) ([]SitemapPublication, error) {
+	return s.q.ListSitemapPublications(ctx, limit)
 }
 func (s *Store) PutPublication(ctx context.Context, p Publication) error {
 	return s.q.PutPublication(ctx, p)

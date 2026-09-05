@@ -4,14 +4,38 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#1769e0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="{{.Description}}" />
+    <meta name="keywords" content="{{.Keywords}}" />
+    <meta name="robots" content="{{.Robots}}" />
+    <meta name="googlebot" content="{{.Robots}}" />
     <link rel="icon" href="/favicon.svg" />
     <link rel="canonical" href="{{.CanonicalURL}}" />
-    <title>{{.Title}} · Offline Notepad</title>
+    <meta property="og:type" content="{{.OpenGraphType}}" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="Offline Notepad" />
+    <meta property="og:title" content="{{.PageTitle}}" />
+    <meta property="og:description" content="{{.Description}}" />
+    <meta property="og:url" content="{{.CanonicalURL}}" />
+    <meta property="og:image" content="{{.SocialImageURL}}" />
+    {{if .SocialImageSecureURL}}<meta property="og:image:secure_url" content="{{.SocialImageSecureURL}}" />{{end}}
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="{{.SocialImageAlt}}" />
+    {{if .ModifiedAt}}<meta property="article:modified_time" content="{{.ModifiedAt}}" />{{end}}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{{.PageTitle}}" />
+    <meta name="twitter:description" content="{{.Description}}" />
+    <meta name="twitter:image" content="{{.SocialImageURL}}" />
+    <meta name="twitter:image:alt" content="{{.SocialImageAlt}}" />
+    <script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>
+    <title>{{.PageTitle}}</title>
     <link rel="stylesheet" href="/src/public.css" />
   </head>
   <body>
     <header class="public-header">
-      <a href="/" class="public-brand"><span aria-hidden="true">N</span> Offline Notepad</a>
+      <a href="/" class="public-brand"><img src="/favicon.svg" alt="" /> Offline Notepad</a>
       <a href="{{.RawURL}}" class="raw-link">View raw</a>
     </header>
     <main class="public-note">

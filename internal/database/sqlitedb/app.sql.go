@@ -252,6 +252,48 @@ func (q *Queries) ListDocuments(ctx context.Context, workspaceID string) ([]Docu
 	return items, nil
 }
 
+const listSitemapPublications = `-- name: ListSitemapPublications :many
+SELECT public_id, legacy, updated_at
+FROM (
+    SELECT public_id, legacy, updated_at FROM publications
+    UNION ALL
+    SELECT legacy_publications.public_id, CAST(1 AS INTEGER) AS legacy, legacy_publications.imported_at AS updated_at
+    FROM legacy_publications
+    WHERE NOT EXISTS (SELECT 1 FROM publications WHERE publications.public_id = legacy_publications.public_id)
+) AS crawlable_publications
+ORDER BY updated_at DESC, public_id
+LIMIT ?1
+`
+
+type ListSitemapPublicationsRow struct {
+	PublicID  string
+	Legacy    int64
+	UpdatedAt string
+}
+
+func (q *Queries) ListSitemapPublications(ctx context.Context, limit int64) ([]ListSitemapPublicationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSitemapPublications, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSitemapPublicationsRow
+	for rows.Next() {
+		var i ListSitemapPublicationsRow
+		if err := rows.Scan(&i.PublicID, &i.Legacy, &i.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStagedLegacyDocuments = `-- name: ListStagedLegacyDocuments :many
 SELECT legacy_id, document_id, ciphertext, document_hash, imported_at
 FROM legacy_documents WHERE legacy_id = ?1 ORDER BY document_id

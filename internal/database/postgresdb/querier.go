@@ -19,6 +19,7 @@ type Querier interface {
 	GetStagedLegacyWorkspace(ctx context.Context, legacyID string) (LegacyWorkspace, error)
 	GetWorkspace(ctx context.Context, id string) (Workspace, error)
 	ListDocuments(ctx context.Context, workspaceID string) ([]Document, error)
+	ListSitemapPublications(ctx context.Context, limit int32) ([]ListSitemapPublicationsRow, error)
 	ListStagedLegacyDocuments(ctx context.Context, legacyID string) ([]LegacyDocument, error)
 	PutPublication(ctx context.Context, arg PutPublicationParams) error
 	RotateDocument(ctx context.Context, arg RotateDocumentParams) (int64, error)

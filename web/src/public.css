@@ -5,7 +5,7 @@
 body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 10% 0%, #dbeaff 0, transparent 30rem), #f6f8fc; }
 .public-header { height: 68px; display: flex; align-items: center; justify-content: space-between; max-width: 900px; margin: auto; padding: 0 24px; }
 .public-brand { display: flex; align-items: center; gap: 10px; color: inherit; font-weight: 500; text-decoration: none; }
-.public-brand span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: white; background: #1769e0; }
+.public-brand img { display: block; width: 34px; height: 34px; border-radius: 9px; }
 .raw-link { color: #1769e0; font-weight: 500; text-decoration: none; }
 .public-note { max-width: 800px; min-height: calc(100vh - 150px); margin: 20px auto; padding: clamp(28px, 7vw, 72px); background: color-mix(in srgb, Canvas 96%, transparent); border: 1px solid #dfe6f0; border-radius: 24px; box-shadow: 0 24px 70px #30507818; }
 .eyebrow { color: #1769e0; font-size: .75rem; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; }

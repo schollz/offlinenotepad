@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1769e0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="{{.Description}}" />
+    <meta name="keywords" content="{{.Keywords}}" />
+    <meta name="author" content="Offline Notepad" />
+    <meta name="robots" content="{{.Robots}}" />
+    <meta name="googlebot" content="{{.Robots}}" />
+    <link rel="icon" href="/favicon.svg" />
+    <link rel="canonical" href="{{.CanonicalURL}}" />
+    <meta property="og:type" content="{{.OpenGraphType}}" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="Offline Notepad" />
+    <meta property="og:title" content="{{.PageTitle}}" />
+    <meta property="og:description" content="{{.Description}}" />
+    <meta property="og:url" content="{{.CanonicalURL}}" />
+    <meta property="og:image" content="{{.SocialImageURL}}" />
+    {{if .SocialImageSecureURL}}<meta property="og:image:secure_url" content="{{.SocialImageSecureURL}}" />{{end}}
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="{{.SocialImageAlt}}" />
+    {{if .PublishedAt}}<meta property="article:published_time" content="{{.PublishedAt}}" />{{end}}
+    {{if .ModifiedAt}}<meta property="article:modified_time" content="{{.ModifiedAt}}" />{{end}}
+    {{if .PublishedAt}}<meta property="article:section" content="{{.Post.Section}}" />{{end}}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{{.PageTitle}}" />
+    <meta name="twitter:description" content="{{.Description}}" />
+    <meta name="twitter:image" content="{{.SocialImageURL}}" />
+    <meta name="twitter:image:alt" content="{{.SocialImageAlt}}" />
+    <script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>
+    <title>{{.PageTitle}}</title>
+    <link rel="stylesheet" href="/src/blog.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="site-brand" href="/"><img src="/favicon.svg" alt="" /><span>Offline Notepad</span></a>
+      <nav aria-label="Primary navigation"><a href="/">Open notepad</a><a href="/blog" aria-current="page">Blog</a></nav>
+    </header>
+    {{if .IsIndex}}
+    <main class="blog-index">
+      <header class="page-intro">
+        <h1>Offline Notepad blog</h1>
+        <p>Release notes and practical writing about private, offline-first notes.</p>
+      </header>
+      <div class="post-list">
+        {{range .Posts}}
+        <article class="post-row">
+          <p class="post-meta"><time datetime="{{.PublishedAt}}">{{.PublishedDisplay}}</time> · {{.ReadingTime}}</p>
+          <h2><a href="/blog/{{.Slug}}">{{.Title}}</a></h2>
+          <p>{{.Description}}</p>
+          <a class="read-link" href="/blog/{{.Slug}}">Read the release note</a>
+        </article>
+        {{end}}
+      </div>
+    </main>
+    {{else}}
+    <main class="blog-post">
+      <a class="back-link" href="/blog">← Blog</a>
+      <article>
+        <header class="article-header">
+          <h1>{{.Post.Title}}</h1>
+          <p class="article-summary">{{.Post.Description}}</p>
+          <p class="post-meta"><time datetime="{{.Post.PublishedAt}}">{{.Post.PublishedDisplay}}</time> · {{.Post.ReadingTime}}</p>
+        </header>
+        <div class="article-body">{{.Post.Body}}</div>
+        <footer class="article-footer">Try <a href="/">Offline Notepad</a> or read more on the <a href="/blog">blog</a>.</footer>
+      </article>
+    </main>
+    {{end}}
+    <footer class="site-footer">
+      <nav class="footer-links" aria-label="Footer navigation">
+        <span>made by <a href="https://github.com/sponsors/schollz" rel="noreferrer" target="_blank">schollz</a></span>
+        <span aria-hidden="true">·</span>
+        <a href="https://github.com/schollz/offlinenotepad" rel="noreferrer" target="_blank">github</a>
+      </nav>
+      <details class="tools-menu">
+        <summary>other tools</summary>
+        <ul>
+          <li><a href="https://getcroc.com" rel="noreferrer" target="_blank"><strong>croc</strong><span>fast, simple, secure file transfer</span></a></li>
+          <li><a href="https://wthrtxt.com" rel="noreferrer" target="_blank"><strong>wthrtxt</strong><span>weather without clutter</span></a></li>
+          <li><a href="https://cowyo.com" rel="noreferrer" target="_blank"><strong>cowyo</strong><span>write together, without the setup</span></a></li>
+          <li><a href="https://yesnotice.com" rel="noreferrer" target="_blank"><strong>yesnotice</strong><span>yes/no alerts when websites change</span></a></li>
+          <li><a href="https://makemydrivefun.com" rel="noreferrer" target="_blank"><strong>makemydrivefun</strong><span>strange roadside detours</span></a></li>
+          <li><a href="https://makestopmotion.com" rel="noreferrer" target="_blank"><strong>makestopmotion</strong><span>claymation in browsers</span></a></li>
+        </ul>
+      </details>
+    </footer>
+  </body>
+</html>

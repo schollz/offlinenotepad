@@ -7,6 +7,7 @@ package postgresdb
 
 import (
 	"context"
+	"time"
 )
 
 const createDocument = `-- name: CreateDocument :execrows
@@ -239,6 +240,48 @@ func (q *Queries) ListDocuments(ctx context.Context, workspaceID string) ([]Docu
 			&i.ImportedLegacy,
 			&i.UpdatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSitemapPublications = `-- name: ListSitemapPublications :many
+SELECT public_id, legacy, updated_at
+FROM (
+    SELECT public_id, legacy, updated_at FROM publications
+    UNION ALL
+    SELECT legacy_publications.public_id, TRUE AS legacy, legacy_publications.imported_at AS updated_at
+    FROM legacy_publications
+    WHERE NOT EXISTS (SELECT 1 FROM publications WHERE publications.public_id = legacy_publications.public_id)
+) AS crawlable_publications
+ORDER BY updated_at DESC, public_id
+LIMIT $1
+`
+
+type ListSitemapPublicationsRow struct {
+	PublicID  string
+	Legacy    bool
+	UpdatedAt time.Time
+}
+
+func (q *Queries) ListSitemapPublications(ctx context.Context, limit int32) ([]ListSitemapPublicationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSitemapPublications, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSitemapPublicationsRow
+	for rows.Next() {
+		var i ListSitemapPublicationsRow
+		if err := rows.Scan(&i.PublicID, &i.Legacy, &i.UpdatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
