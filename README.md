@@ -14,7 +14,7 @@ The app ships as one CGO-free Go binary with an embedded React frontend. It uses
 
 ## Install
 
-Requires Go 1.26.8 and Node.js 24.
+Requires Go 1.27.1 and Node.js 24.
 
 ```sh
 git clone https://github.com/schollz/offlinenotepad

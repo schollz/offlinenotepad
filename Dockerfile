@@ -10,7 +10,7 @@ COPY web/public ./public
 COPY web/src ./src
 RUN npm run build
 
-FROM golang:1.26.8-alpine AS backend
+FROM golang:1.27.1-alpine AS backend
 
 WORKDIR /src
 
