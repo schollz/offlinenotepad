@@ -10,7 +10,7 @@ async function createNotebook(page: Page, name: string) {
   await page.goto('/')
   await page.getByLabel('Notebook name').fill(name)
   await page.getByLabel('Password').fill(password)
-  await page.getByRole('button', { name: 'Open notebook' }).click()
+  await page.getByRole('button', { name: 'Sign in or create notebook' }).click()
   await expect(page).toHaveURL(/\/app/u)
 }
 
@@ -50,10 +50,10 @@ test('creates, edits in live preview, and publishes an explicit snapshot', async
 test('creates an unknown notebook with a short password from the unified form', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'mobile', 'covered by the desktop credential flow')
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'Create' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Sign in or create a notebook' })).toBeVisible()
   await page.getByLabel('Notebook name').fill(notebookName('short-password'))
   await page.getByLabel('Password').fill('tiny')
-  await page.getByRole('button', { name: 'Open notebook' }).click()
+  await page.getByRole('button', { name: 'Sign in or create notebook' }).click()
   await expect(page).toHaveURL(/\/app/u)
   await expect(page.getByRole('button', { name: 'Create your first note' })).toBeVisible()
 })
@@ -156,7 +156,7 @@ test('preserves simultaneous offline edits as a conflict copy', async ({ page, b
   await second.goto('/')
   await second.getByLabel('Notebook name').fill(name)
   await second.getByLabel('Password').fill(password)
-  await second.getByRole('button', { name: 'Open notebook' }).click()
+  await second.getByRole('button', { name: 'Sign in or create notebook' }).click()
   await second.getByRole('button', { name: /Shared note/ }).click()
   await secondContext.setOffline(true)
   await second.getByLabel('Note content').fill('Unsent edit from the second device.')
@@ -233,10 +233,10 @@ test('rotates credentials and requires the new password', async ({ page }, testI
 
   await page.getByLabel('Notebook name').fill(name)
   await page.getByLabel('Password').fill(password)
-  await page.getByRole('button', { name: 'Open notebook' }).click()
+  await page.getByRole('button', { name: 'Sign in or create notebook' }).click()
   await expect(page.getByText('The password is incorrect.')).toBeVisible()
   await page.getByLabel('Password').fill(nextPassword)
-  await page.getByRole('button', { name: 'Open notebook' }).click()
+  await page.getByRole('button', { name: 'Sign in or create notebook' }).click()
   await expect(page.getByRole('button', { name: /Rotated note/ })).toBeVisible()
 })
 
@@ -267,7 +267,7 @@ test('analytics stays normalized and outside the service worker cache', async ({
   await page.goto('/')
   await page.getByLabel('Notebook name').fill(name)
   await page.getByLabel('Password').fill(originalPassword)
-  await page.getByRole('button', { name: 'Open notebook' }).click()
+  await page.getByRole('button', { name: 'Sign in or create notebook' }).click()
   await expect(page).toHaveURL(/\/app/u)
   await createNote(page, title)
   await page.getByLabel('Note content').fill(content)
@@ -327,7 +327,7 @@ test('analytics stays normalized and outside the service worker cache', async ({
   await page.getByRole('button', { name: /Log out/ }).click()
   await page.getByLabel('Notebook name').fill(name)
   await page.getByLabel('Password').fill(nextPassword)
-  await page.getByRole('button', { name: 'Open notebook' }).click()
+  await page.getByRole('button', { name: 'Sign in or create notebook' }).click()
   await expect(page.getByRole('button', { name: new RegExp(title) })).toBeVisible()
 
   const requiredEvents = [

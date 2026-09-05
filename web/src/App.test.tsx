@@ -27,14 +27,14 @@ afterEach(async () => {
 describe('landing and notebook access experience', () => {
   it('presents one accessible open-or-create credential flow', async () => {
     render(<MemoryRouter><App /></MemoryRouter>)
-    expect(screen.getByRole('heading', { name: 'A private notepad that works offline.' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Sign in or create a notebook' })).toBeInTheDocument()
     expect(await screen.findByLabelText('Notebook name')).toHaveAttribute('autocomplete', 'username')
+    expect(screen.getByLabelText('Notebook name')).toHaveFocus()
     expect(screen.getByLabelText('Password')).toHaveAttribute('autocomplete', 'current-password')
     expect(screen.getByText(/password never leaves this browser/i)).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Notebook access' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Open notebook' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Create' })).not.toBeInTheDocument()
-    expect(screen.getByText(/new credentials create a notebook automatically/i)).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Sign in or create a notebook' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sign in or create notebook' })).toBeInTheDocument()
+    expect(screen.getByText(/existing details sign you in; new details create a private notebook/i)).toBeInTheDocument()
   })
 
   it('accepts a short password and attempts to create an unknown notebook', async () => {
@@ -43,7 +43,7 @@ describe('landing and notebook access experience', () => {
     render(<MemoryRouter><App /></MemoryRouter>)
     fireEvent.change(await screen.findByLabelText('Notebook name'), { target: { value: 'legacy-account' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'tiny' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Open notebook' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in or create notebook' }))
     expect(await screen.findByText('This browser cannot run the encryption worker.')).toBeInTheDocument()
     const productRequests = () => fetchMock.mock.calls.filter(([input]) => String(input) !== '/api/v1/analytics')
     expect(productRequests()).toHaveLength(2)
@@ -54,7 +54,7 @@ describe('landing and notebook access experience', () => {
     })).toBe(true))
 
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: '' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Open notebook' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in or create notebook' }))
     expect(await screen.findByText('Enter your password.')).toBeInTheDocument()
     expect(productRequests()).toHaveLength(2)
     const telemetry = fetchMock.mock.calls
@@ -85,7 +85,7 @@ describe('landing and notebook access experience', () => {
     render(<MemoryRouter><App /></MemoryRouter>)
     fireEvent.change(await screen.findByLabelText('Notebook name'), { target: { value: 'migration-integration-workspace' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'wrong' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Open notebook' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in or create notebook' }))
     expect(await screen.findByText(/legacy username or password is incorrect/i)).toBeInTheDocument()
     const productRequests = fetchMock.mock.calls.filter(([input]) => String(input) !== '/api/v1/analytics')
     expect(productRequests).toHaveLength(2)

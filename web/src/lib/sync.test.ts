@@ -111,6 +111,8 @@ const keys: SessionKeys = {
   authPublicKey: new Uint8Array(32),
 }
 
+let online = true
+
 function stored(hash: string): StoredDocument {
   return {
     key: documentKey(metadata.id, 'document-one'),
@@ -153,20 +155,52 @@ function callbacks() {
   }
 }
 
-describe('synchronization debounce', () => {
+describe('offline synchronization', () => {
   beforeEach(async () => {
     await notebookDB.documents.clear()
     await notebookDB.outbox.clear()
     FakeWebSocket.instances.length = 0
     FakeBroadcastChannel.channels.clear()
     vi.stubGlobal('WebSocket', FakeWebSocket)
-    vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(true)
+    online = true
+    vi.spyOn(window.navigator, 'onLine', 'get').mockImplementation(() => online)
     Object.defineProperty(window.navigator, 'locks', { value: undefined, configurable: true })
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+  })
+
+  it('keeps an encrypted edit queued offline and sends it after reconnecting', async () => {
+    online = false
+    const client = new SyncClient(metadata, keys, callbacks())
+    client.connect()
+    await queueDocument(stored('offline-edit'), 'upsert')
+
+    expect(FakeWebSocket.instances).toHaveLength(0)
+    expect(await notebookDB.documents.get(documentKey(metadata.id, 'document-one'))).toMatchObject({
+      ciphertextHash: 'offline-edit', pending: true,
+    })
+    expect(await notebookDB.outbox.count()).toBe(1)
+
+    online = true
+    window.dispatchEvent(new Event('online'))
+    const socket = FakeWebSocket.instances[0]
+    socket.emit('message', { data: JSON.stringify({ type: 'authenticated', documents: [], publications: [] }) })
+
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(1))
+    expect(JSON.parse(socket.sent[0])).toMatchObject({
+      type: 'upsert', ciphertext: 'cipher-offline-edit', ciphertext_hash: 'offline-edit',
+    })
+    expect(await notebookDB.outbox.count()).toBe(1)
+
+    socket.emit('message', { data: JSON.stringify({ type: 'ack', documents: [wire('offline-edit', 1)] }) })
+    await vi.waitFor(async () => expect(await notebookDB.outbox.count()).toBe(0))
+    expect(await notebookDB.documents.get(documentKey(metadata.id, 'document-one'))).toMatchObject({
+      ciphertextHash: 'offline-edit', pending: false,
+    })
+    client.close()
   })
 
   it('coalesces rapid edits and sends only the latest encrypted record after typing pauses', async () => {

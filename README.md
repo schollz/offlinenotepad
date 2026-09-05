@@ -14,15 +14,16 @@ The app ships as one CGO-free Go binary with an embedded React frontend. It uses
 
 ## Install
 
-Requires Go 1.27.1 and Node.js 24.
+Requires Go 1.27.1, Node.js 24, and npm.
 
 ```sh
 git clone https://github.com/schollz/offlinenotepad
 cd offlinenotepad
-make frontend-install
 make build
 ./offlinenotepad
 ```
+
+`make build` installs the locked frontend dependencies when needed, generates the ignored frontend output in `internal/site/build`, and embeds it in the Go binary. Docker performs the same frontend build in its Node stage, so generated assets are not kept in Git or required in the Docker build context.
 
 Open `http://localhost:8251`. Without `DATABASE_URL`, data is stored in `offlinenotepad.sqlite3` by default. See `.env.example` for configuration.
 
@@ -47,11 +48,14 @@ The archive-wide migration does not require usernames or passwords. Users comple
 ## Development
 
 ```sh
-make dev
+make serve
 make test
 make lint
 make test-race
 ```
+
+`make serve` uses Air to rebuild the embedded frontend and Go server, then reloads the browser at `http://localhost:8251` when their source files change. `make dev` is an alias for the same development server.
+Set `AIR_PROXY_PORT` and `AIR_APP_PORT` to use another pair of ports when running more than one development server.
 
 ## License
 

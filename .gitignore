@@ -14,3 +14,5 @@ web/coverage/
 web/playwright-report/
 web/test-results/
 web/*.tsbuildinfo
+/internal/site/build/*
+!/internal/site/build/.gitkeep

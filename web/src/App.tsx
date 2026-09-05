@@ -18,6 +18,7 @@ import {
   Menu,
   Moon,
   MoreHorizontal,
+  NotebookPen,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
@@ -43,7 +44,7 @@ import type { ContentMode, KdfMetadata, NoteContent, Publication, SessionKeys, S
 
 interface OpenNote { note: NoteContent; stored: StoredDocument }
 interface Session { username: string; metadata: KdfMetadata; keys: SessionKeys }
-type SaveState = 'saved-offline' | 'saving' | 'synced'
+type SaveState = 'saved-offline' | 'synced'
 type ConnectionState = 'connecting' | 'online' | 'offline'
 
 const usernameSchema = z.string().max(200).refine((value) => value.trim().length > 0, 'Enter your notebook name.')
@@ -141,7 +142,7 @@ function download(name: string, data: unknown): void {
 export default function App() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { sidebarOpen, setSidebarOpen, theme, setTheme, markdownEditorMode, setMarkdownEditorMode, toast, showToast } = useUI()
+  const { sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, theme, setTheme, markdownEditorMode, setMarkdownEditorMode, toast, showToast } = useUI()
   const [session, setSession] = useState<Session | null>(null)
   const [notes, setNotes] = useState<OpenNote[]>([])
   const notesRef = useRef<OpenNote[]>([])
@@ -150,7 +151,6 @@ export default function App() {
   const [saveState, setSaveState] = useState<SaveState>('saved-offline')
   const [publications, setPublications] = useState<Record<string, Publication>>({})
   const [search, setSearch] = useState('')
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [rotationOpen, setRotationOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -236,7 +236,6 @@ export default function App() {
   }, [])
 
   const persistNote = useCallback(async (active: Session, open: OpenNote) => {
-    setSaveState('saving')
     await runDocumentOperation(open.stored.key, async () => {
       const encrypted = encryptNote(open.note, active.metadata.id, active.keys.contentKey)
       const stored: StoredDocument = {
@@ -259,7 +258,6 @@ export default function App() {
         return updated
       })
     })
-    setSaveState('saved-offline')
     syncRef.current?.scheduleFlush()
   }, [runDocumentOperation])
 
@@ -564,7 +562,7 @@ export default function App() {
     if (!current) return
     const changed: OpenNote = { ...current, note: { ...(dirtyNotes.current.get(selectedID) ?? current.note), ...patch, updated_at: new Date().toISOString() } }
     dirtyNotes.current.set(selectedID, changed.note)
-    setSaveState('saving')
+    setSaveState('saved-offline')
     const updated = notesRef.current.map((item) => item.note.id === selectedID ? changed : item)
     notesRef.current = updated
     setNotes(updated)
@@ -575,6 +573,7 @@ export default function App() {
     if (!session) return
     let failureReason: 'local-storage' | 'unknown' = 'unknown'
     try {
+      setSaveState('saved-offline')
       const now = new Date().toISOString()
       const note: NoteContent = { id: crypto.randomUUID(), title: '', content: '', mode: 'markdown', created_at: now, updated_at: now }
       const encrypted = encryptNote(note, session.metadata.id, session.keys.contentKey)
@@ -603,6 +602,7 @@ export default function App() {
     const open = notesRef.current.find((item) => item.note.id === selectedID)
     if (!open) return
     try {
+      setSaveState('saved-offline')
       await runDocumentOperation(open.stored.key, async () => {
         const latest = await notebookDB.documents.get(open.stored.key) ?? open.stored
         await queueDocument({ ...latest, ciphertext: '', ciphertextHash: '', deleted: true, pending: true, updatedAt: new Date().toISOString() }, 'delete')
@@ -714,6 +714,7 @@ export default function App() {
         })
       }
       failureReason = 'local-storage'
+      if (imported.length) setSaveState('saved-offline')
       for (const old of imported) {
         const now = new Date().toISOString()
         const note = { ...old, id: crypto.randomUUID(), updated_at: now }
@@ -807,11 +808,11 @@ export default function App() {
     <div className={`notebook ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`} aria-label="Notes">
         <div className="sidebar-top">
-          <a className="brand compact" href="/app" onClick={(event) => { event.preventDefault(); navigate('/app') }}><span className="brand-mark">N</span><span>Offline Notepad</span></a>
-          <button className="icon-button desktop-collapse" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>{sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button>
+          <a className="brand compact" href="/app" onClick={(event) => { event.preventDefault(); navigate('/app') }}><span className="brand-mark"><NotebookPen aria-hidden="true" /></span><span>Offline Notepad</span></a>
+          <button className="icon-button desktop-collapse" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>{sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button>
           <button className="icon-button mobile-only" onClick={() => setSidebarOpen(false)} aria-label="Close notes"><X /></button>
         </div>
-        <button className="new-note" onClick={() => void newNote()}><FilePlus2 /> <span>New note</span><kbd>⌘ N</kbd></button>
+        <button className="new-note" onClick={() => void newNote()} aria-label="New note" title="New note"><FilePlus2 /> <span>New note</span><kbd>⌘ N</kbd></button>
         <label className="search-box"><Search /><input ref={searchInput} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search notes" aria-label="Search notes" /></label>
         <div className="note-list">
           {filteredNotes.map(({ note, stored }) => (
@@ -825,7 +826,7 @@ export default function App() {
         </div>
         <div className="sidebar-footer">
           <Connection status={connection} />
-          <button className="icon-button" onClick={() => setSettingsOpen(true)} aria-label="Open settings"><Settings /></button>
+          <button className="icon-button" onClick={() => setSettingsOpen(true)} aria-label="Open settings" title="Open settings"><Settings /></button>
         </div>
       </aside>
       {sidebarOpen && <button className="scrim" aria-label="Close navigation" onClick={() => setSidebarOpen(false)} />}
@@ -834,7 +835,7 @@ export default function App() {
         <header className="editor-toolbar">
           <button className="icon-button mobile-only" onClick={() => setSidebarOpen(true)} aria-label="Open notes"><Menu /></button>
           <div className="save-indicator" aria-live="polite">
-            {saveState === 'saving' ? <><span className="saving-dot" /> Saving…</> : saveState === 'synced' && connection === 'online' ? <><Check /> Synced</> : <><CloudOff /> Saved offline</>}
+            {saveState === 'synced' && connection === 'online' ? <><Check /> Synced</> : <><CloudOff /> Saved offline</>}
           </div>
           <div className="toolbar-actions">
             {selected?.note.mode === 'markdown' && <div className="mode-switch" aria-label="Markdown editor view"><button className={markdownEditorMode === 'live' ? 'active' : ''} aria-pressed={markdownEditorMode === 'live'} onClick={() => setMarkdownEditorMode('live')}><Eye /> Live</button><button className={markdownEditorMode === 'source' ? 'active' : ''} aria-pressed={markdownEditorMode === 'source'} onClick={() => setMarkdownEditorMode('source')}><Code2 /> Source</button></div>}
@@ -880,30 +881,36 @@ function Welcome({ restoring, busy, error, onAuthenticate }: { restoring: boolea
   const [password, setPassword] = useState('')
   const submit = (event: FormEvent) => { event.preventDefault(); void onAuthenticate(username, password) }
   return <main className="welcome">
-    <nav className="welcome-nav"><a className="brand" href="/"><span className="brand-mark">N</span><span>Offline Notepad</span></a></nav>
-    <div className="welcome-grid">
-      <section className="hero-copy">
-        <h1 aria-label="A private notepad that works offline.">A private notepad<br />that works offline.</h1>
-        <p className="hero-lead">Notes are encrypted in your browser, saved on this device first, and synced when you’re online.</p>
-      </section>
-      <section className="auth-card" aria-label="Notebook access">
+    <div className="welcome-shell">
+      <nav className="welcome-nav"><a className="brand" href="/"><span className="brand-mark"><NotebookPen aria-hidden="true" /></span><span>Offline Notepad</span></a></nav>
+      <section className="auth-section" aria-labelledby="notebook-access-title">
+        <div className="auth-heading">
+          <h1 id="notebook-access-title">Sign in or create a notebook</h1>
+          <p className="auth-intro">Enter a notebook name and password. Existing details sign you in; new details create a private notebook.</p>
+        </div>
         {restoring ? <div className="auth-restoring" role="status"><span className="spinner" /><span>Opening your saved notebook…</span></div> : <>
           <form onSubmit={submit}>
-            <label>Notebook name<input autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="e.g. north-star" /></label>
-            <label>Password<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Any non-empty password" /></label>
+            <div className="auth-fields">
+              <label>Notebook name<input autoFocus autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="e.g. north-star" /></label>
+              <label>Password<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Your password" /></label>
+            </div>
             {error && <p className="form-error" role="alert">{error}</p>}
-            <button className="button primary auth-submit" disabled={busy}>{busy ? <span className="spinner" /> : <LockKeyhole />}{busy ? 'Deriving encryption keys…' : 'Open notebook'}</button>
+            <button className="button primary auth-submit" disabled={busy}>{busy ? <span className="spinner" /> : <LockKeyhole />}{busy ? 'Deriving encryption keys…' : 'Sign in or create notebook'}</button>
           </form>
-          <p className="auth-hint">New credentials create a notebook automatically. Existing credentials open or migrate it.</p>
           <p className="no-recovery"><ShieldCheck /> Your password never leaves this browser. There is no recovery.</p>
         </>}
+      </section>
+      <section className="welcome-details" aria-label="About Offline Notepad">
+        <p>Write, edit, search, and delete private notes without an internet connection. Changes are saved on this device first.</p>
+        <p>Encrypted synchronization makes the same notebook available on your other devices without sending readable notes or your password to the server.</p>
       </section>
     </div>
   </main>
 }
 
 function Connection({ status }: { status: ConnectionState }) {
-  return <span className={`connection ${status}`}>{status === 'online' ? <Cloud /> : status === 'connecting' ? <span className="saving-dot" /> : <CloudOff />}<span>{status === 'online' ? 'Connected' : status === 'connecting' ? 'Connecting' : 'Offline'}</span></span>
+  const label = status === 'online' ? 'Connected' : status === 'connecting' ? 'Connecting' : 'Offline'
+  return <span className={`connection ${status}`} aria-label={label} title={label}>{status === 'online' ? <Cloud /> : status === 'connecting' ? <span className="saving-dot" /> : <CloudOff />}<span>{label}</span></span>
 }
 
 function SettingsPanel(props: {

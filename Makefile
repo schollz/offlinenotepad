@@ -2,6 +2,8 @@ BINARY := offlinenotepad
 WEB_DIR := web
 NODE_MODULES_LOCK := $(WEB_DIR)/node_modules/.package-lock.json
 AIR_VERSION := v1.65.1
+AIR_PROXY_PORT ?= 8251
+AIR_APP_PORT ?= 8252
 SQLC_VERSION := v1.31.1
 LEGACY_DB ?= data.db
 
@@ -30,11 +32,10 @@ migrate-legacy:
 reset-test-db:
 	./scripts/reset-test-db.sh
 
-dev:
-	go run github.com/air-verse/air@$(AIR_VERSION) -c .air.toml
+dev: serve
 
-serve:
-	go run ./cmd/offlinenotepad serve
+serve: $(NODE_MODULES_LOCK)
+	PORT=$(AIR_APP_PORT) go run github.com/air-verse/air@$(AIR_VERSION) -c .air.toml -proxy.proxy_port $(AIR_PROXY_PORT) -proxy.app_port $(AIR_APP_PORT)
 
 test:
 	npm --prefix $(WEB_DIR) test

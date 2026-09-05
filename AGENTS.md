@@ -25,6 +25,11 @@
 - Maintain keyboard focus visibility, reduced-motion behavior, semantic labels, responsive mobile navigation, and system/light/dark themes.
 - The service worker may cache the app shell and fingerprinted assets, but not APIs, health checks, WebSockets, or public snapshots.
 
+## Version control
+
+- Use plain Git for all version-control operations. Do not use GitButler.
+- Write semantic commit messages using Conventional Commit prefixes such as `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, and `chore:`.
+
 ## Before handing off
 
 Run `make frontend`, `make test`, `make lint`, `make test-race`, and a CGO-free production build. When PostgreSQL is available, set `TEST_DATABASE_URL` and run the storage integration test. Do not commit unless the user explicitly requests it.

@@ -5,6 +5,12 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   plugins: [
+    {
+      name: 'keep-embedded-build-directory',
+      generateBundle() {
+        this.emitFile({ type: 'asset', fileName: '.gitkeep', source: '' })
+      },
+    },
     react(),
     VitePWA({
       registerType: 'autoUpdate',

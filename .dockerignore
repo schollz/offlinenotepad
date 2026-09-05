@@ -11,3 +11,4 @@ web/coverage
 web/playwright-report
 web/e2e
 web/test-results
+internal/site/build
