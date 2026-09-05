@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1769e0" />
+    <link rel="icon" href="/favicon.svg" />
+    <link rel="canonical" href="{{.CanonicalURL}}" />
+    <title>{{.Title}} · Offline Notepad</title>
+    <link rel="stylesheet" href="/src/public.css" />
+  </head>
+  <body>
+    <header class="public-header">
+      <a href="/" class="public-brand"><span aria-hidden="true">N</span> Offline Notepad</a>
+      <a href="{{.RawURL}}" class="raw-link">View raw</a>
+    </header>
+    <main class="public-note">
+      <p class="eyebrow">Shared snapshot</p>
+      <h1>{{.Title}}</h1>
+      <article>{{.Content}}</article>
+    </main>
+    <footer>Published as a read-only snapshot. Later private edits are not shown here.</footer>
+    <script type="module" src="/src/public-analytics.ts"></script>
+  </body>
+</html>

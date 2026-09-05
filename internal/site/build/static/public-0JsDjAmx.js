@@ -1,0 +1,1 @@
+import{n as e}from"./analytics-B5Rx0mbl.js";e(window.location.pathname);

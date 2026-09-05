@@ -1,0 +1,13 @@
+.git
+.github
+.env
+data.db
+*.sqlite
+*.sqlite3
+offlinenotepad
+tmp
+web/node_modules
+web/coverage
+web/playwright-report
+web/e2e
+web/test-results

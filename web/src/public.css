@@ -1,0 +1,17 @@
+@font-face { font-family: "OpenAI Sans"; src: url("/fonts/OpenAISans-Regular.woff2") format("woff2"); font-display: swap; font-style: normal; font-weight: 400; }
+@font-face { font-family: "OpenAI Sans"; src: url("/fonts/OpenAISans-Medium.woff2") format("woff2"); font-display: swap; font-style: normal; font-weight: 500; }
+:root { color-scheme: light dark; font-family: "OpenAI Sans", Arial, sans-serif; color: #182235; background: #f4f7fb; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 10% 0%, #dbeaff 0, transparent 30rem), #f6f8fc; }
+.public-header { height: 68px; display: flex; align-items: center; justify-content: space-between; max-width: 900px; margin: auto; padding: 0 24px; }
+.public-brand { display: flex; align-items: center; gap: 10px; color: inherit; font-weight: 500; text-decoration: none; }
+.public-brand span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: white; background: #1769e0; }
+.raw-link { color: #1769e0; font-weight: 500; text-decoration: none; }
+.public-note { max-width: 800px; min-height: calc(100vh - 150px); margin: 20px auto; padding: clamp(28px, 7vw, 72px); background: color-mix(in srgb, Canvas 96%, transparent); border: 1px solid #dfe6f0; border-radius: 24px; box-shadow: 0 24px 70px #30507818; }
+.eyebrow { color: #1769e0; font-size: .75rem; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; }
+h1 { margin: .25em 0 1em; font-size: clamp(2rem, 6vw, 3.8rem); line-height: 1.05; letter-spacing: -.045em; }
+article { line-height: 1.75; font-size: 1.06rem; }
+article img { max-width: 100%; } article pre { overflow: auto; padding: 18px; border-radius: 12px; background: #101827; color: #e6edf7; } article blockquote { margin-left: 0; padding-left: 20px; border-left: 3px solid #80adf2; color: #53627a; }
+footer { text-align: center; padding: 22px; color: #68758a; font-size: .84rem; }
+@media (max-width: 700px) { .public-note { margin: 0; border-radius: 0; border-inline: 0; } }
+@media (prefers-color-scheme: dark) { :root { color: #e8eef8; background: #0c111b; } body { background: radial-gradient(circle at 10% 0%, #153665 0, transparent 30rem), #0c111b; } .public-note { border-color: #29364a; box-shadow: none; } article blockquote, footer { color: #9babbe; } }

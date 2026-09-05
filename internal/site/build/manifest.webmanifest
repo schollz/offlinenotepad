@@ -1,0 +1,1 @@
+{"name":"Offline Notepad","short_name":"Notepad","description":"A private, encrypted notebook that works offline.","start_url":"/app","display":"standalone","background_color":"#f5f7fb","theme_color":"#1769e0","lang":"en","scope":"/","icons":[{"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}

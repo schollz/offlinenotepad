@@ -1,0 +1,131 @@
+import { useLayoutEffect, useRef } from 'react'
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
+import { bracketMatching, HighlightStyle, indentOnInput, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
+import { commonmarkLanguage, markdown } from '@codemirror/lang-markdown'
+import { highlightSelectionMatches, searchKeymap } from '@codemirror/search'
+import { Annotation, Compartment, EditorState, Prec, Transaction } from '@codemirror/state'
+import { drawSelection, dropCursor, EditorView, highlightActiveLine, highlightSpecialChars, keymap, placeholder as placeholderExtension } from '@codemirror/view'
+import { tags } from '@lezer/highlight'
+import { GFM } from '@lezer/markdown'
+import { insertLink, toggleBold, toggleInlineCode, toggleItalic, toggleStrikethrough } from './commands'
+import { codeLanguages } from './languages'
+import { livePreview, openLiveLink } from './livePreview'
+
+export type MarkdownEditorMode = 'live' | 'source'
+
+interface MarkdownEditorProps {
+  documentId: string
+  value: string
+  mode: MarkdownEditorMode
+  onChange: (markdown: string) => void
+}
+
+const externalUpdate = Annotation.define<boolean>()
+
+const markdownHighlightStyle = HighlightStyle.define([
+  { tag: tags.heading, color: 'var(--text)', fontWeight: '500' },
+  { tag: tags.strong, fontWeight: '650' },
+  { tag: tags.emphasis, fontStyle: 'italic' },
+  { tag: tags.strikethrough, textDecoration: 'line-through' },
+  { tag: tags.link, color: 'var(--blue)', textDecoration: 'underline' },
+  { tag: tags.url, color: 'var(--blue)' },
+  { tag: tags.monospace, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' },
+  { tag: tags.keyword, color: 'var(--syntax-purple)' },
+  { tag: [tags.string, tags.special(tags.string)], color: 'var(--syntax-green)' },
+  { tag: [tags.number, tags.bool, tags.null], color: 'var(--syntax-orange)' },
+  { tag: [tags.comment, tags.meta], color: '#7f8a9a', fontStyle: 'italic' },
+  { tag: [tags.typeName, tags.className], color: 'var(--syntax-yellow)' },
+  { tag: [tags.function(tags.variableName), tags.definition(tags.variableName)], color: 'var(--syntax-blue)' },
+  { tag: [tags.operator, tags.punctuation], color: '#abb2bf' },
+])
+
+const formattingKeymap = Prec.highest(keymap.of([
+  { key: 'Mod-b', run: toggleBold },
+  { key: 'Mod-i', run: toggleItalic },
+  { key: 'Mod-Shift-x', run: toggleStrikethrough },
+  { key: 'Mod-e', run: toggleInlineCode },
+  { key: 'Mod-k', run: insertLink },
+]))
+
+export function MarkdownEditor({ documentId, value, mode, onChange }: MarkdownEditorProps) {
+  const hostRef = useRef<HTMLDivElement>(null)
+  const viewRef = useRef<EditorView | null>(null)
+  const modeCompartment = useRef(new Compartment())
+  const valueRef = useRef(value)
+  const modeRef = useRef(mode)
+  const onChangeRef = useRef(onChange)
+  valueRef.current = value
+  modeRef.current = mode
+  onChangeRef.current = onChange
+
+  useLayoutEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    const viewMode = modeCompartment.current
+    const state = EditorState.create({
+      doc: valueRef.current,
+      extensions: [
+        highlightSpecialChars(),
+        history(),
+        drawSelection(),
+        dropCursor(),
+        indentOnInput(),
+        bracketMatching(),
+        highlightActiveLine(),
+        highlightSelectionMatches(),
+        keymap.of([...defaultKeymap, ...searchKeymap, ...historyKeymap]),
+        EditorView.lineWrapping,
+        EditorView.contentAttributes.of({
+          'aria-label': 'Note content',
+          'aria-multiline': 'true',
+          autocapitalize: 'sentences',
+          spellcheck: 'true',
+        }),
+        placeholderExtension('Start writing in Markdown…'),
+        markdown({
+          base: commonmarkLanguage,
+          extensions: [GFM],
+          codeLanguages: (info) => /^(?:md|markdown)$/iu.test(info)
+            ? commonmarkLanguage
+            : LanguageDescription.matchLanguageName(codeLanguages, info),
+        }),
+        syntaxHighlighting(markdownHighlightStyle),
+        formattingKeymap,
+        openLiveLink,
+        viewMode.of(modeRef.current === 'live' ? livePreview : []),
+        EditorView.updateListener.of((update) => {
+          if (!update.docChanged || update.transactions.some((transaction) => transaction.annotation(externalUpdate))) return
+          onChangeRef.current(update.state.doc.toString())
+        }),
+      ],
+    })
+    const view = new EditorView({ state, parent: host })
+    viewRef.current = view
+    return () => {
+      if (viewRef.current === view) viewRef.current = null
+      view.destroy()
+    }
+  }, [documentId])
+
+  useLayoutEffect(() => {
+    const view = viewRef.current
+    if (!view || view.state.doc.toString() === value) return
+    const selection = view.state.selection.main
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: value },
+      selection: {
+        anchor: Math.min(selection.anchor, value.length),
+        head: Math.min(selection.head, value.length),
+      },
+      annotations: [externalUpdate.of(true), Transaction.addToHistory.of(false)],
+    })
+  }, [documentId, value])
+
+  useLayoutEffect(() => {
+    const view = viewRef.current
+    if (!view) return
+    view.dispatch({ effects: modeCompartment.current.reconfigure(mode === 'live' ? livePreview : []) })
+  }, [documentId, mode])
+
+  return <div ref={hostRef} className="markdown-editor" data-document-id={documentId} data-mode={mode} />
+}

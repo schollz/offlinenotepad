@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS publications;
+DROP TABLE IF EXISTS documents;
+DROP TABLE IF EXISTS workspaces;
