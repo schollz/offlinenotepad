@@ -73,7 +73,8 @@ func migrateLegacyArchive(args []string) error {
 		return err
 	}
 	defer store.Close()
-	result, err := legacy.StageArchive(ctx, store, legacy.ArchiveOptions{Source: *source, DryRun: *dryRun})
+	progress := legacyMigrationProgressLogger{logger: slog.Default(), interval: time.Second}
+	result, err := legacy.StageArchive(ctx, store, legacy.ArchiveOptions{Source: *source, DryRun: *dryRun, Progress: progress.Report})
 	if err != nil {
 		return err
 	}
@@ -82,6 +83,30 @@ func migrateLegacyArchive(args []string) error {
 		"documents_imported", result.DocumentsImported, "documents_skipped", result.DocumentsSkipped,
 		"publications_imported", result.PublicationsImported, "publications_skipped", result.PublicationsSkipped)
 	return nil
+}
+
+type legacyMigrationProgressLogger struct {
+	logger    *slog.Logger
+	interval  time.Duration
+	lastPhase legacy.ArchiveProgressPhase
+	lastLog   time.Time
+}
+
+func (reporter *legacyMigrationProgressLogger) Report(progress legacy.ArchiveProgress) {
+	now := time.Now()
+	phaseChanged := progress.Phase != reporter.lastPhase
+	completed := progress.Total == 0 || progress.Completed >= progress.Total
+	if !phaseChanged && !completed && !reporter.lastLog.IsZero() && now.Sub(reporter.lastLog) < reporter.interval {
+		return
+	}
+	attributes := []any{"phase", progress.Phase}
+	if progress.Total > 0 {
+		percent := progress.Completed * 100 / progress.Total
+		attributes = append(attributes, "completed", progress.Completed, "total", progress.Total, "percent", percent)
+	}
+	reporter.logger.Info("legacy migration progress", attributes...)
+	reporter.lastPhase = progress.Phase
+	reporter.lastLog = now
 }
 
 func legacyMigrationAlias(args []string) ([]string, bool, error) {

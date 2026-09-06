@@ -61,7 +61,10 @@ func TestReadArchiveDiscoversEveryWorkspaceWithoutCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	archive, err := readArchive(source)
+	var progress []ArchiveProgress
+	archive, err := readArchiveWithProgress(context.Background(), source, func(update ArchiveProgress) {
+		progress = append(progress, update)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,6 +82,21 @@ func TestReadArchiveDiscoversEveryWorkspaceWithoutCredentials(t *testing.T) {
 	}
 	if string(before) != string(after) {
 		t.Fatal("legacy source was modified")
+	}
+	wantCompleted := map[ArchiveProgressPhase]ArchiveProgress{
+		ArchiveProgressInspect:          {Phase: ArchiveProgressInspect},
+		ArchiveProgressReadDocuments:    {Phase: ArchiveProgressReadDocuments, Completed: 2, Total: 2},
+		ArchiveProgressValidateHashes:   {Phase: ArchiveProgressValidateHashes, Completed: 2, Total: 2},
+		ArchiveProgressReadPublications: {Phase: ArchiveProgressReadPublications, Completed: 1, Total: 1},
+	}
+	completed := make(map[ArchiveProgressPhase]ArchiveProgress)
+	for _, update := range progress {
+		completed[update.Phase] = update
+	}
+	for phase, want := range wantCompleted {
+		if got, ok := completed[phase]; !ok || got != want {
+			t.Errorf("final %s progress = %#v, want %#v", phase, got, want)
+		}
 	}
 }
 

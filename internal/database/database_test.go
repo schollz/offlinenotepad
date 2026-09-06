@@ -60,9 +60,15 @@ func TestLegacyStagingIsTransactionalAndIdempotent(t *testing.T) {
 		Workspaces:   []LegacyWorkspace{{LegacyID: "1234abcd", Documents: []LegacyDocument{{DocumentID: "abc12345", Ciphertext: "encrypted", DocumentHash: "bb33cf65"}}}},
 		Publications: []LegacyPublication{{PublicID: "abcd1234", LegacyID: "1234abcd", DocumentID: "abc12345", Title: "Public", Content: "# Snapshot", ContentMode: "markdown"}},
 	}
-	result, err := store.StageLegacyArchive(context.Background(), archive, true)
+	var progress [][2]int
+	result, err := store.StageLegacyArchiveWithProgress(context.Background(), archive, true, func(completed, total int) {
+		progress = append(progress, [2]int{completed, total})
+	})
 	if err != nil || result.WorkspacesImported != 1 || result.DocumentsImported != 1 || result.PublicationsImported != 1 {
 		t.Fatalf("dry-run result = %#v err=%v", result, err)
+	}
+	if len(progress) != 4 || progress[0] != [2]int{0, 3} || progress[len(progress)-1] != [2]int{3, 3} {
+		t.Fatalf("staging progress = %#v", progress)
 	}
 	if _, err := store.GetLegacyWorkspace(context.Background(), "1234abcd"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("dry run wrote legacy workspace: %v", err)

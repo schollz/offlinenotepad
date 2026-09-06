@@ -48,6 +48,7 @@ To stage every account from an old bbolt `data.db` into PostgreSQL:
 ```
 
 The archive-wide migration does not require usernames or passwords. Users complete migration by opening their notebook with its original credentials. Back up both databases first.
+The command reports aggregate progress while it reads and validates the archive and stages its records; it never prints notebook or document identifiers, ciphertext, or note content.
 
 ## Development
 

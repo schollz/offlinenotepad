@@ -127,6 +127,8 @@ type LegacyArchiveResult struct {
 	PublicationsSkipped  int
 }
 
+type LegacyArchiveProgressFunc func(completed, total int)
+
 type queryAdapter interface {
 	CreateWorkspace(context.Context, Workspace) (bool, error)
 	GetWorkspace(context.Context, string) (Workspace, error)
@@ -362,6 +364,14 @@ func (s *Store) ImportLegacy(ctx context.Context, workspace Workspace, documents
 }
 
 func (s *Store) StageLegacyArchive(ctx context.Context, archive LegacyArchive, dryRun bool) (LegacyArchiveResult, error) {
+	return s.stageLegacyArchive(ctx, archive, dryRun, nil)
+}
+
+func (s *Store) StageLegacyArchiveWithProgress(ctx context.Context, archive LegacyArchive, dryRun bool, progress LegacyArchiveProgressFunc) (LegacyArchiveResult, error) {
+	return s.stageLegacyArchive(ctx, archive, dryRun, progress)
+}
+
+func (s *Store) stageLegacyArchive(ctx context.Context, archive LegacyArchive, dryRun bool, progress LegacyArchiveProgressFunc) (LegacyArchiveResult, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return LegacyArchiveResult{}, err
@@ -380,6 +390,17 @@ func (s *Store) StageLegacyArchive(ctx context.Context, archive LegacyArchive, d
 		publicationSelect = `SELECT COALESCE(legacy_id,''),COALESCE(document_id,''),title,content,content_mode FROM legacy_publications WHERE public_id=?1`
 	}
 	result := LegacyArchiveResult{}
+	total := len(archive.Workspaces) + len(archive.Publications)
+	for _, workspace := range archive.Workspaces {
+		total += len(workspace.Documents)
+	}
+	completed := 0
+	reportProgress := func() {
+		if progress != nil {
+			progress(completed, total)
+		}
+	}
+	reportProgress()
 	for _, workspace := range archive.Workspaces {
 		inserted, err := tx.ExecContext(ctx, workspaceInsert, workspace.LegacyID)
 		if err != nil {
@@ -391,6 +412,8 @@ func (s *Store) StageLegacyArchive(ctx context.Context, archive LegacyArchive, d
 		} else {
 			result.WorkspacesSkipped++
 		}
+		completed++
+		reportProgress()
 		for _, document := range workspace.Documents {
 			inserted, err = tx.ExecContext(ctx, documentInsert, workspace.LegacyID, document.DocumentID, document.Ciphertext, document.DocumentHash)
 			if err != nil {
@@ -399,6 +422,8 @@ func (s *Store) StageLegacyArchive(ctx context.Context, archive LegacyArchive, d
 			rows, _ = inserted.RowsAffected()
 			if rows == 1 {
 				result.DocumentsImported++
+				completed++
+				reportProgress()
 				continue
 			}
 			var ciphertext, hash string
@@ -409,6 +434,8 @@ func (s *Store) StageLegacyArchive(ctx context.Context, archive LegacyArchive, d
 				return result, fmt.Errorf("legacy document collision: %w", ErrExists)
 			}
 			result.DocumentsSkipped++
+			completed++
+			reportProgress()
 		}
 	}
 	for _, publication := range archive.Publications {
@@ -419,6 +446,8 @@ func (s *Store) StageLegacyArchive(ctx context.Context, archive LegacyArchive, d
 		rows, _ := inserted.RowsAffected()
 		if rows == 1 {
 			result.PublicationsImported++
+			completed++
+			reportProgress()
 			continue
 		}
 		var legacyID, documentID, title, content, mode string
@@ -429,6 +458,8 @@ func (s *Store) StageLegacyArchive(ctx context.Context, archive LegacyArchive, d
 			return result, fmt.Errorf("legacy publication collision: %w", ErrExists)
 		}
 		result.PublicationsSkipped++
+		completed++
+		reportProgress()
 	}
 	if dryRun {
 		if err := tx.Rollback(); err != nil {
