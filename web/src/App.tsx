@@ -1292,6 +1292,8 @@ function ProjectFooter() {
       <span>made by <a href="https://github.com/sponsors/schollz" rel="noreferrer" target="_blank">schollz</a></span>
       <span aria-hidden="true">·</span>
       <a href="https://github.com/schollz/offlinenotepad" rel="noreferrer" target="_blank">github</a>
+      <span aria-hidden="true">·</span>
+      <a href="https://disco.cloud/" rel="noreferrer" target="_blank">deployed with disco</a>
     </nav>
     <details className="tools-menu">
       <summary>other tools</summary>
