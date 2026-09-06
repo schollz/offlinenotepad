@@ -113,14 +113,14 @@ const keys: SessionKeys = {
 
 let online = true
 
-function stored(hash: string): StoredDocument {
+function stored(hash: string, revision = 0): StoredDocument {
   return {
     key: documentKey(metadata.id, 'document-one'),
     workspaceId: metadata.id,
     documentId: 'document-one',
     ciphertext: `cipher-${hash}`,
     ciphertextHash: hash,
-    revision: 0,
+    revision,
     deleted: false,
     updatedAt: new Date().toISOString(),
     pending: true,
@@ -220,6 +220,32 @@ describe('offline synchronization', () => {
     expect(socket.sent).toHaveLength(0)
     await vi.waitFor(() => expect(socket.sent).toHaveLength(1))
     expect(JSON.parse(socket.sent[0])).toMatchObject({ ciphertext: 'cipher-latest', ciphertext_hash: 'latest' })
+    client.close()
+  })
+
+  it('rebases typing that continues while an older mutation is in flight', async () => {
+    const client = new SyncClient(metadata, keys, callbacks())
+    client.connect()
+    const socket = FakeWebSocket.instances[0]
+    socket.emit('message', { data: JSON.stringify({ type: 'authenticated', documents: [], publications: [] }) })
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+
+    await queueDocument(stored('first', 1), 'upsert')
+    await client.flush()
+    expect(JSON.parse(socket.sent[0])).toMatchObject({ ciphertext_hash: 'first', base_revision: 1 })
+
+    await queueDocument(stored('latest', 1), 'upsert')
+    socket.emit('message', { data: JSON.stringify({ type: 'ack', documents: [wire('first', 2)] }) })
+
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(2))
+    expect(JSON.parse(socket.sent[1])).toMatchObject({ ciphertext_hash: 'latest', base_revision: 2 })
+    expect(await notebookDB.documents.where('workspaceId').equals(metadata.id).count()).toBe(1)
+
+    socket.emit('message', { data: JSON.stringify({ type: 'ack', documents: [wire('latest', 3)] }) })
+    await vi.waitFor(async () => expect(await notebookDB.outbox.count()).toBe(0))
+    expect(await notebookDB.documents.get(documentKey(metadata.id, 'document-one'))).toMatchObject({
+      ciphertextHash: 'latest', revision: 3, pending: false,
+    })
     client.close()
   })
 

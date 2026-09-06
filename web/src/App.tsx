@@ -186,7 +186,6 @@ export default function App() {
   const sessionRef = useRef<Session | null>(null)
   const dirtyRecords = useRef(new Map<string, PrivateRecord>())
   const dirtyHashes = useRef(new Map<string, string>())
-  const dirtyDocuments = useRef(new Map<string, StoredDocument>())
   const documentOperations = useRef(new Map<string, Promise<unknown>>())
   const pendingPublicationAnalytics = useRef(new Map<string, 'create' | 'update'>())
   const pendingUnpublicationAnalytics = useRef(new Set<string>())
@@ -285,7 +284,6 @@ export default function App() {
       const persisted = await notebookDB.documents.get(stored.key) ?? stored
       if (dirtyRecords.current.get(record.id) === record) {
         dirtyHashes.current.set(record.id, encrypted.hash)
-        dirtyDocuments.current.set(record.id, persisted)
       }
       if (isFolderRecord(record)) {
         setFolders((current) => {
@@ -310,28 +308,12 @@ export default function App() {
     syncRef.current?.scheduleFlush()
   }, [runDocumentOperation])
 
-  const createConflictCopy = useCallback((active: Session, local: StoredDocument): StoredDocument => {
-    const old = decryptRecord(local.ciphertext, active.metadata.id, local.documentId, active.keys.contentKey)
-    const now = new Date().toISOString()
-    const stableHash = local.ciphertextHash.replace(/\+/gu, '-').replace(/\//gu, '_').replace(/=+$/gu, '')
-    const conflictLabel = new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(new Date())
-    const copy: PrivateRecord = isFolderRecord(old)
-      ? { ...old, id: `conflict-${stableHash}`, name: `${old.name} (conflict ${conflictLabel})`, created_at: now, updated_at: now }
-      : { ...old, id: `conflict-${stableHash}`, title: `${old.title || 'Untitled'} (conflict ${conflictLabel})`, created_at: now, updated_at: now }
-    const encrypted = encryptRecord(copy, active.metadata.id, active.keys.contentKey)
-    return {
-      key: documentKey(active.metadata.id, copy.id), workspaceId: active.metadata.id, documentId: copy.id,
-      ciphertext: encrypted.ciphertext, ciphertextHash: encrypted.hash, revision: 0, deleted: false, pending: true, updatedAt: now,
-    }
-  }, [])
-
   const closeSession = useCallback((keys: SessionKeys | null, message = '') => {
     syncRef.current?.close()
     syncRef.current = null
     clearKeys(keys)
     dirtyRecords.current.clear()
     dirtyHashes.current.clear()
-    dirtyDocuments.current.clear()
     pendingPublicationAnalytics.current.clear()
     pendingUnpublicationAnalytics.current.clear()
     notesRef.current = []
@@ -361,28 +343,18 @@ export default function App() {
         let dirtyRecord: PrivateRecord | undefined
         const result = await runDocumentOperation(key, () => {
           dirtyRecord = dirtyRecords.current.get(wire.document_id)
-          const dirtyDocument = dirtyDocuments.current.get(wire.document_id)
-          return reconcileDocument(
-            storedFromWire(active.metadata.id, wire),
-            source,
-            (local) => createConflictCopy(active, local),
-            dirtyDocument,
-          )
+          return reconcileDocument(storedFromWire(active.metadata.id, wire), source)
         })
         if (result.kind === 'inconsistent') {
           setError('Synchronization stopped for a document because the server returned inconsistent encrypted data.')
           continue
         }
-        if (result.kind === 'rebased' || result.kind === 'conflict-preserved') shouldFlush = true
-        if (result.kind === 'accepted' || result.kind === 'conflict-preserved') {
+        if (result.kind === 'rebased') shouldFlush = true
+        if (result.kind === 'accepted') {
           if (dirtyRecords.current.get(wire.document_id) === dirtyRecord) {
             dirtyRecords.current.delete(wire.document_id)
             dirtyHashes.current.delete(wire.document_id)
-            dirtyDocuments.current.delete(wire.document_id)
           }
-        }
-        if (result.kind === 'conflict-preserved' && result.conflictCreated) {
-          showToast('A simultaneous edit was preserved as a conflict copy.')
         }
       }
       await refreshLocal(active)
@@ -441,7 +413,7 @@ export default function App() {
     })
     syncRef.current = client
     client.connect()
-  }, [closeSession, createConflictCopy, refreshLocal, runDocumentOperation, showToast])
+  }, [closeSession, refreshLocal, runDocumentOperation, showToast])
 
   useEffect(() => {
     let cancelled = false
@@ -673,7 +645,6 @@ export default function App() {
       trackEvent({ event: 'note-delete', outcome: 'success' }, 'note')
       dirtyRecords.current.delete(noteId)
       dirtyHashes.current.delete(noteId)
-      dirtyDocuments.current.delete(noteId)
       const updated = notesRef.current.filter((item) => item.note.id !== noteId)
       notesRef.current = updated
       setNotes(updated)
@@ -798,7 +769,6 @@ export default function App() {
       for (const id of [...deletedFolderIds, ...deletedNotes.map(({ note }) => note.id)]) {
         dirtyRecords.current.delete(id)
         dirtyHashes.current.delete(id)
-        dirtyDocuments.current.delete(id)
       }
       const remainingFolders = foldersRef.current.filter(({ folder: candidate }) => !deletedFolderIds.has(candidate.id))
       const remainingNotes = notesRef.current.filter(({ note }) => !note.folder_id || !deletedFolderIds.has(note.folder_id))

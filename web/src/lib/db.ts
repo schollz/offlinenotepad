@@ -4,9 +4,7 @@ import type { KdfMetadata, OutboxEntry, SessionKeys, StoredDocument } from '../t
 export type DocumentSource = 'ack' | 'remote' | 'conflict' | 'initial'
 
 export interface ReconcileResult {
-  kind: 'accepted' | 'rebased' | 'unchanged' | 'stale' | 'conflict-preserved' | 'inconsistent'
-  conflictDocumentId?: string
-  conflictCreated?: boolean
+  kind: 'accepted' | 'rebased' | 'unchanged' | 'stale' | 'inconsistent'
 }
 
 interface LocalAccount extends KdfMetadata {
@@ -164,8 +162,6 @@ export async function claimNextOutbox(workspaceId: string): Promise<OutboxEntry 
 export async function reconcileDocument(
   document: StoredDocument,
   source: DocumentSource,
-  createConflictCopy?: (local: StoredDocument) => StoredDocument,
-  localCandidate?: StoredDocument,
 ): Promise<ReconcileResult> {
   return notebookDB.transaction('rw', notebookDB.documents, notebookDB.outbox, async () => {
     const local = await notebookDB.documents.get(document.key)
@@ -179,60 +175,38 @@ export async function reconcileDocument(
       if (!sameOperation || !sameCiphertext) return { kind: 'inconsistent' } satisfies ReconcileResult
     }
 
-    let conflictDocumentId: string | undefined
-    let conflictCreated = false
-    const preserve = async (candidate: StoredDocument): Promise<void> => {
-      if (!createConflictCopy) throw new Error('A conflict copy is required to reconcile this document.')
-      const conflict = createConflictCopy(candidate)
-      conflictDocumentId = conflict.documentId
-      if (await notebookDB.documents.get(conflict.key)) return
-      await notebookDB.documents.put({ ...conflict, pending: true })
-      await notebookDB.outbox.add({
-        key: conflict.key,
-        workspaceId: conflict.workspaceId,
-        documentId: conflict.documentId,
-        operation: 'upsert',
-        ciphertext: conflict.ciphertext,
-        ciphertextHash: conflict.ciphertextHash,
-        baseRevision: conflict.revision,
-        createdAt: conflict.updatedAt,
-      })
-      conflictCreated = true
-    }
-    const finish = (kind: Exclude<ReconcileResult['kind'], 'conflict-preserved'>): ReconcileResult => (
-      conflictDocumentId
-        ? { kind: 'conflict-preserved', conflictDocumentId, conflictCreated }
-        : { kind }
-    )
-
-    const candidateDiffersFromRemote = localCandidate
-      && !localCandidate.deleted
-      && !matchesRemote({ operation: 'upsert', ciphertextHash: localCandidate.ciphertextHash }, document)
-    const candidateMatchesQueue = localCandidate && queued
-      && matchesRemote(queued, localCandidate)
-    if (candidateDiffersFromRemote && !candidateMatchesQueue) await preserve(localCandidate)
-
     if (queued) {
       if (matchesRemote(queued, document)) {
         await notebookDB.documents.put({ ...document, pending: false })
         await notebookDB.outbox.delete(queued.id!)
-        return finish('accepted')
+        return { kind: 'accepted' }
       }
 
       const sent = queued.sentMutation
       if (sent && matchesRemote(sent, document) && document.revision > sent.baseRevision) {
         await notebookDB.documents.put(queuedDocument(queued, document.revision))
         await notebookDB.outbox.put({ ...queued, baseRevision: document.revision, sentMutation: undefined })
-        return finish('rebased')
+        return { kind: 'rebased' }
       }
 
       if (source === 'ack' && document.revision >= queued.baseRevision) {
         await notebookDB.documents.put(queuedDocument(queued, document.revision))
         await notebookDB.outbox.put({ ...queued, baseRevision: document.revision, sentMutation: undefined })
-        return finish('rebased')
+        return { kind: 'rebased' }
       }
 
       if (source === 'conflict' && document.revision === queued.baseRevision) {
+        if (document.deleted) {
+          await notebookDB.documents.put({ ...document, pending: false })
+          await notebookDB.outbox.delete(queued.id!)
+          return { kind: 'accepted' }
+        }
+        if (!sent) {
+          // A broadcast may rebase the queue before the conflict response for
+          // the original send arrives. The response is then already accounted
+          // for, so leave the latest local mutation queued at this revision.
+          return { kind: 'unchanged' }
+        }
         // A conflict at the exact base revision violates the optimistic-revision
         // contract. Keep the encrypted local record, but stop retrying it forever.
         await notebookDB.outbox.delete(queued.id!)
@@ -240,28 +214,27 @@ export async function reconcileDocument(
       }
 
       if (document.revision <= queued.baseRevision) {
-        return finish('unchanged')
+        return { kind: 'unchanged' }
       }
 
-      if (queued.operation === 'delete') {
-        await notebookDB.documents.put(queuedDocument(queued, document.revision))
-        await notebookDB.outbox.put({ ...queued, baseRevision: document.revision, sentMutation: undefined })
-        return finish('rebased')
+      if (document.deleted) {
+        await notebookDB.documents.put({ ...document, pending: false })
+        await notebookDB.outbox.delete(queued.id!)
+        return { kind: 'accepted' }
       }
 
-      await preserve(local ?? queuedDocument(queued, queued.baseRevision))
-      await notebookDB.documents.put({ ...document, pending: false })
-      await notebookDB.outbox.delete(queued.id!)
-      return { kind: 'conflict-preserved', conflictDocumentId, conflictCreated }
+      await notebookDB.documents.put(queuedDocument(queued, document.revision))
+      await notebookDB.outbox.put({ ...queued, baseRevision: document.revision, sentMutation: undefined })
+      return { kind: 'rebased' }
     }
 
     if (local) {
       if (document.revision === local.revision) {
-        if (!local.pending) return finish('unchanged')
+        if (!local.pending) return { kind: 'unchanged' }
       }
     }
     await notebookDB.documents.put({ ...document, pending: false })
-    return finish('accepted')
+    return { kind: 'accepted' }
   })
 }
 

@@ -182,7 +182,7 @@ test('mobile layout uses a drawer and preserves editor access', async ({ page },
   await expect(page.getByLabel('Note content')).toBeVisible()
 })
 
-test('preserves simultaneous offline edits as a conflict copy', async ({ page, browser }, testInfo) => {
+test('rebases an offline edit in place without creating a duplicate note', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name === 'mobile', 'desktop multi-device scenario')
   const name = notebookName('conflict')
   await createNotebook(page, name)
@@ -202,15 +202,15 @@ test('preserves simultaneous offline edits as a conflict copy', async ({ page, b
   await page.getByLabel('Note content').fill('Server edit from the first device.')
   await expect(page.getByText('Synced', { exact: true })).toBeVisible()
   await secondContext.setOffline(false)
-  const conflict = second.getByRole('button', { name: /Shared note \(conflict/ })
-  await expect(conflict).toHaveCount(1)
-  await expect(conflict).toBeVisible()
-  await conflict.click()
+  await expect(second.getByText('Synced', { exact: true })).toBeVisible()
+  await expect(second.locator('.note-title')).toHaveCount(1)
+  await second.getByRole('button', { name: /Shared note/ }).click()
   await expect(second.getByLabel('Note content')).toContainText('Unsent edit from the second device.')
+  await expect(page.getByLabel('Note content')).toContainText('Unsent edit from the second device.')
   await secondContext.close()
 })
 
-test('coordinates same-browser tabs without multiplying conflicts and transfers the sender lock', async ({ page }, testInfo) => {
+test('coordinates same-browser tabs without duplicate notes and transfers the sender lock', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'mobile', 'desktop multi-tab scenario')
   await createNotebook(page, notebookName('same-browser-tabs'))
   await createNote(page, 'Shared tab note')
@@ -239,11 +239,16 @@ test('coordinates same-browser tabs without multiplying conflicts and transfers 
     page.getByLabel('Note content').fill('Concurrent edit from the first tab.'),
     second.getByLabel('Note content').fill('Concurrent edit from the second tab.'),
   ])
-  await expect(conflicts(page)).toHaveCount(1)
-  await expect(conflicts(second)).toHaveCount(1)
+  await expect(conflicts(page)).toHaveCount(0)
+  await expect(conflicts(second)).toHaveCount(0)
   await page.waitForTimeout(2_000)
-  await expect(conflicts(page)).toHaveCount(1)
-  await expect(conflicts(second)).toHaveCount(1)
+  await expect(conflicts(page)).toHaveCount(0)
+  await expect(conflicts(second)).toHaveCount(0)
+  await expect.poll(async () => {
+    const firstContent = await page.getByLabel('Note content').textContent()
+    const secondContent = await second.getByLabel('Note content').textContent()
+    return firstContent === secondContent ? firstContent : ''
+  }).toMatch(/Concurrent edit from the (first|second) tab\./u)
 
   await page.close()
   await mainNote(second).click()
@@ -252,7 +257,7 @@ test('coordinates same-browser tabs without multiplying conflicts and transfers 
   await second.reload()
   await mainNote(second).click()
   await expect(second.getByLabel('Note content')).toContainText('Saved after the original sender tab closed.')
-  await expect(conflicts(second)).toHaveCount(1)
+  await expect(conflicts(second)).toHaveCount(0)
 })
 
 test('rotates credentials and requires the new password', async ({ page }, testInfo) => {
