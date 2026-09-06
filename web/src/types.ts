@@ -15,9 +15,21 @@ export interface NoteContent {
   title: string
   content: string
   mode: ContentMode
+  folder_id?: string | null
   created_at: string
   updated_at: string
 }
+
+export interface FolderContent {
+  record_type: 'folder'
+  id: string
+  name: string
+  parent_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type PrivateRecord = NoteContent | FolderContent
 
 export interface StoredDocument {
   key: string

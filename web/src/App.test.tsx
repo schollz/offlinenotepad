@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { decryptRecord } from './lib/crypto'
 import { getLogin, notebookDB, saveLogin } from './lib/db'
 import { toBase64 } from './lib/encoding'
 
@@ -124,5 +125,41 @@ describe('landing and notebook access experience', () => {
     fireEvent.click(screen.getByRole('button', { name: /Log out/ }))
     expect(await screen.findByLabelText('Notebook name')).toBeInTheDocument()
     await waitFor(async () => expect(await getLogin()).toBeUndefined())
+  })
+
+  it('creates a folder and saves a new note inside it before synchronization', async () => {
+    const contentKey = new Uint8Array(32).fill(8)
+    const authPublicKey = new Uint8Array(32).fill(3)
+    await saveLogin({
+      username: 'folder-notebook',
+      metadata: {
+        id: 'folder-workspace', kdf_version: 1, kdf_salt: 'salt', kdf_memory: 65_536,
+        kdf_iterations: 3, kdf_parallelism: 1, auth_public_key: toBase64(authPublicKey),
+      },
+      keys: { contentKey, authSeed: new Uint8Array(32).fill(2), authPublicKey },
+    })
+    vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false)
+
+    render(<MemoryRouter><App /></MemoryRouter>)
+    expect(await screen.findByRole('button', { name: 'Create your first note' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'New folder' }))
+    fireEvent.change(screen.getByLabelText('Folder name'), { target: { value: 'Projects' } })
+    fireEvent.click(screen.getAllByRole('button', { name: /^New folder$/u }).at(-1)!)
+    expect(await screen.findByRole('button', { name: /^Projects$/u })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Projects$/u }))
+    fireEvent.click(screen.getByRole('button', { name: 'New note' }))
+    fireEvent.change(await screen.findByLabelText('Note title'), { target: { value: 'Launch plan' } })
+
+    await waitFor(async () => {
+      const documents = await notebookDB.documents.where('workspaceId').equals('folder-workspace').toArray()
+      const records = documents.map((document) => decryptRecord(document.ciphertext, 'folder-workspace', document.documentId, contentKey))
+      const folder = records.find((record) => 'record_type' in record && record.record_type === 'folder')
+      const note = records.find((record) => !('record_type' in record))
+      expect(folder).toMatchObject({ name: 'Projects' })
+      expect(note).toMatchObject({ title: 'Launch plan', folder_id: folder?.id })
+      expect(documents.every((document) => document.pending)).toBe(true)
+    })
+    expect(screen.getByText('Saved offline', { exact: true })).toBeInTheDocument()
   })
 })

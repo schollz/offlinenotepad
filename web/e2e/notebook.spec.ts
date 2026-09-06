@@ -121,6 +121,43 @@ test('starts offline from the cached shell and saves locally before reconnecting
   await expect(page.getByText('Synced', { exact: true })).toBeVisible()
 })
 
+test('organizes notes in nested encrypted folders and moves them accessibly', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile', 'covered by the desktop folder workflow')
+  await createNotebook(page, notebookName('folders'))
+
+  await page.getByRole('button', { name: 'New folder', exact: true }).click()
+  await page.getByLabel('Folder name').fill('Projects')
+  await page.getByRole('button', { name: 'New folder', exact: true }).last().click()
+  const projects = page.locator('.folder-tree-row').filter({ hasText: /^Projects/u })
+  await expect(projects).toBeVisible()
+
+  await projects.locator('..').getByRole('button', { name: 'More actions' }).click()
+  await page.getByRole('menuitem', { name: 'New subfolder' }).click()
+  await page.getByLabel('Folder name').fill('Research')
+  await page.getByRole('button', { name: 'New folder', exact: true }).last().click()
+  await expect(page.locator('.folder-tree-row').filter({ hasText: /^Research/u })).toBeVisible()
+
+  await page.getByRole('button', { name: 'New note', exact: true }).first().click()
+  await page.getByLabel('Note title').fill('Folder design')
+  await page.getByRole('button', { name: 'Source', exact: true }).click()
+  await page.getByLabel('Note content').fill('Nested folder content')
+  await expect(page.getByRole('button', { name: 'Projects / Research' })).toBeVisible()
+  await expect(page.getByText('Synced', { exact: true })).toBeVisible()
+
+  await page.getByLabel('Search notes').fill('Research')
+  await expect(page.locator('.note-title', { hasText: /^Folder design$/u })).toBeVisible()
+  await page.getByLabel('Search notes').fill('')
+
+  await page.getByRole('button', { name: 'Projects / Research' }).click()
+  await page.getByRole('option', { name: 'Projects', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Projects', exact: true })).toBeVisible()
+  await expect(page.getByText('Synced', { exact: true })).toBeVisible()
+  await page.reload()
+  await expect(page.locator('.note-title', { hasText: /^Folder design$/u })).toBeVisible()
+  await page.locator('.note-title', { hasText: /^Folder design$/u }).click()
+  await expect(page.getByRole('button', { name: 'Projects', exact: true })).toBeVisible()
+})
+
 test('restores the saved browser login and removes it on logout', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'mobile', 'covered by the desktop credential flow')
   await createNotebook(page, notebookName('saved-login'))
@@ -140,7 +177,7 @@ test('mobile layout uses a drawer and preserves editor access', async ({ page },
   await createNotebook(page, notebookName('mobile'))
   await createNote(page, 'Pocket note')
   await page.getByRole('button', { name: 'Open notes' }).click()
-  await expect(page.getByRole('complementary', { name: 'Notes' })).toBeVisible()
+  await expect(page.getByRole('complementary', { name: 'Files' })).toBeVisible()
   await page.getByRole('button', { name: /Pocket note/ }).click()
   await expect(page.getByLabel('Note content')).toBeVisible()
 })

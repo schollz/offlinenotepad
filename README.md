@@ -2,9 +2,11 @@
 
 Offline Notepad is a minimal, offline-first notebook that securely syncs across browsers and devices.
 
-**Offline-first.** Notes are saved to IndexedDB before network synchronization, so editing and searching work without a connection.
+**Offline-first.** Notes and folders are saved to IndexedDB before network synchronization, so organizing, editing, and searching work without a connection.
 
-**Private.** Notes are encrypted in the browser with XChaCha20-Poly1305. Passwords, private keys, and plaintext notes never reach the server. There is no password recovery.
+**Private.** Notes and folder metadata are encrypted in the browser with XChaCha20-Poly1305. Passwords, private keys, folder names, and plaintext notes never reach the server. There is no password recovery.
+
+**Organized.** Nested folders, a compact file tree, drag-and-drop, and accessible move controls keep larger notebooks easy to navigate.
 
 **Simple.** Any notebook name and non-empty password opens an existing notebook or creates a new one. A saved browser login reopens automatically until you log out.
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js'
 import { sha256 } from '@noble/hashes/sha2.js'
-import { decryptNote, encryptNote, normalizeUsername, signChallenge, workspaceID } from './crypto'
+import { decryptNote, decryptRecord, encryptNote, encryptRecord, normalizeUsername, signChallenge, workspaceID } from './crypto'
 import { encoder, fromBase64, toBase64 } from './encoding'
 import { deriveKeyMaterial } from './key-material'
 
@@ -35,6 +35,19 @@ describe('zero-knowledge cryptography', () => {
     expect(encrypted.ciphertext).not.toContain(note.content)
     expect(decryptNote(encrypted.ciphertext, golden.workspace, note.id, keys.contentKey)).toEqual(note)
     expect(() => decryptNote(encrypted.ciphertext, golden.workspace, 'different', keys.contentKey)).toThrow()
+  })
+
+  it('encrypts folder names and hierarchy with the same authenticated document contract', () => {
+    const keys = deriveKeyMaterial('correct horse battery staple', fromBase64(golden.salt), 32_768, 1, 1)
+    const folder = {
+      record_type: 'folder' as const, id: 'folder-projects', name: 'Secret projects', parent_id: 'folder-work',
+      created_at: '2020-01-01T00:00:00Z', updated_at: '2020-01-01T00:00:00Z',
+    }
+    const encrypted = encryptRecord(folder, golden.workspace, keys.contentKey)
+    expect(encrypted.ciphertext).not.toContain(folder.name)
+    expect(encrypted.ciphertext).not.toContain(folder.parent_id)
+    expect(decryptRecord(encrypted.ciphertext, golden.workspace, folder.id, keys.contentKey)).toEqual(folder)
+    expect(() => decryptNote(encrypted.ciphertext, golden.workspace, folder.id, keys.contentKey)).toThrow(/not a note/i)
   })
 
   it('matches the Go encrypted-envelope golden byte for byte', () => {

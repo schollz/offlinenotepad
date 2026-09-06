@@ -27,7 +27,7 @@
 
 ## Version control
 
-- Use plain Git for all version-control operations. Do not use GitButler.
+- Use Git directly for all version-control operations, including status, diffs, branches, commits, and pushes. Never use GitButler or its `but` CLI.
 - Write semantic commit messages using Conventional Commit prefixes such as `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, and `chore:`.
 
 ## Before handing off

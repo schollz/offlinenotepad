@@ -2,7 +2,7 @@ import { xchacha20poly1305 } from '@noble/ciphers/chacha.js'
 import { ed25519 } from '@noble/curves/ed25519.js'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { caseFold } from 'unicode-case-folding'
-import type { KdfMetadata, NoteContent, SessionKeys } from '../types'
+import type { KdfMetadata, NoteContent, PrivateRecord, SessionKeys } from '../types'
 import { concat, decoder, encoder, fromBase64, toBase64 } from './encoding'
 
 const workspaceContext = 'offlinenotepad workspace v2\u0000'
@@ -52,22 +52,32 @@ function aad(workspace: string, document: string): Uint8Array {
   return encoder.encode(`offlinenotepad document v2\u0000${workspace}\u0000${document}`)
 }
 
-export function encryptNote(note: NoteContent, workspace: string, key: Uint8Array): { ciphertext: string; hash: string } {
+export function encryptRecord(record: PrivateRecord, workspace: string, key: Uint8Array): { ciphertext: string; hash: string } {
   const nonce = crypto.getRandomValues(new Uint8Array(24))
-  const cipher = xchacha20poly1305(key, nonce, aad(workspace, note.id))
-  const encrypted = cipher.encrypt(encoder.encode(JSON.stringify(note)))
+  const cipher = xchacha20poly1305(key, nonce, aad(workspace, record.id))
+  const encrypted = cipher.encrypt(encoder.encode(JSON.stringify(record)))
   const envelope = `${envelopeBegin}\n${JSON.stringify({ v: 2, cipher: 'xchacha20-poly1305', nonce: toBase64(nonce), data: toBase64(encrypted) })}\n${envelopeEnd}`
   return { ciphertext: envelope, hash: toBase64(sha256(encoder.encode(envelope))) }
 }
 
-export function decryptNote(ciphertext: string, workspace: string, document: string, key: Uint8Array): NoteContent {
+export function decryptRecord(ciphertext: string, workspace: string, document: string, key: Uint8Array): PrivateRecord {
   const body = ciphertext.trim().replace(envelopeBegin, '').replace(envelopeEnd, '').trim()
   const envelope = JSON.parse(body) as { v: number; cipher: string; nonce: string; data: string }
   if (envelope.v !== 2 || envelope.cipher !== 'xchacha20-poly1305') throw new Error('Unsupported encrypted note format.')
   const cipher = xchacha20poly1305(key, fromBase64(envelope.nonce), aad(workspace, document))
-  const note = JSON.parse(decoder.decode(cipher.decrypt(fromBase64(envelope.data)))) as NoteContent
-  if (note.id !== document) throw new Error('Encrypted note identifier does not match.')
-  return note
+  const record = JSON.parse(decoder.decode(cipher.decrypt(fromBase64(envelope.data)))) as PrivateRecord
+  if (record.id !== document) throw new Error('Encrypted document identifier does not match.')
+  return record
+}
+
+export function encryptNote(note: NoteContent, workspace: string, key: Uint8Array): { ciphertext: string; hash: string } {
+  return encryptRecord(note, workspace, key)
+}
+
+export function decryptNote(ciphertext: string, workspace: string, document: string, key: Uint8Array): NoteContent {
+  const record = decryptRecord(ciphertext, workspace, document, key)
+  if ('record_type' in record && record.record_type === 'folder') throw new Error('Encrypted document is not a note.')
+  return record as NoteContent
 }
 
 export function signChallenge(challenge: string, seed: Uint8Array): string {
