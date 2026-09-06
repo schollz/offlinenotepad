@@ -301,6 +301,16 @@ function addCodeLineClasses(state: EditorState, ranges: Range<Decoration>[], nod
   }
 }
 
+function addCodeSpellcheckAttributes(state: EditorState, ranges: Range<Decoration>[], node: SyntaxNode): void {
+  let line = state.doc.lineAt(node.from)
+  const lastNumber = state.doc.lineAt(node.to).number
+  while (line.number <= lastNumber) {
+    ranges.push(Decoration.line({ attributes: { spellcheck: 'false' } }).range(line.from))
+    if (line.number === lastNumber) break
+    line = state.doc.line(line.number + 1)
+  }
+}
+
 function imageData(state: EditorState, node: SyntaxNode): { source: string, alt: string, title: string } | null {
   const url = node.getChild('URL')
   const markers = node.getChildren('LinkMark')
@@ -454,6 +464,26 @@ export function buildLivePreviewDecorations(state: EditorState): DecorationSet {
   return Decoration.set(ranges, true)
 }
 
+function buildCodeSpellcheckDecorations(state: EditorState): DecorationSet {
+  const ranges: Range<Decoration>[] = []
+  syntaxTree(state).iterate({
+    enter(node) {
+      if (node.name === 'FencedCode' || node.name === 'CodeBlock') {
+        addCodeSpellcheckAttributes(state, ranges, node.node)
+      }
+    },
+  })
+  return Decoration.set(ranges, true)
+}
+
+const codeSpellcheckField = StateField.define<DecorationSet>({
+  create: buildCodeSpellcheckDecorations,
+  update(decorations, transaction) {
+    return transaction.docChanged ? buildCodeSpellcheckDecorations(transaction.state) : decorations
+  },
+  provide: (field) => EditorView.decorations.from(field),
+})
+
 const livePreviewField = StateField.define<DecorationSet>({
   create: buildLivePreviewDecorations,
   update(decorations, transaction) {
@@ -465,6 +495,7 @@ const livePreviewField = StateField.define<DecorationSet>({
 })
 
 export const livePreview: Extension = livePreviewField
+export const disableCodeSpellcheck: Extension = codeSpellcheckField
 
 export function safeImageSource(source: string, base = globalThis.location?.href ?? 'http://localhost/'): string | null {
   const value = source.trim().replace(/^<|>$/gu, '')

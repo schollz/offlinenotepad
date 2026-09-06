@@ -9,7 +9,7 @@ import { tags } from '@lezer/highlight'
 import { GFM } from '@lezer/markdown'
 import { insertLink, toggleBold, toggleInlineCode, toggleItalic, toggleStrikethrough } from './commands'
 import { codeLanguages } from './languages'
-import { livePreview, openLiveLink } from './livePreview'
+import { disableCodeSpellcheck, livePreview, openLiveLink } from './livePreview'
 
 export type MarkdownEditorMode = 'live' | 'source'
 
@@ -45,11 +45,11 @@ const markdownHighlightStyle = HighlightStyle.define([
   { tag: tags.url, color: 'var(--blue)' },
   { tag: tags.monospace, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' },
   { tag: tags.keyword, color: 'var(--syntax-purple)' },
-  { tag: [tags.string, tags.special(tags.string)], color: 'var(--syntax-green)' },
-  { tag: [tags.number, tags.bool, tags.null], color: 'var(--syntax-orange)' },
+  { tag: [tags.string, tags.regexp, tags.escape, tags.special(tags.string)], color: 'var(--syntax-green)' },
+  { tag: [tags.number, tags.bool, tags.null, tags.atom], color: 'var(--syntax-orange)' },
   { tag: [tags.comment, tags.meta], color: '#7f8a9a', fontStyle: 'italic' },
-  { tag: [tags.typeName, tags.className], color: 'var(--syntax-yellow)' },
-  { tag: [tags.function(tags.variableName), tags.definition(tags.variableName)], color: 'var(--syntax-blue)' },
+  { tag: [tags.typeName, tags.className, tags.namespace, tags.tagName], color: 'var(--syntax-yellow)' },
+  { tag: [tags.variableName, tags.propertyName, tags.attributeName, tags.labelName, tags.macroName], color: 'var(--syntax-blue)' },
   { tag: [tags.operator, tags.punctuation], color: '#abb2bf' },
 ])
 
@@ -105,6 +105,7 @@ export function MarkdownEditor({ documentId, value, mode, onChange }: MarkdownEd
             : LanguageDescription.matchLanguageName(codeLanguages, info),
         }),
         syntaxHighlighting(markdownHighlightStyle),
+        disableCodeSpellcheck,
         formattingKeymap,
         openLiveLink,
         viewMode.of(modeRef.current === 'live' ? livePreview : []),
