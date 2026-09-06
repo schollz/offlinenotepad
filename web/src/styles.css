@@ -168,6 +168,9 @@ kbd { padding: 2px 6px; border: 1px solid #ffffff55; border-radius: 5px; font-fa
 .search-box input { min-width: 0; flex: 1; border: 0; color: var(--text); background: transparent; font-size: .8rem; outline: 0; }
 .file-tree { min-height: 0; flex: 1; overflow: auto; padding: 1px 8px 16px; }
 .tree-section-label { padding: 7px 10px 6px; color: var(--faint); font-size: .64rem; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.tree-root-label { display: block; width: 100%; border: 0; border-radius: 7px; text-align: left; background: transparent; cursor: pointer; }
+.tree-root-label:hover, .tree-root-label:focus-visible { color: var(--text); background: color-mix(in srgb, var(--surface) 72%, transparent); }
+.tree-root-label.drop-target { color: var(--blue); background: color-mix(in srgb, var(--blue) 11%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--blue) 45%, transparent); }
 .tree-row-wrap { --tree-depth: 0; position: relative; display: flex; min-width: 0; align-items: center; padding-left: calc(var(--tree-depth) * 17px); border-radius: 8px; }
 .tree-row-wrap.drop-target { background: color-mix(in srgb, var(--blue) 11%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--blue) 45%, transparent); }
 .tree-row { display: flex; min-width: 0; height: 34px; flex: 1; align-items: center; gap: 7px; padding: 0 7px; border: 0; border-radius: 7px; color: var(--muted); text-align: left; background: transparent; cursor: pointer; transition: color .14s ease, background .14s ease; }
@@ -179,9 +182,8 @@ kbd { padding: 2px 6px; border: 1px solid #ffffff55; border-radius: 5px; font-fa
 .tree-toggle svg { width: 14px; transition: transform .14s ease; }
 .tree-toggle svg.open { transform: rotate(90deg); }
 .note-tree-row { margin-left: 23px; }
-.root-tree-row { margin-left: 23px; font-weight: 500; }
 .tree-item-icon { width: 16px; height: 16px; flex: 0 0 16px; color: var(--faint); }
-.folder-tree-row .tree-item-icon, .root-tree-row .tree-item-icon { color: color-mix(in srgb, var(--blue) 74%, var(--muted)); }
+.folder-tree-row .tree-item-icon { color: color-mix(in srgb, var(--blue) 74%, var(--muted)); }
 .tree-label { display: grid; min-width: 0; flex: 1; gap: 1px; }
 .tree-label > span { overflow: hidden; font-size: .78rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .tree-label small { overflow: hidden; color: var(--faint); font-size: .62rem; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }

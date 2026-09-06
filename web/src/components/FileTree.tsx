@@ -9,7 +9,6 @@ import {
   FolderOpen,
   FolderPen,
   FolderPlus,
-  FolderRoot,
   MoreHorizontal,
   Move,
   Trash2,
@@ -246,20 +245,15 @@ export function FileTree(props: FileTreeProps) {
   }
 
   return <nav className="file-tree" aria-label="Files and folders">
-    <div className="tree-section-label">Files</div>
-    <div
-      className={`tree-row-wrap root-drop ${dropTarget === null ? 'drop-target' : ''}`}
-      style={{ '--tree-depth': 0 } as CSSProperties}
+    <button
+      className={`tree-section-label tree-root-label ${dropTarget === null ? 'drop-target' : ''}`}
+      aria-label="Show top-level files"
+      title="Show top-level files"
+      onClick={() => props.onSelectFolder(null)}
       onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropTarget(null) }}
       onDragLeave={() => setDropTarget(undefined)}
       onDrop={(event) => { setDropTarget(undefined); dropOnFolder(event, null, props.onDropItem) }}
-    >
-      <button className={`tree-row root-tree-row ${props.activeFolderId === null ? 'active' : ''}`} onClick={() => props.onSelectFolder(null)}>
-        <FolderRoot className="tree-item-icon" />
-        <span className="tree-label"><span>Notes</span></span>
-        <span className="tree-count">{props.notes.length}</span>
-      </button>
-    </div>
+    >Files</button>
     {(childFolders.get(null) ?? []).map((folder) => folderRow(folder, 0))}
     {(childNotes.get(null) ?? []).map((note) => noteRow(note, 0))}
     {!props.notes.length && !props.folders.length && <div className="empty-list"><FileText /><span>Your notes and folders will appear here</span></div>}
