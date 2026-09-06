@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" prefix="og: https://ogp.me/ns# article: https://ogp.me/ns/article#">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,8 +9,9 @@
     <meta name="keywords" content="{{.Keywords}}" />
     <meta name="robots" content="{{.Robots}}" />
     <meta name="googlebot" content="{{.Robots}}" />
-    <link rel="icon" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any" />
     <link rel="canonical" href="{{.CanonicalURL}}" />
+    <link rel="alternate" type="application/atom+xml" title="Offline Notepad Blog" href="{{.FeedURL}}" />
     <meta property="og:type" content="{{.OpenGraphType}}" />
     <meta property="og:locale" content="en_US" />
     <meta property="og:site_name" content="Offline Notepad" />
@@ -24,19 +25,21 @@
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="{{.SocialImageAlt}}" />
     {{if .ModifiedAt}}<meta property="article:modified_time" content="{{.ModifiedAt}}" />{{end}}
+    {{if .ModifiedAt}}<meta property="og:updated_time" content="{{.ModifiedAt}}" />{{end}}
+    {{if .ArticleSection}}<meta property="article:section" content="{{.ArticleSection}}" />{{end}}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="{{.PageTitle}}" />
     <meta name="twitter:description" content="{{.Description}}" />
     <meta name="twitter:image" content="{{.SocialImageURL}}" />
     <meta name="twitter:image:alt" content="{{.SocialImageAlt}}" />
-    <script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>
+    {{if .StructuredData}}<script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>{{end}}
     <title>{{.PageTitle}}</title>
     <link rel="stylesheet" href="/src/public.css" />
   </head>
   <body>
     <header class="public-header">
       <a href="/" class="public-brand"><img src="/favicon.svg" alt="" /> Offline Notepad</a>
-      <a href="{{.RawURL}}" class="raw-link">View raw</a>
+      <a href="{{.RawURL}}" class="raw-link" rel="nofollow">View raw</a>
     </header>
     <main class="public-note">
       <p class="eyebrow">Shared snapshot</p>

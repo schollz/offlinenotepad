@@ -29,7 +29,7 @@ make build
 
 Open `http://localhost:8251`. Without `DATABASE_URL`, data is stored in `offlinenotepad.sqlite3` by default. See `.env.example` for configuration.
 
-For a public deployment, set `SITE_URL` to the site's HTTPS origin (for example, `https://notes.example.com`). Canonical links, social previews, `robots.txt`, JSON-LD, and the sitemap use this value.
+For a public deployment, set `SITE_URL` to the site's HTTPS origin (for example, `https://notes.example.com`). Canonical links, social previews, `robots.txt`, JSON-LD, the XML sitemap, and the blog's Atom feed use this value.
 
 ### Docker
 

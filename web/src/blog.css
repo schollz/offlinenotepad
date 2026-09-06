@@ -1,5 +1,11 @@
 @font-face { font-family: "OpenAI Sans"; src: url("/fonts/OpenAISans-Regular.woff2") format("woff2"); font-display: swap; font-style: normal; font-weight: 400; }
+@font-face { font-family: "OpenAI Sans"; src: url("/fonts/OpenAISans-RegularItalic.woff2") format("woff2"); font-display: swap; font-style: italic; font-weight: 400; }
 @font-face { font-family: "OpenAI Sans"; src: url("/fonts/OpenAISans-Medium.woff2") format("woff2"); font-display: swap; font-style: normal; font-weight: 500; }
+@font-face { font-family: "OpenAI Sans"; src: url("/fonts/OpenAISans-MediumItalic.woff2") format("woff2"); font-display: swap; font-style: italic; font-weight: 500; }
+@font-face { font-family: "OpenAI Sans"; src: url("/fonts/OpenAISans-Semibold.woff2") format("woff2"); font-display: swap; font-style: normal; font-weight: 600; }
+@font-face { font-family: "OpenAI Sans"; src: url("/fonts/OpenAISans-SemiboldItalic.woff2") format("woff2"); font-display: swap; font-style: italic; font-weight: 600; }
+@font-face { font-family: "OpenAI Sans"; src: url("/fonts/OpenAISans-Bold.woff2") format("woff2"); font-display: swap; font-style: normal; font-weight: 700; }
+@font-face { font-family: "OpenAI Sans"; src: url("/fonts/OpenAISans-BoldItalic.woff2") format("woff2"); font-display: swap; font-style: italic; font-weight: 700; }
 :root { color-scheme: light dark; color: #182235; background: #fff; font-family: "OpenAI Sans", Arial, sans-serif; font-synthesis: none; }
 * { box-sizing: border-box; }
 body { min-height: 100vh; margin: 0; background: #fff; }

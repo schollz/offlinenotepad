@@ -1,15 +1,20 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"html/template"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
 
 const (
+	siteName           = "Offline Notepad"
+	staticModifiedDate = "2026-09-06"
+	indexRobots        = "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
 	homeTitle          = "Offline Notepad — Private Notes That Work Offline"
 	homeDescription    = "Write private encrypted notes that work offline. Offline Notepad saves locally first and securely syncs your notebook when you reconnect."
 	aboutTitle         = "About Offline Notepad — Private, Offline-First Notes"
@@ -41,8 +46,11 @@ type metaTemplateData struct {
 	SocialImageURL       string
 	SocialImageSecureURL string
 	SocialImageAlt       string
+	FeedURL              string
 	PublishedAt          string
 	ModifiedAt           string
+	ArticleSection       string
+	ArticleTags          []string
 	StructuredData       template.JS
 	Nonce                string
 }
@@ -52,6 +60,7 @@ type blogPost struct {
 	Title            string
 	Description      string
 	PublishedAt      string
+	ModifiedAt       string
 	PublishedDisplay string
 	ReadingTime      string
 	Section          string
@@ -64,6 +73,7 @@ var howItWorksPost = blogPost{
 	Title:            howItWorksTitle,
 	Description:      howItWorksDesc,
 	PublishedAt:      howPublishedAt,
+	ModifiedAt:       howPublishedAt,
 	PublishedDisplay: "September 4, 2026",
 	ReadingTime:      "5 minute read",
 	Section:          "Guide",
@@ -87,6 +97,7 @@ var releasePost = blogPost{
 	Title:            blogPostTitle,
 	Description:      blogPostSummary,
 	PublishedAt:      blogPublishedAt,
+	ModifiedAt:       blogPublishedAt,
 	PublishedDisplay: "September 5, 2026",
 	ReadingTime:      "4 minute read",
 	Section:          "Release notes",
@@ -120,10 +131,43 @@ type sitemapURLSet struct {
 }
 
 type sitemapURL struct {
-	Location        string `xml:"loc"`
-	LastModified    string `xml:"lastmod,omitempty"`
-	ChangeFrequency string `xml:"changefreq,omitempty"`
-	Priority        string `xml:"priority,omitempty"`
+	Location     string `xml:"loc"`
+	LastModified string `xml:"lastmod,omitempty"`
+}
+
+type atomFeed struct {
+	XMLName xml.Name    `xml:"feed"`
+	XMLNS   string      `xml:"xmlns,attr"`
+	Title   string      `xml:"title"`
+	ID      string      `xml:"id"`
+	Updated string      `xml:"updated"`
+	Author  atomAuthor  `xml:"author"`
+	Links   []atomLink  `xml:"link"`
+	Entries []atomEntry `xml:"entry"`
+}
+
+type atomAuthor struct {
+	Name string `xml:"name"`
+}
+
+type atomLink struct {
+	Href string `xml:"href,attr"`
+	Rel  string `xml:"rel,attr,omitempty"`
+	Type string `xml:"type,attr,omitempty"`
+}
+
+type atomEntry struct {
+	Title     string       `xml:"title"`
+	ID        string       `xml:"id"`
+	Published string       `xml:"published"`
+	Updated   string       `xml:"updated"`
+	Link      atomLink     `xml:"link"`
+	Summary   string       `xml:"summary"`
+	Category  atomCategory `xml:"category"`
+}
+
+type atomCategory struct {
+	Term string `xml:"term,attr"`
 }
 
 func requestNonce(r *http.Request) string {
@@ -160,11 +204,36 @@ func (a *App) pageMetadata(r *http.Request, path, title, description, keywords, 
 		SocialImageURL:       socialImageURL,
 		SocialImageSecureURL: secureSocialImageURL,
 		SocialImageAlt:       "Offline Notepad — private notes saved locally and synced securely",
+		FeedURL:              origin + "/blog/feed.xml",
 		PublishedAt:          publishedAt,
 		ModifiedAt:           modifiedAt,
 		StructuredData:       jsonStructuredData(structuredData),
 		Nonce:                requestNonce(r),
 	}
+}
+
+func siteOrganization(origin string) map[string]any {
+	return map[string]any{
+		"@type": "Organization", "@id": origin + "/#organization", "name": siteName, "url": origin + "/",
+		"logo":   map[string]any{"@type": "ImageObject", "@id": origin + "/#logo", "url": origin + "/icon.svg", "width": 512, "height": 512},
+		"sameAs": []string{"https://github.com/schollz/offlinenotepad"},
+	}
+}
+
+func siteWebsite(origin string) map[string]any {
+	return map[string]any{
+		"@type": "WebSite", "@id": origin + "/#website", "name": siteName, "alternateName": "OfflineNotepad", "url": origin + "/",
+		"description": homeDescription, "inLanguage": "en", "publisher": map[string]any{"@id": origin + "/#organization"},
+	}
+}
+
+func breadcrumbStructuredData(origin string, items ...[2]string) map[string]any {
+	elements := make([]any, 0, len(items)+1)
+	elements = append(elements, map[string]any{"@type": "ListItem", "position": 1, "name": "Home", "item": origin + "/"})
+	for i, item := range items {
+		elements = append(elements, map[string]any{"@type": "ListItem", "position": i + 2, "name": item[0], "item": origin + item[1]})
+	}
+	return map[string]any{"@type": "BreadcrumbList", "itemListElement": elements}
 }
 
 func truncateSEOText(value string, maximum int) string {
@@ -184,21 +253,21 @@ func homeStructuredData(origin string) map[string]any {
 	return map[string]any{
 		"@context": "https://schema.org",
 		"@graph": []any{
+			siteOrganization(origin),
+			siteWebsite(origin),
 			map[string]any{
-				"@type": "Organization", "@id": origin + "/#organization", "name": "Offline Notepad", "url": origin,
-				"logo": map[string]any{"@type": "ImageObject", "url": origin + "/icon.svg"}, "sameAs": []string{"https://github.com/schollz/offlinenotepad"},
+				"@type": "WebPage", "@id": origin + "/#webpage", "url": origin + "/", "name": homeTitle,
+				"description": homeDescription, "inLanguage": "en", "isPartOf": map[string]any{"@id": origin + "/#website"},
+				"about": map[string]any{"@id": origin + "/#application"}, "primaryImageOfPage": map[string]any{"@id": origin + "/#social-image"},
 			},
+			map[string]any{"@type": "ImageObject", "@id": origin + "/#social-image", "url": origin + "/social-card.png", "width": 1200, "height": 630},
 			map[string]any{
-				"@type": "WebSite", "@id": origin + "/#website", "name": "Offline Notepad", "url": origin,
-				"description": homeDescription, "inLanguage": "en", "publisher": map[string]any{"@id": origin + "/#organization"},
-			},
-			map[string]any{
-				"@type": "WebApplication", "@id": origin + "/#application", "name": "Offline Notepad", "url": origin,
-				"description": homeDescription, "applicationCategory": "ProductivityApplication", "operatingSystem": "Any",
+				"@type": "WebApplication", "@id": origin + "/#application", "name": siteName, "url": origin + "/app",
+				"description": homeDescription, "applicationCategory": "UtilitiesApplication", "applicationSubCategory": "Note-taking application", "operatingSystem": "Any",
 				"browserRequirements": "Requires a modern web browser with IndexedDB and Web Crypto support",
 				"isAccessibleForFree": true,
 				"offers":              map[string]any{"@type": "Offer", "price": "0", "priceCurrency": "USD"},
-				"image":               origin + "/social-card.png",
+				"image":               map[string]any{"@id": origin + "/#social-image"},
 				"softwareVersion":     "2",
 				"sameAs":              []string{"https://github.com/schollz/offlinenotepad"},
 				"featureList":         []string{"Browser-side encryption", "Offline note editing", "Encrypted synchronization", "Optional read-only public snapshots"},
@@ -222,14 +291,17 @@ func blogIndexStructuredData(origin string) map[string]any {
 	return map[string]any{
 		"@context": "https://schema.org",
 		"@graph": []any{
+			siteOrganization(origin),
+			siteWebsite(origin),
 			map[string]any{
 				"@type": "Blog", "@id": blogURL + "#blog", "name": "Offline Notepad Blog", "url": blogURL,
-				"description": blogDescription, "inLanguage": "en", "publisher": map[string]any{"@type": "Organization", "name": "Offline Notepad", "url": origin}, "blogPost": postReferences,
+				"description": blogDescription, "inLanguage": "en", "publisher": map[string]any{"@id": origin + "/#organization"}, "blogPost": postReferences,
 			},
 			map[string]any{
 				"@type": "CollectionPage", "@id": blogURL + "#webpage", "name": blogTitle, "url": blogURL,
 				"description": blogDescription, "isPartOf": map[string]any{"@id": origin + "/#website"}, "mainEntity": map[string]any{"@id": blogURL + "#blog"}, "hasPart": postReferences,
 			},
+			breadcrumbStructuredData(origin, [2]string{"Blog", "/blog"}),
 		},
 	}
 }
@@ -237,32 +309,38 @@ func blogIndexStructuredData(origin string) map[string]any {
 func aboutStructuredData(origin string) map[string]any {
 	aboutURL := origin + "/about"
 	return map[string]any{
-		"@context":    "https://schema.org",
-		"@type":       "AboutPage",
-		"@id":         aboutURL + "#webpage",
-		"url":         aboutURL,
-		"name":        aboutTitle,
-		"description": aboutDescription,
-		"inLanguage":  "en",
-		"isPartOf":    map[string]any{"@id": origin + "/#website"},
-		"mainEntity": map[string]any{
-			"@type": "WebApplication", "@id": origin + "/#application", "name": "Offline Notepad", "url": origin,
-			"applicationCategory": "ProductivityApplication", "isAccessibleForFree": true,
+		"@context": "https://schema.org",
+		"@graph": []any{
+			siteOrganization(origin),
+			siteWebsite(origin),
+			map[string]any{
+				"@type": "AboutPage", "@id": aboutURL + "#webpage", "url": aboutURL, "name": aboutTitle,
+				"description": aboutDescription, "inLanguage": "en", "isPartOf": map[string]any{"@id": origin + "/#website"},
+				"mainEntity": map[string]any{"@type": "WebApplication", "@id": origin + "/#application", "name": siteName, "url": origin + "/app"},
+			},
+			breadcrumbStructuredData(origin, [2]string{"About", "/about"}),
 		},
 	}
 }
 
 func contactStructuredData(origin string) map[string]any {
 	contactURL := origin + "/contact"
+	organization := siteOrganization(origin)
+	organization["contactPoint"] = map[string]any{
+		"@type": "ContactPoint", "contactType": "customer support", "email": "admin@offlinenotepad.com", "availableLanguage": "English",
+	}
 	return map[string]any{
-		"@context":    "https://schema.org",
-		"@type":       "ContactPage",
-		"@id":         contactURL + "#webpage",
-		"url":         contactURL,
-		"name":        contactTitle,
-		"description": contactDescription,
-		"inLanguage":  "en",
-		"isPartOf":    map[string]any{"@id": origin + "/#website"},
+		"@context": "https://schema.org",
+		"@graph": []any{
+			organization,
+			siteWebsite(origin),
+			map[string]any{
+				"@type": "ContactPage", "@id": contactURL + "#webpage", "url": contactURL, "name": contactTitle,
+				"description": contactDescription, "inLanguage": "en", "isPartOf": map[string]any{"@id": origin + "/#website"},
+				"mainEntity": map[string]any{"@id": origin + "/#organization"},
+			},
+			breadcrumbStructuredData(origin, [2]string{"Contact", "/contact"}),
+		},
 	}
 }
 
@@ -271,17 +349,24 @@ func blogPostStructuredData(origin string, post blogPost) map[string]any {
 	return map[string]any{
 		"@context": "https://schema.org",
 		"@graph": []any{
+			siteOrganization(origin),
+			siteWebsite(origin),
 			map[string]any{
-				"@type": "BlogPosting", "@id": articleURL + "#article", "headline": post.Title, "description": post.Description,
-				"url": articleURL, "datePublished": post.PublishedAt, "dateModified": post.PublishedAt, "inLanguage": "en",
-				"articleSection": post.Section, "keywords": post.Keywords,
-				"mainEntityOfPage": map[string]any{"@type": "WebPage", "@id": articleURL},
-				"author":           map[string]any{"@type": "Organization", "name": "Offline Notepad", "url": origin},
-				"publisher":        map[string]any{"@type": "Organization", "name": "Offline Notepad", "url": origin},
-				"image":            map[string]any{"@type": "ImageObject", "url": origin + "/social-card.png", "width": 1200, "height": 630},
+				"@type": "WebPage", "@id": articleURL + "#webpage", "url": articleURL, "name": post.Title,
+				"description": post.Description, "inLanguage": "en", "isPartOf": map[string]any{"@id": origin + "/#website"},
+				"breadcrumb": map[string]any{"@id": articleURL + "#breadcrumb"}, "mainEntity": map[string]any{"@id": articleURL + "#article"},
 			},
 			map[string]any{
-				"@type": "BreadcrumbList", "itemListElement": []any{
+				"@type": "BlogPosting", "@id": articleURL + "#article", "headline": post.Title, "description": post.Description,
+				"url": articleURL, "datePublished": post.PublishedAt, "dateModified": post.ModifiedAt, "inLanguage": "en",
+				"articleSection": post.Section, "keywords": post.Keywords,
+				"mainEntityOfPage": map[string]any{"@id": articleURL + "#webpage"}, "isPartOf": map[string]any{"@id": origin + "/blog#blog"},
+				"author":    map[string]any{"@id": origin + "/#organization"},
+				"publisher": map[string]any{"@id": origin + "/#organization"},
+				"image":     map[string]any{"@type": "ImageObject", "url": origin + "/social-card.png", "width": 1200, "height": 630},
+			},
+			map[string]any{
+				"@type": "BreadcrumbList", "@id": articleURL + "#breadcrumb", "itemListElement": []any{
 					map[string]any{"@type": "ListItem", "position": 1, "name": "Home", "item": origin + "/"},
 					map[string]any{"@type": "ListItem", "position": 2, "name": "Blog", "item": origin + "/blog"},
 					map[string]any{"@type": "ListItem", "position": 3, "name": post.Title, "item": articleURL},
@@ -295,18 +380,24 @@ func publicStructuredData(origin, canonical, title, description, modifiedAt stri
 	document := map[string]any{
 		"@type": "DigitalDocument", "@id": canonical + "#document", "name": title, "headline": title,
 		"description": description, "url": canonical, "inLanguage": "en", "isPartOf": map[string]any{"@id": origin + "/#website"},
-		"publisher": map[string]any{"@type": "Organization", "name": "Offline Notepad", "url": origin},
 	}
 	if modifiedAt != "" {
 		document["dateModified"] = modifiedAt
 	}
-	return map[string]any{"@context": "https://schema.org", "@type": "WebPage", "@id": canonical, "url": canonical, "name": title, "mainEntity": document}
+	page := map[string]any{
+		"@type": "WebPage", "@id": canonical + "#webpage", "url": canonical, "name": title, "description": description,
+		"inLanguage": "en", "isPartOf": map[string]any{"@id": origin + "/#website"}, "mainEntity": map[string]any{"@id": canonical + "#document"},
+	}
+	if modifiedAt != "" {
+		page["dateModified"] = modifiedAt
+	}
+	return map[string]any{"@context": "https://schema.org", "@graph": []any{siteOrganization(origin), siteWebsite(origin), page, document}}
 }
 
 func (a *App) handleAbout(w http.ResponseWriter, r *http.Request) {
 	meta := a.pageMetadata(r, "/about", aboutTitle, aboutDescription,
 		"about Offline Notepad, private notes, encrypted notes, offline-first notepad, open source notes app",
-		"index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1", "website", "", "", aboutStructuredData(a.origin(r)))
+		indexRobots, "website", "", "", aboutStructuredData(a.origin(r)))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	if err := a.about.Execute(w, meta); err != nil {
@@ -325,7 +416,7 @@ func (a *App) handleAboutSlash(w http.ResponseWriter, r *http.Request) {
 func (a *App) handleContact(w http.ResponseWriter, r *http.Request) {
 	meta := a.pageMetadata(r, "/contact", contactTitle, contactDescription,
 		"contact Offline Notepad, Offline Notepad support, Offline Notepad feedback",
-		"index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1", "website", "", "", contactStructuredData(a.origin(r)))
+		indexRobots, "website", "", "", contactStructuredData(a.origin(r)))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	if err := a.contact.Execute(w, meta); err != nil {
@@ -344,7 +435,7 @@ func (a *App) handleContactSlash(w http.ResponseWriter, r *http.Request) {
 func (a *App) handleBlogIndex(w http.ResponseWriter, r *http.Request) {
 	meta := a.pageMetadata(r, "/blog", blogTitle, blogDescription,
 		"offline notepad blog, encrypted notes, offline-first notes, private notepad, release notes",
-		"index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1", "website", "", "", blogIndexStructuredData(a.origin(r)))
+		indexRobots, "website", "", "", blogIndexStructuredData(a.origin(r)))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	if err := a.blog.Execute(w, blogTemplateData{metaTemplateData: meta, IsIndex: true, Posts: blogPosts}); err != nil {
@@ -360,8 +451,14 @@ func (a *App) handleBlogPost(w http.ResponseWriter, r *http.Request) {
 	}
 	path := "/blog/" + post.Slug
 	meta := a.pageMetadata(r, path, post.Title, post.Description, post.Keywords,
-		"index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1", "article", post.PublishedAt, post.PublishedAt,
+		indexRobots, "article", post.PublishedAt, post.ModifiedAt,
 		blogPostStructuredData(a.origin(r), post))
+	meta.ArticleSection = post.Section
+	for _, tag := range strings.Split(post.Keywords, ",") {
+		if tag = strings.TrimSpace(tag); tag != "" {
+			meta.ArticleTags = append(meta.ArticleTags, tag)
+		}
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	if err := a.blog.Execute(w, blogTemplateData{metaTemplateData: meta, Post: post}); err != nil {
@@ -389,19 +486,20 @@ func (a *App) handleBlogSlash(w http.ResponseWriter, r *http.Request) {
 func (a *App) handleRobots(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
-	_, _ = strings.NewReader("User-agent: *\nAllow: /\nDisallow: /app\nDisallow: /api/\nDisallow: /ws\nDisallow: /healthz\nDisallow: /*/raw\n\nSitemap: " + a.origin(r) + "/sitemap.xml\n").WriteTo(w)
+	origin := a.origin(r)
+	_, _ = strings.NewReader("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /ws\nDisallow: /healthz\n\nSitemap: " + origin + "/sitemap.xml\nSitemap: " + origin + "/blog/feed.xml\n").WriteTo(w)
 }
 
 func (a *App) handleSitemap(w http.ResponseWriter, r *http.Request) {
 	origin := a.origin(r)
 	urls := []sitemapURL{
-		{Location: origin + "/", ChangeFrequency: "weekly", Priority: "1.0"},
-		{Location: origin + "/about", ChangeFrequency: "monthly", Priority: "0.8"},
-		{Location: origin + "/contact", ChangeFrequency: "yearly", Priority: "0.5"},
-		{Location: origin + "/blog", ChangeFrequency: "weekly", Priority: "0.8"},
+		{Location: origin + "/", LastModified: staticModifiedDate},
+		{Location: origin + "/about", LastModified: staticModifiedDate},
+		{Location: origin + "/contact", LastModified: staticModifiedDate},
+		{Location: origin + "/blog", LastModified: staticModifiedDate},
 	}
 	for _, post := range blogPosts {
-		urls = append(urls, sitemapURL{Location: origin + "/blog/" + post.Slug, LastModified: post.PublishedAt, ChangeFrequency: "monthly", Priority: "0.7"})
+		urls = append(urls, sitemapURL{Location: origin + "/blog/" + post.Slug, LastModified: post.ModifiedAt})
 	}
 	publications, err := a.store.ListSitemapPublications(r.Context(), 50_000-len(urls))
 	if err != nil {
@@ -422,22 +520,74 @@ func (a *App) handleSitemap(w http.ResponseWriter, r *http.Request) {
 		if !publication.UpdatedAt.IsZero() {
 			lastModified = publication.UpdatedAt.UTC().Format(time.RFC3339)
 		}
-		urls = append(urls, sitemapURL{Location: origin + path, LastModified: lastModified, ChangeFrequency: "weekly", Priority: "0.5"})
+		urls = append(urls, sitemapURL{Location: origin + path, LastModified: lastModified})
+	}
+	encoded, err := encodeXMLDocument(sitemapURLSet{XMLNS: "http://www.sitemaps.org/schemas/sitemap/0.9", URLs: urls})
+	if err != nil {
+		a.logger.Error("render sitemap", "error", err)
+		http.Error(w, "could not render sitemap", http.StatusInternalServerError)
+		return
 	}
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
-	_, _ = w.Write([]byte(xml.Header))
-	encoder := xml.NewEncoder(w)
-	encoder.Indent("", "  ")
-	if err := encoder.Encode(sitemapURLSet{XMLNS: "http://www.sitemaps.org/schemas/sitemap/0.9", URLs: urls}); err != nil {
-		a.logger.Error("render sitemap", "error", err)
-	}
+	_, _ = w.Write(encoded)
 }
 
-func publicationDescription(title string) string {
-	title = strings.TrimSpace(title)
-	if title == "" {
-		return "Read a public, read-only note shared with Offline Notepad."
+func (a *App) handleBlogFeed(w http.ResponseWriter, r *http.Request) {
+	origin := a.origin(r)
+	feedURL := origin + "/blog/feed.xml"
+	posts := append([]blogPost(nil), blogPosts...)
+	sort.SliceStable(posts, func(i, j int) bool { return posts[i].ModifiedAt > posts[j].ModifiedAt })
+	entries := make([]atomEntry, 0, len(posts))
+	updated := staticModifiedDate + "T00:00:00Z"
+	if len(posts) > 0 {
+		updated = posts[0].ModifiedAt
 	}
-	return "Read “" + title + "”, a public, read-only note shared with Offline Notepad."
+	for _, post := range posts {
+		postURL := origin + "/blog/" + post.Slug
+		entries = append(entries, atomEntry{
+			Title: post.Title, ID: postURL, Published: post.PublishedAt, Updated: post.ModifiedAt,
+			Link: atomLink{Href: postURL, Rel: "alternate", Type: "text/html"}, Summary: post.Description,
+			Category: atomCategory{Term: post.Section},
+		})
+	}
+	feed := atomFeed{
+		XMLNS: "http://www.w3.org/2005/Atom", Title: "Offline Notepad Blog", ID: feedURL, Updated: updated,
+		Author:  atomAuthor{Name: siteName},
+		Links:   []atomLink{{Href: feedURL, Rel: "self", Type: "application/atom+xml"}, {Href: origin + "/blog", Rel: "alternate", Type: "text/html"}},
+		Entries: entries,
+	}
+	encoded, err := encodeXMLDocument(feed)
+	if err != nil {
+		a.logger.Error("render blog feed", "error", err)
+		http.Error(w, "could not render feed", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/atom+xml; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	_, _ = w.Write(encoded)
+}
+
+func encodeXMLDocument(value any) ([]byte, error) {
+	var output bytes.Buffer
+	output.WriteString(xml.Header)
+	encoder := xml.NewEncoder(&output)
+	encoder.Indent("", "  ")
+	if err := encoder.Encode(value); err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
+}
+
+func publicationDescription(title, excerpt string) string {
+	title = strings.Join(strings.Fields(title), " ")
+	excerpt = strings.Join(strings.Fields(excerpt), " ")
+	lead := "Read a public, read-only note shared with Offline Notepad."
+	if title != "" {
+		lead = "Read “" + title + "”, a public, read-only note shared with Offline Notepad."
+	}
+	if excerpt == "" || strings.EqualFold(excerpt, title) {
+		return lead
+	}
+	return lead + " " + excerpt
 }

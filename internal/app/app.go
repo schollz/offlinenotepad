@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	stdhtml "html"
 	"html/template"
 	"io"
 	"io/fs"
@@ -61,6 +62,7 @@ type App struct {
 	blog      *template.Template
 	markdown  goldmark.Markdown
 	sanitizer *bluemonday.Policy
+	textOnly  *bluemonday.Policy
 	hub       *hub
 	config    Config
 	analytics *analyticsRelay
@@ -102,7 +104,7 @@ func New(store *database.Store, content fs.FS, logger *slog.Logger, config Confi
 		return nil, fmt.Errorf("parse blog template: %w", err)
 	}
 	analytics := newAnalyticsRelay(config.UmamiURL, config.UmamiWebsiteID, logger)
-	return &App{store: store, logger: logger, content: content, index: index, about: about, contact: contact, public: public, blog: blog, markdown: goldmark.New(goldmark.WithExtensions(extension.GFM)), sanitizer: bluemonday.UGCPolicy(), hub: newHub(), config: config, analytics: analytics}, nil
+	return &App{store: store, logger: logger, content: content, index: index, about: about, contact: contact, public: public, blog: blog, markdown: goldmark.New(goldmark.WithExtensions(extension.GFM)), sanitizer: bluemonday.UGCPolicy(), textOnly: bluemonday.StrictPolicy(), hub: newHub(), config: config, analytics: analytics}, nil
 }
 
 func (a *App) Handler() http.Handler {
@@ -120,6 +122,7 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("GET /contact", a.handleContact)
 	mux.HandleFunc("GET /contact/", a.handleContactSlash)
 	mux.HandleFunc("GET /blog", a.handleBlogIndex)
+	mux.HandleFunc("GET /blog/feed.xml", a.handleBlogFeed)
 	mux.HandleFunc("GET /blog/{slug}", a.handleBlogPost)
 	mux.HandleFunc("GET /blog/", a.handleBlogSlash)
 	mux.HandleFunc("GET /api/v1/workspaces/{id}", a.handleGetWorkspace)
@@ -195,9 +198,10 @@ func (a *App) renderApp(w http.ResponseWriter, r *http.Request) {
 	isHomepage := r.URL.Path == "/" || r.URL.Path == "/index.html"
 	meta := a.pageMetadata(r, "/", homeTitle, homeDescription,
 		"offline notepad, private notes, encrypted notes, offline notes, secure notepad, local-first notes",
-		"index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1", "website", "", "", homeStructuredData(a.origin(r)))
+		indexRobots, "website", "", "", homeStructuredData(a.origin(r)))
 	if !isHomepage {
-		meta = a.pageMetadata(r, "/app", "Notebook · Offline Notepad", "Open your private Offline Notepad notebook.", "", "noindex, nofollow, noarchive", "website", "", "", nil)
+		meta = a.pageMetadata(r, "/app", "Notebook · Offline Notepad", "Open your private Offline Notepad notebook.", "", "noindex, nofollow, noarchive, nosnippet, noimageindex", "website", "", "", nil)
+		w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet, noimageindex")
 	}
 	if err := a.index.Execute(w, appTemplateData{metaTemplateData: meta, IsHomepage: isHomepage}); err != nil {
 		a.logger.Error("render app", "error", err)
@@ -210,6 +214,18 @@ func (a *App) handleFallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := strings.Trim(r.URL.Path, "/")
+	if r.URL.Path == "/index.html" {
+		target := "/"
+		if r.URL.RawQuery != "" {
+			target += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, target, http.StatusPermanentRedirect)
+		return
+	}
+	if r.URL.Path == "/app/" {
+		http.Redirect(w, r, "/app", http.StatusPermanentRedirect)
+		return
+	}
 	if path != "index.html" && path != "public.html" && !strings.Contains(path, "/") {
 		if info, err := fs.Stat(a.content, path); err == nil && info.Mode().IsRegular() {
 			http.FileServer(http.FS(a.content)).ServeHTTP(w, r)
@@ -282,7 +298,8 @@ func (a *App) renderPublication(w http.ResponseWriter, r *http.Request, id strin
 	if raw {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("Cache-Control", "public, max-age=60")
-		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+		w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet")
+		w.Header().Set("Link", "<"+a.origin(r)+strings.TrimSuffix(r.URL.Path, "/raw")+">; rel=\"canonical\"")
 		io.WriteString(w, p.Content)
 		return
 	}
@@ -297,17 +314,23 @@ func (a *App) renderPublication(w http.ResponseWriter, r *http.Request, id strin
 	}
 	safe := a.sanitizer.Sanitize(rendered.String())
 	canonical := a.origin(r) + r.URL.Path
+	displayTitle := strings.Join(strings.Fields(p.Title), " ")
+	if displayTitle == "" {
+		displayTitle = "Shared note"
+	}
 	modifiedAt := ""
 	if !p.UpdatedAt.IsZero() {
 		modifiedAt = p.UpdatedAt.UTC().Format(time.RFC3339)
 	}
-	description := publicationDescription(p.Title)
-	meta := a.pageMetadata(r, r.URL.Path, strings.TrimSpace(p.Title)+" · Offline Notepad", description,
-		"public note, shared note, Offline Notepad", "index, follow, max-image-preview:large, max-snippet:-1", "article", "", modifiedAt,
-		publicStructuredData(a.origin(r), canonical, p.Title, description, modifiedAt))
+	excerpt := stdhtml.UnescapeString(a.textOnly.Sanitize(safe))
+	description := truncateSEOText(publicationDescription(displayTitle, excerpt), 160)
+	meta := a.pageMetadata(r, r.URL.Path, displayTitle+" · Offline Notepad", description,
+		"public note, shared note, Offline Notepad", indexRobots, "article", "", modifiedAt,
+		publicStructuredData(a.origin(r), canonical, displayTitle, description, modifiedAt))
+	meta.ArticleSection = "Shared note"
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=60")
-	if err := a.public.Execute(w, publicTemplateData{metaTemplateData: meta, Title: p.Title, Content: template.HTML(safe), RawURL: r.URL.Path + "/raw", CanonicalURL: canonical, Plaintext: p.ContentMode == "plaintext"}); err != nil {
+	if err := a.public.Execute(w, publicTemplateData{metaTemplateData: meta, Title: displayTitle, Content: template.HTML(safe), RawURL: r.URL.Path + "/raw", CanonicalURL: canonical, Plaintext: p.ContentMode == "plaintext"}); err != nil {
 		a.logger.Error("render publication", "error", err)
 	}
 }

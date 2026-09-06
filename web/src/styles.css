@@ -8,10 +8,58 @@
 
 @font-face {
   font-family: "OpenAI Sans";
+  src: url("/fonts/OpenAISans-RegularItalic.woff2") format("woff2");
+  font-display: swap;
+  font-style: italic;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "OpenAI Sans";
   src: url("/fonts/OpenAISans-Medium.woff2") format("woff2");
   font-display: swap;
   font-style: normal;
   font-weight: 500;
+}
+
+@font-face {
+  font-family: "OpenAI Sans";
+  src: url("/fonts/OpenAISans-MediumItalic.woff2") format("woff2");
+  font-display: swap;
+  font-style: italic;
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: "OpenAI Sans";
+  src: url("/fonts/OpenAISans-Semibold.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: "OpenAI Sans";
+  src: url("/fonts/OpenAISans-SemiboldItalic.woff2") format("woff2");
+  font-display: swap;
+  font-style: italic;
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: "OpenAI Sans";
+  src: url("/fonts/OpenAISans-Bold.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: "OpenAI Sans";
+  src: url("/fonts/OpenAISans-BoldItalic.woff2") format("woff2");
+  font-display: swap;
+  font-style: italic;
+  font-weight: 700;
 }
 
 :root {
@@ -261,17 +309,18 @@ kbd { padding: 2px 6px; border: 1px solid #ffffff55; border-radius: 5px; font-fa
 .note-location svg { width: 13px; height: 13px; flex: 0 0 auto; }
 .editor-details a { color: var(--blue); text-decoration: none; }
 .editor-details .outdated { color: #d47c18; }
-.content-editor { min-height: 0; flex: 1; resize: none; padding: 0 0 90px; border: 0; color: var(--text); background: transparent; font-family: inherit; font-size: 1.03rem; line-height: 1.78; outline: 0; }
+.content-editor { min-height: 0; flex: 1; resize: none; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; padding: 0 18px 90px 0; border: 0; color: var(--text); background: transparent; font-family: inherit; font-size: 1.03rem; line-height: 1.78; outline: 0; }
+.content-editor:focus, .content-editor:focus-visible { border: 0; outline: 0; box-shadow: none; }
 .content-editor::placeholder { color: var(--faint); }
 .editor-loading { color: var(--faint); font-size: .82rem; }
 .markdown-editor { min-height: 0; flex: 1; overflow: hidden; padding-bottom: 0; font-size: 1.03rem; line-height: 1.78; }
 .markdown-editor .cm-editor { height: 100%; color: var(--text); background: transparent; }
-.markdown-editor .cm-editor.cm-focused { outline: 0; }
-.markdown-editor .cm-scroller { overflow: auto; padding-bottom: 90px; font-family: inherit; line-height: inherit; }
-.markdown-editor .cm-content { min-height: 100%; padding: 0; caret-color: var(--text); }
-.markdown-editor .cm-line { padding: 0; }
+.markdown-editor .cm-editor.cm-focused, .markdown-editor .cm-content:focus, .markdown-editor .cm-content:focus-visible { border: 0; outline: 0 !important; box-shadow: none; }
+.markdown-editor .cm-scroller { height: 100%; max-height: 100%; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; scroll-snap-type: y proximity; font-family: inherit; line-height: inherit; }
+.markdown-editor .cm-content { min-height: 100%; padding: 0 18px 90px 0; caret-color: var(--text); }
+.markdown-editor .cm-line { padding: 0; scroll-snap-align: start; }
 .markdown-editor .cm-gutters { display: none; }
-.markdown-editor .cm-activeLine, .markdown-editor .cm-activeLineGutter { background: transparent; }
+.markdown-editor .cm-editor .cm-activeLine, .markdown-editor .cm-editor .cm-activeLineGutter { background: transparent !important; box-shadow: none; }
 .markdown-editor .cm-selectionBackground, .markdown-editor .cm-content ::selection { background: color-mix(in srgb, var(--blue) 22%, transparent) !important; }
 .markdown-editor .cm-placeholder { color: var(--faint); font-style: normal; }
 .markdown-editor .cm-cursor { border-left-color: var(--text); }
@@ -430,6 +479,10 @@ kbd { padding: 2px 6px; border: 1px solid #ffffff55; border-radius: 5px; font-fa
 @keyframes slide-in { from { transform: translateX(30px); opacity: 0; } }
 @keyframes toast-in { from { transform: translateY(10px); opacity: 0; } }
 
+@media (min-width: 861px) and (max-width: 1200px) {
+  .editor-shell { padding-top: clamp(34px, 6vh, 50px); padding-inline: clamp(24px, 5vw, 56px); }
+}
+
 @media (max-width: 860px) {
   .notebook { display: block; }
   .sidebar { position: fixed; width: min(320px, 88vw); transform: translateX(-105%); box-shadow: 20px 0 50px rgb(20 35 60 / 18%); }
@@ -440,7 +493,7 @@ kbd { padding: 2px 6px; border: 1px solid #ffffff55; border-radius: 5px; font-fa
   .workspace { width: 100%; }
   .editor-toolbar { padding: 0 14px; }
   .save-indicator { min-width: 0; flex: 1; }
-  .editor-shell { padding-inline: clamp(22px, 7vw, 60px); }
+  .editor-shell { padding-top: clamp(28px, 5vh, 38px); padding-inline: clamp(18px, 4.5vw, 32px); }
 }
 
 @media (max-width: 580px) {
@@ -454,7 +507,7 @@ kbd { padding: 2px 6px; border: 1px solid #ffffff55; border-radius: 5px; font-fa
   .save-indicator { font-size: .66rem; }
   .mode-switch button { width: 35px; justify-content: center; padding: 0; font-size: 0; }
   .publish-button { width: 38px; padding: 0; font-size: 0; }
-  .editor-shell { padding-top: 36px; }
+  .editor-shell { padding-top: 30px; }
   .editor-details { margin-bottom: 22px; }
   .settings-panel { padding: 22px 18px; }
   .dialog { padding: 29px 23px; }

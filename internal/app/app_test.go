@@ -36,10 +36,10 @@ func testServerWithConfig(t *testing.T, config Config) (*database.Store, *httpte
 		t.Fatal(err)
 	}
 	content := fstest.MapFS{
-		"index.html":                     &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:title" content="{{.PageTitle}}"><meta name="twitter:card" content="summary_large_image">{{if .StructuredData}}<script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>{{end}}{{if .IsHomepage}}<main>Private notes that work offline. <a href="/about">About</a> <a href="/blog">Blog</a> <a href="/contact">Contact</a></main>{{else}}<main>app</main>{{end}}`)},
+		"index.html":                     &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><link rel="alternate" type="application/atom+xml" href="{{.FeedURL}}"><meta property="og:title" content="{{.PageTitle}}"><meta name="twitter:card" content="summary_large_image">{{if .StructuredData}}<script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>{{end}}{{if .IsHomepage}}<main>Private notes that work offline. <a href="/about">About</a> <a href="/blog">Blog</a> <a href="/contact">Contact</a></main>{{else}}<main>app</main>{{end}}`)},
 		"about.html":                     &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:type" content="{{.OpenGraphType}}"><meta name="twitter:card" content="summary_large_image"><script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script><h1>A quiet place to write, built around privacy.</h1><p>Your password, private keys, and readable private notes stay in the browser.</p><a href="/">Open Offline Notepad</a>`)},
 		"contact.html":                   &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:type" content="{{.OpenGraphType}}"><meta name="twitter:card" content="summary_large_image"><script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script><h1>Get in touch.</h1><form data-subsnail="https://subsnail.schollz.com/form/0e018f9b-3d62-48db-8f40-7398e6aecb0d/subscribe/"><input name="first_name"><input name="last_name"><input type="email" name="email" required><textarea name="textarea"></textarea><button type="submit">Subscribe</button></form><a href="mailto:admin@offlinenotepad.com">admin@offlinenotepad.com</a><script src="https://subsnail.schollz.com/form/embed.js"></script>`)},
-		"blog.html":                      &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:type" content="{{.OpenGraphType}}"><meta name="twitter:card" content="summary_large_image">{{if .PublishedAt}}<meta property="article:published_time" content="{{.PublishedAt}}">{{end}}<script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>{{if .IsIndex}}<h1>Offline Notepad blog</h1>{{range .Posts}}<a href="/blog/{{.Slug}}">{{.Title}}</a>{{end}}{{else}}<h1>{{.Post.Title}}</h1><time datetime="{{.Post.PublishedAt}}">{{.Post.PublishedDisplay}}</time><article>{{.Post.Body}}</article>{{end}}`)},
+		"blog.html":                      &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><link rel="alternate" type="application/atom+xml" href="{{.FeedURL}}"><meta property="og:type" content="{{.OpenGraphType}}"><meta name="twitter:card" content="summary_large_image">{{if .PublishedAt}}<meta property="article:published_time" content="{{.PublishedAt}}">{{end}}{{if .ArticleSection}}<meta property="article:section" content="{{.ArticleSection}}">{{end}}{{range .ArticleTags}}<meta property="article:tag" content="{{.}}">{{end}}<script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>{{if .IsIndex}}<h1>Offline Notepad blog</h1>{{range .Posts}}<a href="/blog/{{.Slug}}">{{.Title}}</a>{{end}}{{else}}<h1>{{.Post.Title}}</h1><time datetime="{{.Post.PublishedAt}}">{{.Post.PublishedDisplay}}</time><article>{{.Post.Body}}</article>{{end}}`)},
 		"public.html":                    &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:title" content="{{.PageTitle}}"><meta name="twitter:card" content="summary_large_image"><script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script><a href="{{.RawURL}}">raw</a><article>{{.Content}}</article>`)},
 		"static/app.js":                  &fstest.MapFile{Data: []byte(`console.log("app")`)},
 		"fonts/OpenAISans-Regular.woff2": &fstest.MapFile{Data: []byte("font")},
@@ -52,6 +52,24 @@ func testServerWithConfig(t *testing.T, config Config) (*database.Store, *httpte
 	server := httptest.NewServer(application.Handler())
 	t.Cleanup(func() { server.Close(); store.Close() })
 	return store, server
+}
+
+func assertValidStructuredData(t *testing.T, body string) {
+	t.Helper()
+	const marker = `type="application/ld+json">`
+	start := strings.Index(body, marker)
+	if start < 0 {
+		t.Fatal("page has no JSON-LD")
+	}
+	start += len(marker)
+	end := strings.Index(body[start:], "</script>")
+	if end < 0 {
+		t.Fatal("page has unterminated JSON-LD")
+	}
+	var document any
+	if err := json.Unmarshal([]byte(body[start:start+end]), &document); err != nil {
+		t.Fatalf("page has invalid JSON-LD: %v", err)
+	}
 }
 
 func TestEmbeddedFontRoute(t *testing.T) {
@@ -77,6 +95,7 @@ func TestHomepageAndBlogSEO(t *testing.T) {
 	homeBody, _ := io.ReadAll(homeResponse.Body)
 	homeResponse.Body.Close()
 	home := string(homeBody)
+	assertValidStructuredData(t, home)
 	for _, expected := range []string{
 		`<title>` + homeTitle + `</title>`,
 		`name="description" content="` + homeDescription + `"`,
@@ -84,7 +103,10 @@ func TestHomepageAndBlogSEO(t *testing.T) {
 		`rel="canonical" href="https://notes.example/"`,
 		`property="og:title"`,
 		`name="twitter:card" content="summary_large_image"`,
+		`rel="alternate" type="application/atom+xml" href="https://notes.example/blog/feed.xml"`,
+		`"alternateName":"OfflineNotepad"`,
 		`"@type":"WebApplication"`,
+		`"applicationCategory":"UtilitiesApplication"`,
 		`Private notes that work offline`,
 		`href="/about"`,
 		`href="/blog"`,
@@ -111,8 +133,11 @@ func TestHomepageAndBlogSEO(t *testing.T) {
 	}
 	appBody, _ := io.ReadAll(appResponse.Body)
 	appResponse.Body.Close()
-	if !strings.Contains(string(appBody), `name="robots" content="noindex, nofollow, noarchive"`) || !strings.Contains(string(appBody), `href="https://notes.example/app"`) {
+	if !strings.Contains(string(appBody), `name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex"`) || !strings.Contains(string(appBody), `href="https://notes.example/app"`) {
 		t.Fatalf("private app SEO metadata is incorrect: %s", appBody)
+	}
+	if got := appResponse.Header.Get("X-Robots-Tag"); got != "noindex, nofollow, noarchive, nosnippet, noimageindex" {
+		t.Fatalf("private app X-Robots-Tag = %q", got)
 	}
 
 	aboutResponse, err := http.Get(server.URL + "/about")
@@ -122,7 +147,8 @@ func TestHomepageAndBlogSEO(t *testing.T) {
 	aboutBody, _ := io.ReadAll(aboutResponse.Body)
 	aboutResponse.Body.Close()
 	about := string(aboutBody)
-	for _, expected := range []string{aboutTitle, aboutDescription, `https://notes.example/about`, `"@type":"AboutPage"`, `A quiet place to write, built around privacy`, `readable private notes stay in the browser`} {
+	assertValidStructuredData(t, about)
+	for _, expected := range []string{aboutTitle, aboutDescription, `https://notes.example/about`, `"@type":"AboutPage"`, `"@type":"BreadcrumbList"`, `A quiet place to write, built around privacy`, `readable private notes stay in the browser`} {
 		if !strings.Contains(about, expected) {
 			t.Errorf("about page missing %q", expected)
 		}
@@ -135,7 +161,8 @@ func TestHomepageAndBlogSEO(t *testing.T) {
 	contactBody, _ := io.ReadAll(contactResponse.Body)
 	contactResponse.Body.Close()
 	contact := string(contactBody)
-	for _, expected := range []string{contactTitle, contactDescription, `https://notes.example/contact`, `"@type":"ContactPage"`, `Get in touch`, `data-subsnail="https://subsnail.schollz.com/form/0e018f9b-3d62-48db-8f40-7398e6aecb0d/subscribe/"`, `name="first_name"`, `name="last_name"`, `type="email" name="email" required`, `name="textarea"`, `>Subscribe</button>`, `src="https://subsnail.schollz.com/form/embed.js"`, `mailto:admin@offlinenotepad.com`} {
+	assertValidStructuredData(t, contact)
+	for _, expected := range []string{contactTitle, contactDescription, `https://notes.example/contact`, `"@type":"ContactPage"`, `"@type":"ContactPoint"`, `Get in touch`, `data-subsnail="https://subsnail.schollz.com/form/0e018f9b-3d62-48db-8f40-7398e6aecb0d/subscribe/"`, `name="first_name"`, `name="last_name"`, `type="email" name="email" required`, `name="textarea"`, `>Subscribe</button>`, `src="https://subsnail.schollz.com/form/embed.js"`, `mailto:admin@offlinenotepad.com`} {
 		if !strings.Contains(contact, expected) {
 			t.Errorf("contact page missing %q", expected)
 		}
@@ -157,7 +184,8 @@ func TestHomepageAndBlogSEO(t *testing.T) {
 	blogBody, _ := io.ReadAll(blogResponse.Body)
 	blogResponse.Body.Close()
 	blog := string(blogBody)
-	for _, expected := range []string{blogTitle, `https://notes.example/blog`, `"@type":"Blog"`, howItWorksPost.Title, `/blog/` + howItWorksPost.Slug, releasePost.Title, `/blog/` + releasePost.Slug} {
+	assertValidStructuredData(t, blog)
+	for _, expected := range []string{blogTitle, `https://notes.example/blog`, `https://notes.example/blog/feed.xml`, `"@type":"Blog"`, howItWorksPost.Title, `/blog/` + howItWorksPost.Slug, releasePost.Title, `/blog/` + releasePost.Slug} {
 		if !strings.Contains(blog, expected) {
 			t.Errorf("blog index missing %q", expected)
 		}
@@ -172,6 +200,7 @@ func TestHomepageAndBlogSEO(t *testing.T) {
 	}
 	howBody, _ := io.ReadAll(howResponse.Body)
 	howResponse.Body.Close()
+	assertValidStructuredData(t, string(howBody))
 	for _, expected := range []string{howItWorksPost.Title, howItWorksPost.Description, `"@type":"BlogPosting"`, `Argon2id`, `https://github.com/schollz/offlinenotepad`} {
 		if !strings.Contains(string(howBody), expected) {
 			t.Errorf("how-it-works post missing %q", expected)
@@ -184,7 +213,8 @@ func TestHomepageAndBlogSEO(t *testing.T) {
 	}
 	postBody, _ := io.ReadAll(postResponse.Body)
 	postResponse.Body.Close()
-	for _, expected := range []string{releasePost.Title, releasePost.Description, `"@type":"BlogPosting"`, `article:published_time`, `Every private note is encrypted in your browser`} {
+	assertValidStructuredData(t, string(postBody))
+	for _, expected := range []string{releasePost.Title, releasePost.Description, `"@type":"BlogPosting"`, `article:published_time`, `property="article:section" content="Release notes"`, `property="article:tag" content="Offline Notepad v2"`, `Every private note is encrypted in your browser`} {
 		if !strings.Contains(string(postBody), expected) {
 			t.Errorf("blog post missing %q", expected)
 		}
@@ -196,6 +226,18 @@ func TestHomepageAndBlogSEO(t *testing.T) {
 	missingResponse.Body.Close()
 	if missingResponse.StatusCode != http.StatusNotFound {
 		t.Fatalf("missing blog post status = %d", missingResponse.StatusCode)
+	}
+
+	noRedirects := &http.Client{CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	for path, location := range map[string]string{"/index.html": "/", "/app/": "/app", "/about/": "/about", "/blog/": "/blog", "/contact/": "/contact"} {
+		response, err := noRedirects.Get(server.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusPermanentRedirect || response.Header.Get("Location") != location {
+			t.Errorf("%s redirect status=%d location=%q", path, response.StatusCode, response.Header.Get("Location"))
+		}
 	}
 }
 
@@ -248,13 +290,37 @@ func TestSitemapAndRobotsIncludeCrawlablePages(t *testing.T) {
 	robotsBody, _ := io.ReadAll(robotsResponse.Body)
 	robotsResponse.Body.Close()
 	robots := string(robotsBody)
-	for _, expected := range []string{"User-agent: *", "Allow: /", "Disallow: /app", "Disallow: /api/", "Sitemap: https://notes.example/sitemap.xml"} {
+	for _, expected := range []string{"User-agent: *", "Allow: /", "Disallow: /api/", "Disallow: /ws", "Disallow: /healthz", "Sitemap: https://notes.example/sitemap.xml", "Sitemap: https://notes.example/blog/feed.xml"} {
 		if !strings.Contains(robots, expected) {
 			t.Errorf("robots.txt missing %q", expected)
 		}
 	}
 	if strings.Contains(robots, "Disallow: /blog") {
 		t.Error("robots.txt blocks the blog")
+	}
+	if strings.Contains(robots, "Disallow: /app") || strings.Contains(robots, "Disallow: /*/raw") {
+		t.Error("robots.txt prevents crawlers from seeing page-level noindex directives")
+	}
+	if strings.Contains(string(sitemapBody), "<changefreq>") || strings.Contains(string(sitemapBody), "<priority>") {
+		t.Error("sitemap contains unsupported hint fields")
+	}
+	if !strings.Contains(string(sitemapBody), "<lastmod>"+staticModifiedDate+"</lastmod>") {
+		t.Error("sitemap does not include an accurate static-page lastmod")
+	}
+
+	feedResponse, err := http.Get(server.URL + "/blog/feed.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	feedBody, _ := io.ReadAll(feedResponse.Body)
+	feedResponse.Body.Close()
+	if feedResponse.Header.Get("Content-Type") != "application/atom+xml; charset=utf-8" {
+		t.Fatalf("feed Content-Type = %q", feedResponse.Header.Get("Content-Type"))
+	}
+	for _, expected := range []string{`<feed xmlns="http://www.w3.org/2005/Atom">`, `<id>https://notes.example/blog/feed.xml</id>`, `<link href="https://notes.example/blog/feed.xml" rel="self" type="application/atom+xml"></link>`, releasePost.Title, howItWorksPost.Title} {
+		if !strings.Contains(string(feedBody), expected) {
+			t.Errorf("blog feed missing %q", expected)
+		}
 	}
 }
 
@@ -410,7 +476,8 @@ func TestPublicSnapshotIsSanitizedAndNotAppCached(t *testing.T) {
 	}
 	defer response.Body.Close()
 	body, _ := io.ReadAll(response.Body)
-	if response.Header.Get("Cache-Control") != "public, max-age=60" || strings.Contains(string(body), "<script>alert") || !strings.Contains(string(body), "Safe") || !strings.Contains(string(body), `type="application/ld+json"`) {
+	assertValidStructuredData(t, string(body))
+	if response.Header.Get("Cache-Control") != "public, max-age=60" || strings.Contains(string(body), "<script>alert") || !strings.Contains(string(body), "Safe") || !strings.Contains(string(body), `type="application/ld+json"`) || !strings.Contains(string(body), `name="description" content="Read “Snapshot”, a public, read-only note shared with Offline Notepad. Safe"`) {
 		t.Fatalf("public response headers=%v body=%q", response.Header, body)
 	}
 	rawResponse, err := http.Get(server.URL + "/p/" + url.PathEscape(publication.PublicID) + "/raw")
@@ -418,8 +485,11 @@ func TestPublicSnapshotIsSanitizedAndNotAppCached(t *testing.T) {
 		t.Fatal(err)
 	}
 	rawResponse.Body.Close()
-	if rawResponse.Header.Get("X-Robots-Tag") != "noindex, nofollow" {
+	if rawResponse.Header.Get("X-Robots-Tag") != "noindex, nofollow, noarchive, nosnippet" {
 		t.Fatalf("raw public X-Robots-Tag = %q", rawResponse.Header.Get("X-Robots-Tag"))
+	}
+	if rawResponse.Header.Get("Link") != `<`+server.URL+`/p/public-document-one>; rel="canonical"` {
+		t.Fatalf("raw public canonical Link = %q", rawResponse.Header.Get("Link"))
 	}
 	appResponse, err := http.Get(server.URL + "/app/notes/document-one")
 	if err != nil {
@@ -428,6 +498,9 @@ func TestPublicSnapshotIsSanitizedAndNotAppCached(t *testing.T) {
 	defer appResponse.Body.Close()
 	if appResponse.Header.Get("Cache-Control") != "no-cache" {
 		t.Fatalf("app Cache-Control = %q", appResponse.Header.Get("Cache-Control"))
+	}
+	if !strings.Contains(appResponse.Header.Get("X-Robots-Tag"), "noindex") {
+		t.Fatalf("app X-Robots-Tag = %q", appResponse.Header.Get("X-Robots-Tag"))
 	}
 }
 

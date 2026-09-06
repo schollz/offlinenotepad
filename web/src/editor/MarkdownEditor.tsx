@@ -65,6 +65,7 @@ export function MarkdownEditor({ documentId, value, mode, onChange }: MarkdownEd
     const state = EditorState.create({
       doc: valueRef.current,
       extensions: [
+        EditorState.phrases.of({ 'Selection deleted': '' }),
         highlightSpecialChars(),
         history(),
         drawSelection(),

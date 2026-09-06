@@ -18,7 +18,10 @@ export default defineConfig({
       manifest: {
         name: 'Offline Notepad',
         short_name: 'Notepad',
-        description: 'A private, encrypted notebook that works offline.',
+        description: 'Private encrypted notes that save locally, work offline, and sync securely.',
+        id: '/app',
+        lang: 'en-US',
+        categories: ['productivity', 'utilities'],
         theme_color: '#1769e0',
         background_color: '#f5f7fb',
         display: 'standalone',

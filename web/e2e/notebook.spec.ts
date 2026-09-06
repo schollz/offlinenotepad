@@ -65,6 +65,45 @@ test('clicking below a short note focuses the editor at the end', async ({ page 
   await expect(page.getByLabel('Note content')).toContainText('A short note. Appended at the end.')
 })
 
+test('scrolls long Markdown and plain-text note bodies', async ({ page }) => {
+  await createNotebook(page, notebookName('editor-scroll'))
+  await page.getByRole('button', { name: 'Create your first note' }).click()
+  const longNote = Array.from({ length: 100 }, (_, index) => `Line ${index + 1}: scrollable note content`).join('\n\n')
+  await page.getByLabel('Note content').fill(longNote)
+
+  const markdownScroller = page.locator('.cm-scroller')
+  await expect.poll(() => markdownScroller.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0)
+  await expect.poll(() => markdownScroller.evaluate((element) => getComputedStyle(element).scrollbarGutter)).toContain('stable')
+  await expect.poll(() => markdownScroller.evaluate((element) => getComputedStyle(element).scrollSnapType)).not.toBe('none')
+  await expect.poll(() => page.locator('.cm-activeLine').evaluate((element) => getComputedStyle(element).backgroundColor)).toBe('rgba(0, 0, 0, 0)')
+  await expect.poll(() => page.locator('.cm-content').evaluate((element) => parseFloat(getComputedStyle(element).paddingRight))).toBeGreaterThanOrEqual(18)
+  await markdownScroller.evaluate((element) => { element.scrollTop = 0 })
+  await markdownScroller.hover()
+  await page.mouse.wheel(0, 700)
+  await expect.poll(() => markdownScroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+  await expect.poll(() => markdownScroller.evaluate((element) => {
+    const top = element.getBoundingClientRect().top
+    const firstVisibleLine = Array.from(element.querySelectorAll<HTMLElement>('.cm-line')).find((line) =>
+      line.textContent?.trim() && line.getBoundingClientRect().bottom > top)
+    return firstVisibleLine ? firstVisibleLine.getBoundingClientRect().top - top : -1
+  })).toBeGreaterThanOrEqual(-0.5)
+
+  await page.getByRole('button', { name: 'More options' }).click()
+  const settings = page.locator('aside[aria-label="Notebook settings"]')
+  await settings.getByRole('button', { name: /Format: Markdown/ }).click()
+  await settings.getByRole('button', { name: 'Close settings' }).click()
+
+  const plainTextEditor = page.getByLabel('Note content')
+  await expect(plainTextEditor).toHaveValue(longNote)
+  await expect.poll(() => plainTextEditor.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0)
+  await expect.poll(() => plainTextEditor.evaluate((element) => getComputedStyle(element).scrollbarGutter)).toContain('stable')
+  await expect.poll(() => plainTextEditor.evaluate((element) => parseFloat(getComputedStyle(element).paddingRight))).toBeGreaterThanOrEqual(18)
+  await plainTextEditor.evaluate((element) => { element.scrollTop = 0 })
+  await plainTextEditor.hover()
+  await page.mouse.wheel(0, 700)
+  await expect.poll(() => plainTextEditor.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+})
+
 test('creates an unknown notebook with a short password from the unified form', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'mobile', 'covered by the desktop credential flow')
   await page.goto('/')
