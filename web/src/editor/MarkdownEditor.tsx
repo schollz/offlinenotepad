@@ -21,6 +21,20 @@ interface MarkdownEditorProps {
 }
 
 const externalUpdate = Annotation.define<boolean>()
+const scrollbarMeasureKey = {}
+
+function updateScrollbarVisibility(view: EditorView): void {
+  view.requestMeasure({
+    key: scrollbarMeasureKey,
+    read: (measuredView) => {
+      const lastBlock = measuredView.lineBlockAt(measuredView.state.doc.length)
+      return measuredView.documentPadding.top + lastBlock.bottom > measuredView.scrollDOM.clientHeight + 1
+    },
+    write: (overflows, measuredView) => {
+      measuredView.scrollDOM.dataset.contentOverflow = overflows ? 'true' : 'false'
+    },
+  })
+}
 
 const markdownHighlightStyle = HighlightStyle.define([
   { tag: tags.heading, color: 'var(--text)', fontWeight: '500' },
@@ -95,12 +109,14 @@ export function MarkdownEditor({ documentId, value, mode, onChange }: MarkdownEd
         openLiveLink,
         viewMode.of(modeRef.current === 'live' ? livePreview : []),
         EditorView.updateListener.of((update) => {
+          if (update.docChanged || update.geometryChanged) updateScrollbarVisibility(update.view)
           if (!update.docChanged || update.transactions.some((transaction) => transaction.annotation(externalUpdate))) return
           onChangeRef.current(update.state.doc.toString())
         }),
       ],
     })
     const view = new EditorView({ state, parent: host })
+    updateScrollbarVisibility(view)
     viewRef.current = view
     return () => {
       if (viewRef.current === view) viewRef.current = null
