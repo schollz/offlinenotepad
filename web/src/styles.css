@@ -327,6 +327,18 @@ kbd { padding: 2px 6px; border: 1px solid #ffffff55; border-radius: 5px; font-fa
 .markdown-editor .cm-selectionBackground, .markdown-editor .cm-content ::selection { background: color-mix(in srgb, var(--blue) 22%, transparent) !important; }
 .markdown-editor .cm-placeholder { color: var(--faint); font-style: normal; }
 .markdown-editor .cm-cursor { border-left-color: var(--text); }
+.markdown-editor .tok-heading { color: var(--text); font-weight: 500; }
+.markdown-editor .tok-strong { font-weight: 650; }
+.markdown-editor .tok-emphasis { font-style: italic; }
+.markdown-editor .tok-link, .markdown-editor .tok-url { color: var(--blue); text-decoration: underline; }
+.markdown-editor .tok-keyword { color: var(--syntax-purple); }
+.markdown-editor .tok-string, .markdown-editor .tok-string2, .markdown-editor .tok-literal, .markdown-editor .tok-inserted { color: var(--syntax-green); }
+.markdown-editor .tok-number, .markdown-editor .tok-bool, .markdown-editor .tok-atom { color: var(--syntax-orange); }
+.markdown-editor .tok-comment, .markdown-editor .tok-meta { color: #7f8a9a; font-style: italic; }
+.markdown-editor .tok-typeName, .markdown-editor .tok-className, .markdown-editor .tok-namespace { color: var(--syntax-yellow); }
+.markdown-editor .tok-variableName, .markdown-editor .tok-variableName2, .markdown-editor .tok-propertyName, .markdown-editor .tok-labelName, .markdown-editor .tok-macroName { color: var(--syntax-blue); }
+.markdown-editor .tok-operator, .markdown-editor .tok-punctuation { color: #abb2bf; }
+.markdown-editor .tok-invalid { color: var(--danger); text-decoration: underline wavy; }
 .markdown-editor .cm-panels { border-color: var(--border); color: var(--text); background: var(--surface-raised); }
 .markdown-editor .cm-search { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 .markdown-editor .cm-search input, .markdown-editor .cm-search button { border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); }

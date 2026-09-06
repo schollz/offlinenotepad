@@ -1,11 +1,11 @@
 import { useLayoutEffect, useRef, type MouseEvent } from 'react'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { bracketMatching, HighlightStyle, indentOnInput, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
+import { bracketMatching, indentOnInput, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
 import { commonmarkLanguage, markdown } from '@codemirror/lang-markdown'
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search'
 import { Annotation, Compartment, EditorState, Prec, Transaction } from '@codemirror/state'
 import { drawSelection, dropCursor, EditorView, highlightActiveLine, highlightSpecialChars, keymap, placeholder as placeholderExtension } from '@codemirror/view'
-import { tags } from '@lezer/highlight'
+import { classHighlighter } from '@lezer/highlight'
 import { GFM } from '@lezer/markdown'
 import { insertLink, toggleBold, toggleInlineCode, toggleItalic, toggleStrikethrough } from './commands'
 import { codeLanguages } from './languages'
@@ -36,23 +36,6 @@ function updateScrollbarVisibility(view: EditorView): void {
   })
 }
 
-const markdownHighlightStyle = HighlightStyle.define([
-  { tag: tags.heading, color: 'var(--text)', fontWeight: '500' },
-  { tag: tags.strong, fontWeight: '650' },
-  { tag: tags.emphasis, fontStyle: 'italic' },
-  { tag: tags.strikethrough, textDecoration: 'line-through' },
-  { tag: tags.link, color: 'var(--blue)', textDecoration: 'underline' },
-  { tag: tags.url, color: 'var(--blue)' },
-  { tag: tags.monospace, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' },
-  { tag: tags.keyword, color: 'var(--syntax-purple)' },
-  { tag: [tags.string, tags.regexp, tags.escape, tags.special(tags.string)], color: 'var(--syntax-green)' },
-  { tag: [tags.number, tags.bool, tags.null, tags.atom], color: 'var(--syntax-orange)' },
-  { tag: [tags.comment, tags.meta], color: '#7f8a9a', fontStyle: 'italic' },
-  { tag: [tags.typeName, tags.className, tags.namespace, tags.tagName], color: 'var(--syntax-yellow)' },
-  { tag: [tags.variableName, tags.propertyName, tags.attributeName, tags.labelName, tags.macroName], color: 'var(--syntax-blue)' },
-  { tag: [tags.operator, tags.punctuation], color: '#abb2bf' },
-])
-
 const formattingKeymap = Prec.highest(keymap.of([
   { key: 'Mod-b', run: toggleBold },
   { key: 'Mod-i', run: toggleItalic },
@@ -75,11 +58,13 @@ export function MarkdownEditor({ documentId, value, mode, onChange }: MarkdownEd
   useLayoutEffect(() => {
     const host = hostRef.current
     if (!host) return
+    const cspNonce = document.querySelector<HTMLMetaElement>('meta[name="csp-nonce"]')?.content ?? ''
     const viewMode = modeCompartment.current
     const state = EditorState.create({
       doc: valueRef.current,
       extensions: [
         EditorState.phrases.of({ 'Selection deleted': '' }),
+        EditorView.cspNonce.of(cspNonce),
         highlightSpecialChars(),
         history(),
         drawSelection(),
@@ -104,7 +89,7 @@ export function MarkdownEditor({ documentId, value, mode, onChange }: MarkdownEd
             ? commonmarkLanguage
             : LanguageDescription.matchLanguageName(codeLanguages, info),
         }),
-        syntaxHighlighting(markdownHighlightStyle),
+        syntaxHighlighting(classHighlighter),
         disableCodeSpellcheck,
         formattingKeymap,
         openLiveLink,

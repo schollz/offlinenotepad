@@ -1,41 +1,49 @@
 import type { LanguageDescription } from '@codemirror/language'
 import { LanguageDescription as Description, LanguageSupport, StreamLanguage } from '@codemirror/language'
+import { css } from '@codemirror/lang-css'
+import { go } from '@codemirror/lang-go'
+import { html } from '@codemirror/lang-html'
+import { javascript } from '@codemirror/lang-javascript'
+import { json } from '@codemirror/lang-json'
+import { python } from '@codemirror/lang-python'
+import { sql } from '@codemirror/lang-sql'
+import { shell } from '@codemirror/legacy-modes/mode/shell'
 
 export const codeLanguages: readonly LanguageDescription[] = [
   Description.of({
     name: 'JavaScript', alias: ['js', 'jsx', 'node'], extensions: ['js', 'mjs', 'cjs', 'jsx'],
-    load: () => import('@codemirror/lang-javascript').then(({ javascript }) => javascript({ jsx: true })),
+    support: javascript({ jsx: true }),
   }),
   Description.of({
     name: 'TypeScript', alias: ['ts', 'tsx'], extensions: ['ts', 'tsx'],
-    load: () => import('@codemirror/lang-javascript').then(({ javascript }) => javascript({ typescript: true, jsx: true })),
+    support: javascript({ typescript: true, jsx: true }),
   }),
   Description.of({
     name: 'JSON', alias: ['json5'], extensions: ['json', 'json5'],
-    load: () => import('@codemirror/lang-json').then(({ json }) => json()),
+    support: json(),
   }),
   Description.of({
     name: 'HTML', alias: ['htm'], extensions: ['html', 'htm'],
-    load: () => import('@codemirror/lang-html').then(({ html }) => html()),
+    support: html(),
   }),
   Description.of({
     name: 'CSS', extensions: ['css'],
-    load: () => import('@codemirror/lang-css').then(({ css }) => css()),
+    support: css(),
   }),
   Description.of({
     name: 'Go', alias: ['golang'], extensions: ['go'],
-    load: () => import('@codemirror/lang-go').then(({ go }) => go()),
+    support: go(),
   }),
   Description.of({
     name: 'SQL', extensions: ['sql'],
-    load: () => import('@codemirror/lang-sql').then(({ sql }) => sql()),
+    support: sql(),
   }),
   Description.of({
     name: 'Shell', alias: ['sh', 'bash', 'zsh'], extensions: ['sh', 'bash', 'zsh'],
-    load: () => import('@codemirror/legacy-modes/mode/shell').then(({ shell }) => new LanguageSupport(StreamLanguage.define(shell))),
+    support: new LanguageSupport(StreamLanguage.define(shell)),
   }),
   Description.of({
     name: 'Python', alias: ['py'], extensions: ['py'],
-    load: () => import('@codemirror/lang-python').then(({ python }) => python()),
+    support: python(),
   }),
 ]

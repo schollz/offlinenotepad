@@ -158,6 +158,7 @@ func (a *App) middleware(next http.Handler) http.Handler {
 		}
 		r = r.WithContext(context.WithValue(r.Context(), requestNonceKey{}, nonce))
 		scriptSources := "'self' 'nonce-" + nonce + "'"
+		styleSources := "'self' 'nonce-" + nonce + "'"
 		connectSources := "'self' ws: wss:"
 		formActionSources := "'self'"
 		styleAttributeSources := "'none'"
@@ -167,7 +168,7 @@ func (a *App) middleware(next http.Handler) http.Handler {
 			formActionSources += " https://subsnail.schollz.com"
 			styleAttributeSources = "'unsafe-inline'"
 		}
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src "+scriptSources+"; style-src 'self'; style-src-attr "+styleAttributeSources+"; img-src 'self' data:; connect-src "+connectSources+"; font-src 'self'; object-src 'none'; base-uri 'self'; form-action "+formActionSources+"; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src "+scriptSources+"; style-src "+styleSources+"; style-src-attr "+styleAttributeSources+"; img-src 'self' data:; connect-src "+connectSources+"; font-src 'self'; object-src 'none'; base-uri 'self'; form-action "+formActionSources+"; frame-ancestors 'none'")
 		if strings.HasPrefix(a.origin(r), "https://") {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
