@@ -10,18 +10,22 @@ import (
 )
 
 const (
-	homeTitle       = "Offline Notepad — Private Notes That Work Offline"
-	homeDescription = "Write private encrypted notes that work offline. Offline Notepad saves locally first and securely syncs your notebook when you reconnect."
-	blogTitle       = "Offline Notepad Blog — News and Release Notes"
-	blogDescription = "Plainspoken notes about Offline Notepad releases, offline-first writing, browser encryption, and private note synchronization."
-	howItWorksSlug  = "how-offline-notepad-works"
-	howItWorksTitle = "How Offline Notepad Works: Offline, Encrypted Notes"
-	howItWorksDesc  = "Learn how Offline Notepad saves encrypted notes locally, works without internet, syncs safely, and keeps passwords and plaintext out of the server."
-	howPublishedAt  = "2026-09-04T00:00:00Z"
-	blogPostSlug    = "offline-notepad-v2"
-	blogPostTitle   = "Offline Notepad v2: Private Notes That Work Offline"
-	blogPostSummary = "Offline Notepad v2 is a private encrypted notepad that saves locally, works without internet, and securely syncs when you reconnect."
-	blogPublishedAt = "2026-09-05T00:00:00Z"
+	homeTitle          = "Offline Notepad — Private Notes That Work Offline"
+	homeDescription    = "Write private encrypted notes that work offline. Offline Notepad saves locally first and securely syncs your notebook when you reconnect."
+	aboutTitle         = "About Offline Notepad — Private, Offline-First Notes"
+	aboutDescription   = "Learn why Offline Notepad saves encrypted notes locally first, keeps readable notes out of the server, and stays deliberately simple."
+	contactTitle       = "Contact Offline Notepad"
+	contactDescription = "Contact Offline Notepad with questions, feedback, or bug reports."
+	blogTitle          = "Offline Notepad Blog — News and Release Notes"
+	blogDescription    = "Plainspoken notes about Offline Notepad releases, offline-first writing, browser encryption, and private note synchronization."
+	howItWorksSlug     = "how-offline-notepad-works"
+	howItWorksTitle    = "How Offline Notepad Works: Offline, Encrypted Notes"
+	howItWorksDesc     = "Learn how Offline Notepad saves encrypted notes locally, works without internet, syncs safely, and keeps passwords and plaintext out of the server."
+	howPublishedAt     = "2026-09-04T00:00:00Z"
+	blogPostSlug       = "offline-notepad-v2"
+	blogPostTitle      = "Offline Notepad v2: Private Notes That Work Offline"
+	blogPostSummary    = "Offline Notepad v2 is a private encrypted notepad that saves locally, works without internet, and securely syncs when you reconnect."
+	blogPublishedAt    = "2026-09-05T00:00:00Z"
 )
 
 type requestNonceKey struct{}
@@ -230,6 +234,38 @@ func blogIndexStructuredData(origin string) map[string]any {
 	}
 }
 
+func aboutStructuredData(origin string) map[string]any {
+	aboutURL := origin + "/about"
+	return map[string]any{
+		"@context":    "https://schema.org",
+		"@type":       "AboutPage",
+		"@id":         aboutURL + "#webpage",
+		"url":         aboutURL,
+		"name":        aboutTitle,
+		"description": aboutDescription,
+		"inLanguage":  "en",
+		"isPartOf":    map[string]any{"@id": origin + "/#website"},
+		"mainEntity": map[string]any{
+			"@type": "WebApplication", "@id": origin + "/#application", "name": "Offline Notepad", "url": origin,
+			"applicationCategory": "ProductivityApplication", "isAccessibleForFree": true,
+		},
+	}
+}
+
+func contactStructuredData(origin string) map[string]any {
+	contactURL := origin + "/contact"
+	return map[string]any{
+		"@context":    "https://schema.org",
+		"@type":       "ContactPage",
+		"@id":         contactURL + "#webpage",
+		"url":         contactURL,
+		"name":        contactTitle,
+		"description": contactDescription,
+		"inLanguage":  "en",
+		"isPartOf":    map[string]any{"@id": origin + "/#website"},
+	}
+}
+
 func blogPostStructuredData(origin string, post blogPost) map[string]any {
 	articleURL := origin + "/blog/" + post.Slug
 	return map[string]any{
@@ -265,6 +301,44 @@ func publicStructuredData(origin, canonical, title, description, modifiedAt stri
 		document["dateModified"] = modifiedAt
 	}
 	return map[string]any{"@context": "https://schema.org", "@type": "WebPage", "@id": canonical, "url": canonical, "name": title, "mainEntity": document}
+}
+
+func (a *App) handleAbout(w http.ResponseWriter, r *http.Request) {
+	meta := a.pageMetadata(r, "/about", aboutTitle, aboutDescription,
+		"about Offline Notepad, private notes, encrypted notes, offline-first notepad, open source notes app",
+		"index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1", "website", "", "", aboutStructuredData(a.origin(r)))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	if err := a.about.Execute(w, meta); err != nil {
+		a.logger.Error("render about", "error", err)
+	}
+}
+
+func (a *App) handleAboutSlash(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/about/" {
+		http.Redirect(w, r, "/about", http.StatusPermanentRedirect)
+		return
+	}
+	http.NotFound(w, r)
+}
+
+func (a *App) handleContact(w http.ResponseWriter, r *http.Request) {
+	meta := a.pageMetadata(r, "/contact", contactTitle, contactDescription,
+		"contact Offline Notepad, Offline Notepad support, Offline Notepad feedback",
+		"index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1", "website", "", "", contactStructuredData(a.origin(r)))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	if err := a.contact.Execute(w, meta); err != nil {
+		a.logger.Error("render contact", "error", err)
+	}
+}
+
+func (a *App) handleContactSlash(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/contact/" {
+		http.Redirect(w, r, "/contact", http.StatusPermanentRedirect)
+		return
+	}
+	http.NotFound(w, r)
 }
 
 func (a *App) handleBlogIndex(w http.ResponseWriter, r *http.Request) {
@@ -322,6 +396,8 @@ func (a *App) handleSitemap(w http.ResponseWriter, r *http.Request) {
 	origin := a.origin(r)
 	urls := []sitemapURL{
 		{Location: origin + "/", ChangeFrequency: "weekly", Priority: "1.0"},
+		{Location: origin + "/about", ChangeFrequency: "monthly", Priority: "0.8"},
+		{Location: origin + "/contact", ChangeFrequency: "yearly", Priority: "0.5"},
 		{Location: origin + "/blog", ChangeFrequency: "weekly", Priority: "0.8"},
 	}
 	for _, post := range blogPosts {

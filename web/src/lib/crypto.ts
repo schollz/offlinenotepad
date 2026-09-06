@@ -76,7 +76,7 @@ export function encryptNote(note: NoteContent, workspace: string, key: Uint8Arra
 
 export function decryptNote(ciphertext: string, workspace: string, document: string, key: Uint8Array): NoteContent {
   const record = decryptRecord(ciphertext, workspace, document, key)
-  if ('record_type' in record && record.record_type === 'folder') throw new Error('Encrypted document is not a note.')
+  if ('record_type' in record) throw new Error('Encrypted document is not a note.')
   return record as NoteContent
 }
 

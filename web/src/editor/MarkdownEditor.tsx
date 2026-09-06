@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, type MouseEvent } from 'react'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { bracketMatching, HighlightStyle, indentOnInput, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
 import { commonmarkLanguage, markdown } from '@codemirror/lang-markdown'
@@ -127,5 +127,27 @@ export function MarkdownEditor({ documentId, value, mode, onChange }: MarkdownEd
     view.dispatch({ effects: modeCompartment.current.reconfigure(mode === 'live' ? livePreview : []) })
   }, [documentId, mode])
 
-  return <div ref={hostRef} className="markdown-editor" data-document-id={documentId} data-mode={mode} />
+  function focusAtEndFromEmptySpace(event: MouseEvent<HTMLDivElement>): void {
+    const view = viewRef.current
+    if (!view || event.button !== 0) return
+    const lastLine = view.contentDOM.querySelector<HTMLElement>(':scope > .cm-line:last-of-type')
+    const editorBounds = view.dom.getBoundingClientRect()
+    const scrollBounds = view.scrollDOM.getBoundingClientRect()
+    const target = event.target
+    if (!lastLine
+      || (target instanceof Element && target.closest('.cm-panels'))
+      || event.clientY <= lastLine.getBoundingClientRect().bottom
+      || event.clientY > editorBounds.bottom
+      || event.clientX < editorBounds.left
+      || event.clientX > editorBounds.right
+      || (event.clientY <= scrollBounds.bottom
+        && (event.clientX > scrollBounds.left + view.scrollDOM.clientWidth
+          || event.clientY > scrollBounds.top + view.scrollDOM.clientHeight))) return
+
+    event.preventDefault()
+    view.dispatch({ selection: { anchor: view.state.doc.length }, scrollIntoView: true })
+    view.focus()
+  }
+
+  return <div ref={hostRef} className="markdown-editor" data-document-id={documentId} data-mode={mode} onMouseDownCapture={focusAtEndFromEmptySpace} />
 }

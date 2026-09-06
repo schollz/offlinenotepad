@@ -372,6 +372,9 @@ func (s *Store) StageLegacyArchiveWithProgress(ctx context.Context, archive Lega
 }
 
 func (s *Store) stageLegacyArchive(ctx context.Context, archive LegacyArchive, dryRun bool, progress LegacyArchiveProgressFunc) (LegacyArchiveResult, error) {
+	if s.backend == BackendPostgreSQL {
+		return s.stageLegacyArchivePostgreSQL(ctx, archive, dryRun, progress)
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return LegacyArchiveResult{}, err
@@ -524,7 +527,7 @@ func (s *Store) GetLegacyPublication(ctx context.Context, publicID string) (Lega
 	return publication, nil
 }
 
-func (s *Store) PromoteLegacyWorkspace(ctx context.Context, legacyID string, workspace Workspace, documents []Document) (ImportResult, error) {
+func (s *Store) PromoteLegacyWorkspace(ctx context.Context, legacyID string, workspace Workspace, documents []Document, rejectedDocumentIDs, discardedDocumentIDs []string) (ImportResult, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return ImportResult{}, err
@@ -575,10 +578,11 @@ func (s *Store) PromoteLegacyWorkspace(ctx context.Context, legacyID string, wor
 	if err := rows.Close(); err != nil {
 		return ImportResult{}, err
 	}
-	if len(documents) != len(expected) {
+	if len(documents)+len(rejectedDocumentIDs)+len(discardedDocumentIDs) != len(expected) || (len(expected) > 0 && len(documents) == 0 && len(discardedDocumentIDs) == 0) {
 		return ImportResult{}, fmt.Errorf("legacy migration document manifest mismatch: %w", ErrInvalid)
 	}
 	seen := make(map[string]struct{}, len(documents))
+	accepted := make(map[string]struct{}, len(documents))
 	for _, document := range documents {
 		if _, ok := expected[document.DocumentID]; !ok {
 			return ImportResult{}, fmt.Errorf("legacy migration document manifest mismatch: %w", ErrInvalid)
@@ -587,6 +591,25 @@ func (s *Store) PromoteLegacyWorkspace(ctx context.Context, legacyID string, wor
 			return ImportResult{}, fmt.Errorf("legacy migration contains a duplicate document: %w", ErrInvalid)
 		}
 		seen[document.DocumentID] = struct{}{}
+		accepted[document.DocumentID] = struct{}{}
+	}
+	for _, documentID := range rejectedDocumentIDs {
+		if _, ok := expected[documentID]; !ok {
+			return ImportResult{}, fmt.Errorf("legacy migration rejected-document manifest mismatch: %w", ErrInvalid)
+		}
+		if _, duplicate := seen[documentID]; duplicate {
+			return ImportResult{}, fmt.Errorf("legacy migration contains a duplicate document decision: %w", ErrInvalid)
+		}
+		seen[documentID] = struct{}{}
+	}
+	for _, documentID := range discardedDocumentIDs {
+		if _, ok := expected[documentID]; !ok {
+			return ImportResult{}, fmt.Errorf("legacy migration discarded-document manifest mismatch: %w", ErrInvalid)
+		}
+		if _, duplicate := seen[documentID]; duplicate {
+			return ImportResult{}, fmt.Errorf("legacy migration contains a duplicate document decision: %w", ErrInvalid)
+		}
+		seen[documentID] = struct{}{}
 	}
 	created, err := tx.ExecContext(ctx, workspaceInsert, workspace.ID, workspace.KDFVersion, workspace.KDFSalt, workspace.KDFMemory, workspace.KDFIterations, workspace.KDFParallelism, workspace.AuthPublicKey)
 	if err != nil {
@@ -626,7 +649,11 @@ func (s *Store) PromoteLegacyWorkspace(ctx context.Context, legacyID string, wor
 			publicationRows.Close()
 			return result, err
 		}
-		publications = append(publications, publication)
+		if _, ok := accepted[publication.DocumentID]; ok {
+			publications = append(publications, publication)
+		} else {
+			result.PublicationsSkipped++
+		}
 	}
 	if err := publicationRows.Close(); err != nil {
 		return result, err

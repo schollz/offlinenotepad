@@ -62,11 +62,14 @@ func TestReadArchiveDiscoversEveryWorkspaceWithoutCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 	var progress []ArchiveProgress
-	archive, err := readArchiveWithProgress(context.Background(), source, func(update ArchiveProgress) {
+	archive, diagnostics, err := readArchiveWithProgress(context.Background(), source, func(update ArchiveProgress) {
 		progress = append(progress, update)
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if diagnostics != (ArchiveDiagnostics{}) {
+		t.Fatalf("unexpected archive diagnostics: %#v", diagnostics)
 	}
 	if len(archive.Workspaces) != 2 || len(archive.Publications) != 1 {
 		t.Fatalf("archive counts: workspaces=%d publications=%d", len(archive.Workspaces), len(archive.Publications))
@@ -100,7 +103,7 @@ func TestReadArchiveDiscoversEveryWorkspaceWithoutCredentials(t *testing.T) {
 	}
 }
 
-func TestReadArchiveRejectsIncompleteWorkspace(t *testing.T) {
+func TestReadArchiveSkipsIncompleteWorkspace(t *testing.T) {
 	source := filepath.Join(t.TempDir(), "data.db")
 	db, err := bolt.Open(source, 0600, nil)
 	if err != nil {
@@ -115,8 +118,110 @@ func TestReadArchiveRejectsIncompleteWorkspace(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readArchive(source); err == nil {
-		t.Fatal("incomplete legacy workspace unexpectedly accepted")
+	archive, diagnostics, err := readArchiveWithProgress(context.Background(), source, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(archive.Workspaces) != 0 || diagnostics.WorkspacesSkippedIncomplete != 1 {
+		t.Fatalf("incomplete workspace result: archive=%#v diagnostics=%#v", archive, diagnostics)
+	}
+}
+
+func TestReadArchiveRecoversMissingHashesAndSkipsDamagedRecords(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "data.db")
+	db, err := bolt.Open(source, 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = db.Update(func(tx *bolt.Tx) error {
+		data, err := tx.CreateBucket([]byte("1234abcd-data"))
+		if err != nil {
+			return err
+		}
+		hashes, err := tx.CreateBucket([]byte("1234abcd-hashes"))
+		if err != nil {
+			return err
+		}
+		for id, ciphertext := range map[string]string{
+			"abc12345": legacyGolden,
+			"cde34567": "damaged",
+			"invalid!": legacyGolden,
+		} {
+			if err := data.Put([]byte(id), []byte(ciphertext)); err != nil {
+				return err
+			}
+		}
+		for id, hash := range map[string]string{
+			"cde34567": "1234abcd",
+			"orphan01": "1234abcd",
+		} {
+			if err := hashes.Put([]byte(id), []byte(hash)); err != nil {
+				return err
+			}
+		}
+		secondData, err := tx.CreateBucket([]byte("2345bcde-data"))
+		if err != nil {
+			return err
+		}
+		secondHashes, err := tx.CreateBucket([]byte("2345bcde-hashes"))
+		if err != nil {
+			return err
+		}
+		if err := secondData.Put([]byte("abc12345"), []byte(legacyGolden)); err != nil {
+			return err
+		}
+		if err := secondHashes.Put([]byte("abc12345"), []byte("not-a-hash")); err != nil {
+			return err
+		}
+		published, err := tx.CreateBucket([]byte("published"))
+		if err != nil {
+			return err
+		}
+		if err := published.Put([]byte("invalid!"), []byte(`{"id":"invalid!"}`)); err != nil {
+			return err
+		}
+		if err := published.Put([]byte("11111111"), []byte("not json")); err != nil {
+			return err
+		}
+		return published.Put([]byte("22222222"), []byte(`{"id":"33333333"}`))
+	})
+	if closeErr := db.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var finalProgress ArchiveProgress
+	archive, diagnostics, err := readArchiveWithProgress(context.Background(), source, func(progress ArchiveProgress) {
+		finalProgress = progress
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(archive.Workspaces) != 2 {
+		t.Fatalf("recovered archive = %#v", archive)
+	}
+	for _, workspace := range archive.Workspaces {
+		if len(workspace.Documents) != 1 || workspace.Documents[0].DocumentHash != "" {
+			t.Errorf("recovered workspace = %#v", workspace)
+		}
+	}
+	want := ArchiveDiagnostics{
+		DocumentsRecoveredMissingHash:     1,
+		DocumentsRecoveredInvalidHash:     1,
+		DocumentsSkippedInvalidID:         1,
+		DocumentsSkippedInvalidCiphertext: 1,
+		HashesSkippedWithoutDocument:      1,
+		PublicationsSkippedInvalidID:      1,
+		PublicationsSkippedInvalidJSON:    1,
+		PublicationsSkippedIDMismatch:     1,
+	}
+	if diagnostics != want {
+		t.Fatalf("archive diagnostics = %#v, want %#v", diagnostics, want)
+	}
+	if finalProgress.Phase != ArchiveProgressReadPublications || finalProgress.Completed != 3 || finalProgress.Total != 3 || finalProgress.Diagnostics != want {
+		t.Fatalf("final archive progress = %#v", finalProgress)
 	}
 }
 
@@ -201,7 +306,7 @@ func TestPostgreSQLStagesWholeArchiveTransactionally(t *testing.T) {
 		t.Fatal(err)
 	}
 	workspace := database.Workspace{ID: workspaceID, KDFVersion: 1, KDFSalt: "AAECAwQFBgcICQoLDA0ODw", KDFMemory: 32 * 1024, KDFIterations: 1, KDFParallelism: 1, AuthPublicKey: cryptov2.EncodePublicKey(keys.PublicKey)}
-	promoted, err := store.PromoteLegacyWorkspace(context.Background(), legacyID, workspace, []database.Document{{DocumentID: documentID, Ciphertext: "modern encrypted", CiphertextHash: "modern hash"}})
+	promoted, err := store.PromoteLegacyWorkspace(context.Background(), legacyID, workspace, []database.Document{{DocumentID: documentID, Ciphertext: "modern encrypted", CiphertextHash: "modern hash"}}, nil, nil)
 	if err != nil || promoted.DocumentsImported != 1 || promoted.PublicationsImported != 1 {
 		t.Fatalf("promotion result = %#v err=%v", promoted, err)
 	}

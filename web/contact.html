@@ -24,9 +24,6 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="{{.SocialImageAlt}}" />
-    {{if .PublishedAt}}<meta property="article:published_time" content="{{.PublishedAt}}" />{{end}}
-    {{if .ModifiedAt}}<meta property="article:modified_time" content="{{.ModifiedAt}}" />{{end}}
-    {{if .PublishedAt}}<meta property="article:section" content="{{.Post.Section}}" />{{end}}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="{{.PageTitle}}" />
     <meta name="twitter:description" content="{{.Description}}" />
@@ -42,48 +39,36 @@
         <span class="brand-mark">
           <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4" />
-            <path d="M2 6h4" />
-            <path d="M2 10h4" />
-            <path d="M2 14h4" />
-            <path d="M2 18h4" />
+            <path d="M2 6h4M2 10h4M2 14h4M2 18h4" />
             <path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z" />
           </svg>
         </span>
         <span>Offline Notepad</span>
       </a>
-      <nav aria-label="Primary navigation"><a href="/">Open notepad</a><a href="/about">About</a><a href="/blog" aria-current="page">Blog</a><a href="/contact">Contact</a></nav>
+      <nav aria-label="Primary navigation"><a href="/">Open notepad</a><a href="/about">About</a><a href="/blog">Blog</a><a href="/contact" aria-current="page">Contact</a></nav>
     </header>
-    {{if .IsIndex}}
-    <main class="blog-index">
-      <header class="page-intro">
-        <h1>Offline Notepad blog</h1>
-        <p>Release notes and practical writing about private, offline-first notes.</p>
+    <main class="contact-page">
+      <header class="contact-hero">
+        <p class="page-kicker">Contact</p>
+        <h1>Get in touch.</h1>
+        <p>Questions, feedback, and bug reports are welcome.</p>
       </header>
-      <div class="post-list">
-        {{range .Posts}}
-        <article class="post-row">
-          <p class="post-meta"><time datetime="{{.PublishedAt}}">{{.PublishedDisplay}}</time> · {{.ReadingTime}}</p>
-          <h2><a href="/blog/{{.Slug}}">{{.Title}}</a></h2>
-          <p>{{.Description}}</p>
-          <a class="read-link" href="/blog/{{.Slug}}">Read the release note</a>
-        </article>
-        {{end}}
-      </div>
+      <section class="contact-card" aria-labelledby="contact-form-title">
+        <h2 id="contact-form-title">Send a message</h2>
+        <p>Fill out the form and we’ll get back to you by email.</p>
+        <form class="contact-form" data-subsnail="https://subsnail.schollz.com/form/0e018f9b-3d62-48db-8f40-7398e6aecb0d/subscribe/" aria-label="Contact Offline Notepad" aria-live="polite">
+          <div class="contact-name-fields">
+            <label for="contact-first-name">First name<input id="contact-first-name" type="text" name="first_name" placeholder="First name" autocomplete="given-name" /></label>
+            <label for="contact-last-name">Last name<input id="contact-last-name" type="text" name="last_name" placeholder="Last name" autocomplete="family-name" /></label>
+          </div>
+          <label for="contact-email">Email<input id="contact-email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required /></label>
+          <label for="contact-message">Message<textarea id="contact-message" name="textarea" placeholder="Your message"></textarea></label>
+          <button type="submit">Subscribe</button>
+        </form>
+        <p class="contact-alternative">Prefer email? Write to <a href="mailto:admin@offlinenotepad.com">admin@offlinenotepad.com</a>.</p>
+        <p class="contact-note">Please do not include notebook passwords, encryption keys, or the contents of private notes.</p>
+      </section>
     </main>
-    {{else}}
-    <main class="blog-post">
-      <a class="back-link" href="/blog">← Blog</a>
-      <article>
-        <header class="article-header">
-          <h1>{{.Post.Title}}</h1>
-          <p class="article-summary">{{.Post.Description}}</p>
-          <p class="post-meta"><time datetime="{{.Post.PublishedAt}}">{{.Post.PublishedDisplay}}</time> · {{.Post.ReadingTime}}</p>
-        </header>
-        <div class="article-body">{{.Post.Body}}</div>
-        <footer class="article-footer">Try <a href="/">Offline Notepad</a> or read more on the <a href="/blog">blog</a>.</footer>
-      </article>
-    </main>
-    {{end}}
     <footer class="site-footer">
       <nav class="footer-links" aria-label="Footer navigation">
         <span>made by <a href="https://github.com/sponsors/schollz" rel="noreferrer" target="_blank">schollz</a></span>
@@ -102,5 +87,6 @@
         </ul>
       </details>
     </footer>
+    <script src="https://subsnail.schollz.com/form/embed.js"></script>
   </body>
 </html>

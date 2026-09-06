@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent, type ReactNode } from 'react'
 import {
   ChevronRight,
   Cloud,
@@ -27,16 +27,20 @@ interface FileTreeProps {
   notes: FileTreeNote[]
   folders: FolderContent[]
   selectedNoteId: string
+  selectedNoteIds: ReadonlySet<string>
   activeFolderId: string | null
   search: string
-  onSelectNote: (id: string) => void
+  onSelectNotes: (ids: string[], activeId: string) => void
+  onClearNoteSelection: () => void
   onSelectFolder: (id: string | null) => void
   onNewNote: (folderId: string | null) => void
   onNewFolder: (parentId: string | null) => void
   onRenameFolder: (id: string) => void
   onMoveNote: (id: string) => void
+  onMoveNotes: (ids: string[]) => void
   onMoveFolder: (id: string) => void
   onDeleteNote: (id: string) => void
+  onDeleteNotes: (ids: string[]) => void
   onDeleteFolder: (id: string) => void
   onDropItem: (item: DraggedItem, folderId: string | null) => void
 }
@@ -66,6 +70,7 @@ export function FileTree(props: FileTreeProps) {
   const [menu, setMenu] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null | undefined>(undefined)
   const knownFolders = useRef(new Set<string>())
+  const selectionAnchor = useRef<string | null>(null)
   const menuRoot = useRef<HTMLDivElement>(null)
   const byId = useMemo(() => folderById(props.folders), [props.folders])
 
@@ -95,6 +100,10 @@ export function FileTree(props: FileTreeProps) {
       return next
     })
   }, [byId, props.activeFolderId, props.notes, props.selectedNoteId])
+
+  useEffect(() => {
+    if (props.selectedNoteIds.size <= 1) selectionAnchor.current = props.selectedNoteId || null
+  }, [props.selectedNoteId, props.selectedNoteIds.size])
 
   useEffect(() => {
     if (!menu) return
@@ -147,6 +156,40 @@ export function FileTree(props: FileTreeProps) {
     return counts
   }, [byId, props.notes])
 
+  const visibleNoteIds = useMemo(() => {
+    if (props.search.trim()) return props.notes.map(({ note }) => note.id)
+    const result: string[] = []
+    const appendFolder = (folder: FolderContent) => {
+      if (!expanded.has(folder.id)) return
+      for (const child of childFolders.get(folder.id) ?? []) appendFolder(child)
+      for (const { note } of childNotes.get(folder.id) ?? []) result.push(note.id)
+    }
+    for (const folder of childFolders.get(null) ?? []) appendFolder(folder)
+    for (const { note } of childNotes.get(null) ?? []) result.push(note.id)
+    return result
+  }, [childFolders, childNotes, expanded, props.notes, props.search])
+
+  const selectNote = (event: MouseEvent<HTMLButtonElement>, id: string) => {
+    if (!event.shiftKey) {
+      selectionAnchor.current = id
+      props.onSelectNotes([id], id)
+      return
+    }
+    const fallbackAnchor = visibleNoteIds.includes(props.selectedNoteId) ? props.selectedNoteId : id
+    const anchor = selectionAnchor.current && visibleNoteIds.includes(selectionAnchor.current)
+      ? selectionAnchor.current
+      : fallbackAnchor
+    const anchorIndex = visibleNoteIds.indexOf(anchor)
+    const selectedIndex = visibleNoteIds.indexOf(id)
+    if (anchorIndex < 0 || selectedIndex < 0) {
+      props.onSelectNotes([id], id)
+      return
+    }
+    const start = Math.min(anchorIndex, selectedIndex)
+    const end = Math.max(anchorIndex, selectedIndex)
+    props.onSelectNotes(visibleNoteIds.slice(start, end + 1), id)
+  }
+
   const closeMenu = (action: () => void) => {
     setMenu(null)
     action()
@@ -166,12 +209,16 @@ export function FileTree(props: FileTreeProps) {
 
   const noteRow = ({ note, stored }: FileTreeNote, depth: number, showPath = false) => {
     const title = note.title || 'Untitled note'
+    const selected = props.selectedNoteIds.has(note.id)
+    const selectedIds = [...props.selectedNoteIds]
+    const useSelection = selected && selectedIds.length > 1
     return <div className="tree-row-wrap" key={note.id} style={{ '--tree-depth': depth } as CSSProperties}>
       <button
-        className={`tree-row note-tree-row note-row ${note.id === props.selectedNoteId ? 'selected' : ''}`}
+        className={`tree-row note-tree-row note-row ${selected ? 'selected' : ''} ${note.id === props.selectedNoteId ? 'active-note' : ''}`}
+        aria-pressed={selected}
         draggable
         onDragStart={(event) => startDrag(event, { kind: 'note', id: note.id })}
-        onClick={() => props.onSelectNote(note.id)}
+        onClick={(event) => selectNote(event, note.id)}
         title={showPath ? `${title} — ${folderPath(note.folder_id, props.folders)}` : title}
       >
         <FileText className="tree-item-icon" />
@@ -179,11 +226,18 @@ export function FileTree(props: FileTreeProps) {
         <span className="tree-sync" title={stored.pending ? 'Saved offline' : 'Synchronized'}>{stored.pending ? <CloudOff /> : <Cloud />}</span>
       </button>
       {itemMenu(`note:${note.id}`, <>
-        <button role="menuitem" onClick={() => closeMenu(() => props.onMoveNote(note.id))}><Move /> Move note…</button>
-        <button role="menuitem" className="danger" onClick={() => closeMenu(() => props.onDeleteNote(note.id))}><Trash2 /> Delete note</button>
+        <button role="menuitem" onClick={() => closeMenu(() => useSelection ? props.onMoveNotes(selectedIds) : props.onMoveNote(note.id))}><Move /> {useSelection ? `Move ${selectedIds.length} notes…` : 'Move note…'}</button>
+        <button role="menuitem" className="danger" onClick={() => closeMenu(() => useSelection ? props.onDeleteNotes(selectedIds) : props.onDeleteNote(note.id))}><Trash2 /> {useSelection ? `Delete ${selectedIds.length} notes` : 'Delete note'}</button>
       </>)}
     </div>
   }
+
+  const selectionActions = props.selectedNoteIds.size > 1 && <div className="tree-selection-actions" role="toolbar" aria-label={`${props.selectedNoteIds.size} selected notes`}>
+    <span>{props.selectedNoteIds.size} selected</span>
+    <button onClick={() => props.onMoveNotes([...props.selectedNoteIds])} title="Move selected notes"><Move /><span>Move</span></button>
+    <button className="danger" onClick={() => props.onDeleteNotes([...props.selectedNoteIds])} title="Delete selected notes"><Trash2 /><span>Delete</span></button>
+    <button className="clear-selection" onClick={props.onClearNoteSelection} aria-label="Clear note selection" title="Clear selection">×</button>
+  </div>
 
   const folderRow = (folder: FolderContent, depth: number): ReactNode => {
     const open = expanded.has(folder.id)
@@ -238,6 +292,7 @@ export function FileTree(props: FileTreeProps) {
 
   if (props.search.trim()) {
     return <nav className="file-tree search-tree" aria-label="Search results">
+      {selectionActions}
       <div className="tree-section-label">{props.notes.length} result{props.notes.length === 1 ? '' : 's'}</div>
       {props.notes.map((note) => noteRow(note, 0, true))}
       {!props.notes.length && <div className="empty-list"><FileText /><span>No matching notes</span></div>}
@@ -245,6 +300,7 @@ export function FileTree(props: FileTreeProps) {
   }
 
   return <nav className="file-tree" aria-label="Files and folders">
+    {selectionActions}
     <button
       className={`tree-section-label tree-root-label ${dropTarget === null ? 'drop-target' : ''}`}
       aria-label="Show top-level files"

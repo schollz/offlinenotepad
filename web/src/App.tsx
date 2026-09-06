@@ -8,6 +8,7 @@ import {
   CloudOff,
   Download,
   Eye,
+  EyeClosed,
   Folder,
   FolderPlus,
   FileJson,
@@ -38,26 +39,34 @@ import { z } from 'zod'
 import { FileTree } from './components/FileTree'
 import { trackEvent, trackPageView } from './lib/analytics'
 import { clearKeys, decryptRecord, deriveKeys, encryptNote, encryptRecord, randomSalt, workspaceID } from './lib/crypto'
-import { acknowledgeDocument, clearLogin, documentKey, getAccount, getLogin, listDocuments, notebookDB, queueDocument, reconcileDocument, saveAccount, saveLogin, type DocumentSource } from './lib/db'
+import { acknowledgeDocument, clearLogin, documentKey, getAccount, getLogin, listDocuments, notebookDB, queueDocument, reconcileDocument, recoverUnreadableSyncedDocument, saveAccount, saveLogin, type DocumentSource } from './lib/db'
 import { toBase64 } from './lib/encoding'
 import { canMoveFolder, descendantFolderIds, flattenedFolders, folderNameError, folderPath } from './lib/folders'
 import { decryptLegacyWorkspace, legacyWorkspaceID, parseLegacyWorkspace } from './lib/legacy'
+import { isWorkspacePreferences, workspacePreferencesDocumentID } from './lib/preferences'
 import { SyncClient } from './lib/sync'
 import { useUI } from './store'
-import type { ContentMode, FolderContent, KdfMetadata, NoteContent, PrivateRecord, Publication, SessionKeys, StoredDocument, WireDocument } from './types'
+import type { ContentMode, FolderContent, KdfMetadata, NoteContent, PrivateRecord, Publication, SessionKeys, StoredDocument, WireDocument, WorkspacePreferences } from './types'
 
 interface OpenNote { note: NoteContent; stored: StoredDocument }
 interface OpenFolder { folder: FolderContent; stored: StoredDocument }
+interface OpenWorkspacePreferences { preferences: WorkspacePreferences; stored: StoredDocument }
 interface Session { username: string; metadata: KdfMetadata; keys: SessionKeys }
 type SaveState = 'saved-offline' | 'synced'
 type ConnectionState = 'connecting' | 'online' | 'offline'
 type FolderDialogState =
   | { kind: 'create'; parentId: string | null }
   | { kind: 'rename'; folderId: string }
-type MoveDialogState = { kind: 'note' | 'folder'; id: string }
+type MoveDialogState =
+  | { kind: 'note' | 'folder'; id: string }
+  | { kind: 'notes'; ids: string[] }
 
 function isFolderRecord(record: PrivateRecord): record is FolderContent {
   return 'record_type' in record && record.record_type === 'folder'
+}
+
+function isNoteRecord(record: PrivateRecord): record is NoteContent {
+  return !('record_type' in record)
 }
 
 const usernameSchema = z.string().max(200).refine((value) => value.trim().length > 0, 'Enter your notebook name.')
@@ -81,6 +90,8 @@ interface LegacyPromotion {
   metadata: KdfMetadata
   keys: SessionKeys
   documents: WireDocument[]
+  rejectedDocuments: number
+  deletedDocuments: number
   promoted: boolean
 }
 
@@ -91,12 +102,12 @@ async function promoteLegacyWorkspace(username: string, password: string, worksp
   if (!legacyResponse.ok) throw new Error('The server could not load this legacy notebook.')
   const staged = parseLegacyWorkspace(await legacyResponse.json())
   if (staged.legacy_id !== legacyId) throw new Error('The server returned the wrong legacy notebook.')
-  const notes = decryptLegacyWorkspace(staged, password)
+  const decrypted = decryptLegacyWorkspace(staged, password)
   const metadata: KdfMetadata = { id: workspaceId, ...defaultKdf, kdf_salt: toBase64(randomSalt()), auth_public_key: '' }
   let keys = await deriveKeys(password, metadata)
   metadata.auth_public_key = toBase64(keys.authPublicKey)
   const timestamp = new Date().toISOString()
-  const documents: WireDocument[] = notes.map((note) => {
+  const documents: WireDocument[] = decrypted.notes.map((note) => {
     const encrypted = encryptNote(note, workspaceId, keys.contentKey)
     return { document_id: note.id, ciphertext: encrypted.ciphertext, ciphertext_hash: encrypted.hash, revision: 1, deleted: false, updated_at: timestamp }
   })
@@ -104,7 +115,13 @@ async function promoteLegacyWorkspace(username: string, password: string, worksp
   try {
     promotionResponse = await fetch(`/api/v1/legacy/workspaces/${legacyId}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ username, workspace: metadata, documents }),
+      body: JSON.stringify({
+        username,
+        workspace: metadata,
+        documents,
+        rejected_document_ids: decrypted.rejectedDocumentIds,
+        discarded_document_ids: decrypted.deletedDocumentIds,
+      }),
     })
   } catch (caught) {
     clearKeys(keys)
@@ -120,13 +137,19 @@ async function promoteLegacyWorkspace(username: string, password: string, worksp
       clearKeys(keys)
       throw new Error('This legacy notebook was already migrated with different credentials.')
     }
-    return { metadata: current, keys, documents: [], promoted: false }
+    return {
+      metadata: current, keys, documents: [], rejectedDocuments: decrypted.rejectedDocumentIds.length,
+      deletedDocuments: decrypted.deletedDocumentIds.length, promoted: false,
+    }
   }
   if (!promotionResponse.ok) {
     clearKeys(keys)
     throw new Error('The legacy notebook could not be migrated.')
   }
-  return { metadata, keys, documents, promoted: true }
+  return {
+    metadata, keys, documents, rejectedDocuments: decrypted.rejectedDocumentIds.length,
+    deletedDocuments: decrypted.deletedDocumentIds.length, promoted: true,
+  }
 }
 
 function storedFromWire(workspaceId: string, document: WireDocument): StoredDocument {
@@ -169,7 +192,9 @@ export default function App() {
   const notesRef = useRef<OpenNote[]>([])
   const [folders, setFolders] = useState<OpenFolder[]>([])
   const foldersRef = useRef<OpenFolder[]>([])
+  const preferencesRef = useRef<OpenWorkspacePreferences | null>(null)
   const [selectedID, setSelectedID] = useState('')
+  const [selectedNoteIDs, setSelectedNoteIDs] = useState<string[]>([])
   const [activeFolderID, setActiveFolderID] = useState<string | null>(null)
   const [connection, setConnection] = useState<ConnectionState>('offline')
   const [saveState, setSaveState] = useState<SaveState>('saved-offline')
@@ -186,6 +211,7 @@ export default function App() {
   const sessionRef = useRef<Session | null>(null)
   const dirtyRecords = useRef(new Map<string, PrivateRecord>())
   const dirtyHashes = useRef(new Map<string, string>())
+  const unreadableSyncedDocuments = useRef(new Set<string>())
   const documentOperations = useRef(new Map<string, Promise<unknown>>())
   const pendingPublicationAnalytics = useRef(new Map<string, 'create' | 'update'>())
   const pendingUnpublicationAnalytics = useRef(new Set<string>())
@@ -204,6 +230,14 @@ export default function App() {
     trackPageView(location.pathname)
   }, [location.key, location.pathname])
   useEffect(() => { sessionRef.current = session }, [session])
+  useEffect(() => {
+    const available = new Set(notes.map(({ note }) => note.id))
+    setSelectedNoteIDs((current) => {
+      if (!selectedID || !available.has(selectedID)) return []
+      const remaining = current.filter((id) => available.has(id))
+      return remaining.includes(selectedID) ? remaining : [selectedID]
+    })
+  }, [notes, selectedID])
   useEffect(() => () => {
     syncRef.current?.close()
     clearKeys(sessionRef.current?.keys ?? null)
@@ -234,19 +268,30 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, activeFolderID])
 
-  const refreshLocal = useCallback(async (active: Session) => {
+  const refreshLocal = useCallback(async (active: Session, allowServerRecovery = false) => {
     const stored = await listDocuments(active.metadata.id)
     const opened: OpenNote[] = []
     const openedFolders: OpenFolder[] = []
+    let openedPreferences: OpenWorkspacePreferences | null = null
     for (const item of stored) {
       if (item.deleted) continue
       try {
         const decrypted = decryptRecord(item.ciphertext, active.metadata.id, item.documentId, active.keys.contentKey)
+        unreadableSyncedDocuments.current.delete(item.documentId)
         const record = dirtyRecords.current.get(item.documentId) ?? decrypted
         if (isFolderRecord(record)) openedFolders.push({ folder: record, stored: item })
+        else if (isWorkspacePreferences(record)) openedPreferences = { preferences: record, stored: item }
         else opened.push({ note: record, stored: item })
       } catch {
-        throw new Error('A local document could not be decrypted. Restore a valid encrypted backup before continuing.')
+        const queued = await notebookDB.outbox.where('key').equals(item.key).count()
+        if (!item.pending && queued === 0) {
+          if (allowServerRecovery) {
+            unreadableSyncedDocuments.current.add(item.documentId)
+            continue
+          }
+          throw new Error('A synced local cache record could not be decrypted. Reconnect to its server to recover it.')
+        }
+        throw new Error('An unsynced local document could not be decrypted. Its encrypted data was preserved; restore a valid backup before continuing.')
       }
     }
     opened.sort((a, b) => b.note.updated_at.localeCompare(a.note.updated_at))
@@ -255,6 +300,7 @@ export default function App() {
     notesRef.current = opened
     setFolders(openedFolders)
     foldersRef.current = openedFolders
+    preferencesRef.current = openedPreferences
     return opened
   }, [])
 
@@ -285,7 +331,9 @@ export default function App() {
       if (dirtyRecords.current.get(record.id) === record) {
         dirtyHashes.current.set(record.id, encrypted.hash)
       }
-      if (isFolderRecord(record)) {
+      if (isWorkspacePreferences(record)) {
+        preferencesRef.current = { preferences: record, stored: persisted }
+      } else if (isFolderRecord(record)) {
         setFolders((current) => {
           const dirty = dirtyRecords.current.get(record.id)
           const folder = dirty && isFolderRecord(dirty) ? dirty : record
@@ -298,11 +346,44 @@ export default function App() {
       } else {
         setNotes((current) => {
           const dirty = dirtyRecords.current.get(record.id)
-          const note = dirty && !isFolderRecord(dirty) ? dirty : record
+          const note = dirty && isNoteRecord(dirty) ? dirty : record as NoteContent
           const updated = current.map((item) => item.note.id === record.id ? { note, stored: persisted } : item)
           notesRef.current = updated
           return updated
         })
+      }
+    })
+    syncRef.current?.scheduleFlush()
+  }, [runDocumentOperation])
+
+  const rememberOpenedNote = useCallback(async (active: Session, noteId: string) => {
+    const key = documentKey(active.metadata.id, workspacePreferencesDocumentID)
+    setSaveState('saved-offline')
+    await runDocumentOperation(key, async () => {
+      const now = new Date().toISOString()
+      const preferences: WorkspacePreferences = {
+        record_type: 'workspace_preferences',
+        id: workspacePreferencesDocumentID,
+        last_opened_note_id: noteId,
+        updated_at: now,
+      }
+      const encrypted = encryptRecord(preferences, active.metadata.id, active.keys.contentKey)
+      const cached = await notebookDB.documents.get(key)
+      const stored: StoredDocument = {
+        key,
+        workspaceId: active.metadata.id,
+        documentId: workspacePreferencesDocumentID,
+        ciphertext: encrypted.ciphertext,
+        ciphertextHash: encrypted.hash,
+        revision: cached?.revision ?? 0,
+        deleted: false,
+        pending: true,
+        updatedAt: now,
+      }
+      await queueDocument(stored, 'upsert')
+      preferencesRef.current = {
+        preferences,
+        stored: await notebookDB.documents.get(key) ?? stored,
       }
     })
     syncRef.current?.scheduleFlush()
@@ -314,14 +395,17 @@ export default function App() {
     clearKeys(keys)
     dirtyRecords.current.clear()
     dirtyHashes.current.clear()
+    unreadableSyncedDocuments.current.clear()
     pendingPublicationAnalytics.current.clear()
     pendingUnpublicationAnalytics.current.clear()
     notesRef.current = []
     foldersRef.current = []
+    preferencesRef.current = null
     setSession(null)
     setNotes([])
     setFolders([])
     setSelectedID('')
+    setSelectedNoteIDs([])
     setActiveFolderID(null)
     setPublications({})
     setSearch('')
@@ -338,12 +422,20 @@ export default function App() {
     syncRef.current?.close()
     const acceptDocuments = async (documents: WireDocument[], source: DocumentSource) => {
       let shouldFlush = false
+      let recovered = 0
       for (const wire of documents) {
+        const stored = storedFromWire(active.metadata.id, wire)
+        if (unreadableSyncedDocuments.current.has(wire.document_id)) {
+          if (await recoverUnreadableSyncedDocument(stored)) {
+            unreadableSyncedDocuments.current.delete(wire.document_id)
+            recovered += 1
+          }
+        }
         const key = documentKey(active.metadata.id, wire.document_id)
         let dirtyRecord: PrivateRecord | undefined
         const result = await runDocumentOperation(key, () => {
           dirtyRecord = dirtyRecords.current.get(wire.document_id)
-          return reconcileDocument(storedFromWire(active.metadata.id, wire), source)
+          return reconcileDocument(stored, source)
         })
         if (result.kind === 'inconsistent') {
           setError('Synchronization stopped for a document because the server returned inconsistent encrypted data.')
@@ -357,7 +449,22 @@ export default function App() {
           }
         }
       }
-      await refreshLocal(active)
+      const local = await refreshLocal(active, source === 'initial')
+      if (source === 'initial') {
+        const routeID = initialPath.current.match(/^\/app\/notes\/([^/]+)$/u)?.[1]
+        const preferredID = preferencesRef.current?.preferences.last_opened_note_id
+        const next = local.find((item) => item.note.id === routeID)
+          ?? local.find((item) => item.note.id === preferredID)
+          ?? local[0]
+        if (next) {
+          setSelectedID(next.note.id)
+          setActiveFolderID(next.note.folder_id ?? null)
+          navigate(`/app/notes/${next.note.id}`)
+        }
+      }
+      if (source === 'initial' && recovered > 0) {
+        showToast(`Recovered ${recovered} unreadable local cache ${recovered === 1 ? 'record' : 'records'} from the server.`)
+      }
       const queued = await notebookDB.outbox.where('workspaceId').equals(active.metadata.id).count()
       setSaveState(queued || dirtyHashes.current.size ? 'saved-offline' : 'synced')
       if (shouldFlush) await syncRef.current?.flush()
@@ -413,7 +520,7 @@ export default function App() {
     })
     syncRef.current = client
     client.connect()
-  }, [closeSession, refreshLocal, runDocumentOperation, showToast])
+  }, [closeSession, navigate, refreshLocal, runDocumentOperation, showToast])
 
   useEffect(() => {
     let cancelled = false
@@ -443,7 +550,8 @@ export default function App() {
         const active: Session = { username: saved.username, metadata, keys: saved.keys }
         await saveAccount({ ...metadata, username: saved.username, updatedAt: new Date().toISOString() })
         await saveLogin(active)
-        const local = await refreshLocal(active)
+        unreadableSyncedDocuments.current.clear()
+        const local = await refreshLocal(active, response?.ok === true)
         if (cancelled) {
           clearKeys(active.keys)
           return
@@ -451,7 +559,9 @@ export default function App() {
         setSession(active)
         connect(active)
         const routeID = initialPath.current.match(/^\/app\/notes\/([^/]+)$/u)?.[1]
-        const first = local.find((item) => item.note.id === routeID)?.note.id ?? local[0]?.note.id
+        const first = local.find((item) => item.note.id === routeID)?.note.id
+          ?? local.find((item) => item.note.id === preferencesRef.current?.preferences.last_opened_note_id)?.note.id
+          ?? local[0]?.note.id
         if (first) { setSelectedID(first); navigate(`/app/notes/${first}`) } else navigate('/app')
       } catch (caught) {
         clearKeys(restoredKeys)
@@ -471,6 +581,7 @@ export default function App() {
   async function authenticate(username: string, password: string): Promise<void> {
     setBusy(true)
     setError('')
+    unreadableSyncedDocuments.current.clear()
     let authEvent: 'notebook-create' | 'notebook-unlock' = 'notebook-unlock'
     let createFailure: 'validation' | 'already-exists' | 'server' | 'crypto' | 'unknown' = 'validation'
     let unlockFailure: 'validation' | 'not-found' | 'incorrect-password' | 'offline-unavailable' | 'server' | 'crypto' | 'unknown' = 'validation'
@@ -480,6 +591,8 @@ export default function App() {
       let metadata: KdfMetadata
       let keys: SessionKeys
       let migratedDocuments: WireDocument[] = []
+      let rejectedLegacyDocuments = 0
+      let deletedLegacyDocuments = 0
       let promoted = false
       let response: Response | undefined
       let requestError: unknown
@@ -503,6 +616,8 @@ export default function App() {
           metadata = migration.metadata
           keys = migration.keys
           migratedDocuments = migration.documents
+          rejectedLegacyDocuments = migration.rejectedDocuments
+          deletedLegacyDocuments = migration.deletedDocuments
           promoted = migration.promoted
         } else {
           authEvent = 'notebook-create'
@@ -553,12 +668,18 @@ export default function App() {
       await saveLogin(active)
       for (const document of migratedDocuments) await acknowledgeDocument(storedFromWire(metadata.id, document))
       setSession(active)
-      const local = await refreshLocal(active)
+      const local = await refreshLocal(active, response !== undefined)
       connect(active)
       const routeID = location.pathname.match(/^\/app\/notes\/([^/]+)$/u)?.[1]
-      const first = local.find((item) => item.note.id === routeID)?.note.id ?? local[0]?.note.id
+      const first = local.find((item) => item.note.id === routeID)?.note.id
+        ?? local.find((item) => item.note.id === preferencesRef.current?.preferences.last_opened_note_id)?.note.id
+        ?? local[0]?.note.id
       if (first) { setSelectedID(first); navigate(`/app/notes/${first}`) } else navigate('/app')
-      if (promoted) showToast(`Migrated ${migratedDocuments.length} legacy note${migratedDocuments.length === 1 ? '' : 's'}.`)
+      if (promoted) {
+        const deleted = deletedLegacyDocuments > 0 ? ` Omitted ${deletedLegacyDocuments} legacy deletion ${deletedLegacyDocuments === 1 ? 'marker' : 'markers'}.` : ''
+        const unreadable = rejectedLegacyDocuments > 0 ? ` Skipped ${rejectedLegacyDocuments} unreadable legacy ${rejectedLegacyDocuments === 1 ? 'record' : 'records'}.` : ''
+        showToast(`Migrated ${migratedDocuments.length} legacy note${migratedDocuments.length === 1 ? '' : 's'}.${deleted}${unreadable}`)
+      }
       if (authEvent === 'notebook-create') trackEvent({ event: 'notebook-create', outcome: 'success' }, 'landing')
       else trackEvent({ event: 'notebook-unlock', outcome: 'success' }, 'landing')
     } catch (caught) {
@@ -584,7 +705,7 @@ export default function App() {
     const current = notesRef.current.find((item) => item.note.id === noteId)
     if (!current) return
     const dirty = dirtyRecords.current.get(noteId)
-    const base = dirty && !isFolderRecord(dirty) ? dirty : current.note
+    const base = dirty && isNoteRecord(dirty) ? dirty : current.note
     const changed: OpenNote = { ...current, note: { ...base, ...patch, updated_at: new Date().toISOString() } }
     dirtyRecords.current.set(noteId, changed.note)
     setSaveState('saved-offline')
@@ -618,9 +739,11 @@ export default function App() {
       notesRef.current = updated
       setNotes(updated)
       setSelectedID(note.id)
+      setSelectedNoteIDs([note.id])
       setActiveFolderID(targetFolder)
       setSidebarOpen(false)
       navigate(`/app/notes/${note.id}`)
+      void rememberOpenedNote(session, note.id).catch(() => undefined)
       await syncRef.current?.flush()
     } catch {
       trackEvent({ event: 'note-create', outcome: 'error', reason: failureReason }, 'note')
@@ -635,43 +758,61 @@ export default function App() {
     })
   }
 
-  async function deleteNote(noteId = selectedID): Promise<void> {
-    if (!session || !noteId || !window.confirm('Permanently delete this note from every synced device?')) return
-    const open = notesRef.current.find((item) => item.note.id === noteId)
-    if (!open) return
+  async function deleteNotes(noteIds: string[]): Promise<void> {
+    if (!session) return
+    const requested = new Set(noteIds)
+    const deletedNotes = notesRef.current.filter(({ note }) => requested.has(note.id))
+    if (!deletedNotes.length) return
+    const confirmation = deletedNotes.length === 1
+      ? 'Permanently delete this note from every synced device?'
+      : `Permanently delete ${deletedNotes.length} selected notes from every synced device?`
+    if (!window.confirm(confirmation)) return
     try {
       setSaveState('saved-offline')
-      await tombstoneDocument(open.stored)
+      for (const open of deletedNotes) await tombstoneDocument(open.stored)
       trackEvent({ event: 'note-delete', outcome: 'success' }, 'note')
-      dirtyRecords.current.delete(noteId)
-      dirtyHashes.current.delete(noteId)
-      const updated = notesRef.current.filter((item) => item.note.id !== noteId)
+      for (const { note } of deletedNotes) {
+        dirtyRecords.current.delete(note.id)
+        dirtyHashes.current.delete(note.id)
+      }
+      const deletedIds = new Set(deletedNotes.map(({ note }) => note.id))
+      const updated = notesRef.current.filter(({ note }) => !deletedIds.has(note.id))
       notesRef.current = updated
       setNotes(updated)
-      if (selectedID === noteId) {
+      setSelectedNoteIDs((current) => current.filter((id) => !deletedIds.has(id)))
+      if (deletedIds.has(selectedID)) {
         const next = updated[0]
         setSelectedID(next?.note.id ?? '')
         setActiveFolderID(next?.note.folder_id ?? null)
         navigate(next ? `/app/notes/${next.note.id}` : '/app')
+        void rememberOpenedNote(session, next?.note.id ?? '').catch(() => undefined)
       }
+      if (deletedNotes.length > 1) showToast(`Deleted ${deletedNotes.length} notes.`)
       await syncRef.current?.flush()
     } catch {
       trackEvent({ event: 'note-delete', outcome: 'error', reason: 'local-storage' }, 'note')
-      setError('The note could not be deleted.')
+      setError(deletedNotes.length === 1 ? 'The note could not be deleted.' : 'The selected notes could not all be deleted.')
+      await refreshLocal(session).catch(() => undefined)
     }
   }
 
-  function selectNote(id: string): void {
-    const open = notesRef.current.find((item) => item.note.id === id)
-    setSelectedID(id)
+  function selectNotes(ids: string[], activeId: string): void {
+    const available = new Set(notesRef.current.map(({ note }) => note.id))
+    const selection = [...new Set(ids)].filter((id) => available.has(id))
+    const open = notesRef.current.find((item) => item.note.id === activeId)
+    if (!open) return
+    setSelectedNoteIDs(selection.includes(activeId) ? selection : [activeId])
+    setSelectedID(activeId)
     setActiveFolderID(open?.note.folder_id ?? null)
-    setSidebarOpen(false)
-    navigate(`/app/notes/${id}`)
+    if (selection.length === 1) setSidebarOpen(false)
+    navigate(`/app/notes/${activeId}`)
+    if (session) void rememberOpenedNote(session, activeId).catch(() => undefined)
   }
 
   function selectFolder(id: string | null): void {
     setActiveFolderID(id)
     setSelectedID('')
+    setSelectedNoteIDs([])
     setSidebarOpen(false)
     navigate('/app')
   }
@@ -737,6 +878,15 @@ export default function App() {
     showToast(`Moved note to ${folderPath(folderId, foldersRef.current.map(({ folder }) => folder))}.`)
   }
 
+  function moveNotes(noteIds: string[], folderId: string | null): void {
+    const requested = new Set(noteIds)
+    const moved = notesRef.current.filter(({ note }) => requested.has(note.id) && (note.folder_id ?? null) !== folderId)
+    for (const { note } of moved) updateNote(note.id, { folder_id: folderId })
+    if (requested.has(selectedID)) setActiveFolderID(folderId)
+    setMoveDialog(null)
+    if (moved.length) showToast(`Moved ${moved.length} note${moved.length === 1 ? '' : 's'} to ${folderPath(folderId, foldersRef.current.map(({ folder }) => folder))}.`)
+  }
+
   function moveFolder(folderId: string, parentId: string | null): void {
     const allFolders = foldersRef.current.map(({ folder }) => folder)
     const current = allFolders.find((folder) => folder.id === folderId)
@@ -782,6 +932,7 @@ export default function App() {
         setSelectedID(next?.note.id ?? '')
         setActiveFolderID(next?.note.folder_id ?? null)
         navigate(next ? `/app/notes/${next.note.id}` : '/app')
+        void rememberOpenedNote(session, next?.note.id ?? '').catch(() => undefined)
       }
       showToast(`Deleted “${folder.name}”.`)
       await syncRef.current?.flush()
@@ -911,7 +1062,7 @@ export default function App() {
         const now = new Date().toISOString()
         preparedFolders.push({ ...old, id: folderIdMap.get(old.id)!, name, parent_id: parentId, created_at: now, updated_at: now })
       }
-      const preparedNotes = importedRecords.filter((record): record is NoteContent => !isFolderRecord(record)).map((old) => {
+      const preparedNotes = importedRecords.filter(isNoteRecord).map((old) => {
         const now = new Date().toISOString()
         return { ...old, id: crypto.randomUUID(), folder_id: old.folder_id ? folderIdMap.get(old.folder_id) ?? null : null, created_at: now, updated_at: now }
       })
@@ -958,6 +1109,7 @@ export default function App() {
       const records = [
         ...notesRef.current.map(({ note, stored }) => ({ record: note as PrivateRecord, stored })),
         ...foldersRef.current.map(({ folder, stored }) => ({ record: folder as PrivateRecord, stored })),
+        ...(preferencesRef.current ? [{ record: preferencesRef.current.preferences as PrivateRecord, stored: preferencesRef.current.stored }] : []),
       ]
       const rotation = records.map(({ record, stored }) => {
         const encrypted = encryptRecord(record, metadata.id, keys.contentKey)
@@ -1017,8 +1169,20 @@ export default function App() {
   const selectedPublication = selected ? publications[selected.note.id] : undefined
   const publicationOutdated = Boolean(selected && selectedPublication && new Date(selected.note.updated_at).getTime() > new Date(selectedPublication.updated_at).getTime())
   const folderRecords = folders.map(({ folder }) => folder)
+  const selectedNoteIdSet = new Set(selectedNoteIDs)
   const activeFolder = activeFolderID ? folderRecords.find((folder) => folder.id === activeFolderID) : undefined
   const editingFolder = folderDialog?.kind === 'rename' ? folderRecords.find((folder) => folder.id === folderDialog.folderId) : undefined
+  let moveDialogParentId: string | null | undefined
+  if (moveDialog?.kind === 'note') {
+    moveDialogParentId = notesRef.current.find(({ note }) => note.id === moveDialog.id)?.note.folder_id ?? null
+  } else if (moveDialog?.kind === 'folder') {
+    moveDialogParentId = foldersRef.current.find(({ folder }) => folder.id === moveDialog.id)?.folder.parent_id ?? null
+  } else if (moveDialog?.kind === 'notes') {
+    const parentIds = new Set(notesRef.current
+      .filter(({ note }) => moveDialog.ids.includes(note.id))
+      .map(({ note }) => note.folder_id ?? null))
+    if (parentIds.size === 1) moveDialogParentId = [...parentIds][0]
+  }
 
   if (!session) return <Welcome restoring={restoringLogin} busy={busy} error={error} onAuthenticate={authenticate} />
 
@@ -1036,12 +1200,15 @@ export default function App() {
         </div>
         <label className="search-box"><Search /><input ref={searchInput} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search notes" aria-label="Search notes" /></label>
         <FileTree
-          notes={filteredNotes} folders={folderRecords} search={search} selectedNoteId={selectedID} activeFolderId={activeFolderID}
-          onSelectNote={selectNote} onSelectFolder={selectFolder} onNewNote={(folderId) => void newNote(folderId)}
+          notes={filteredNotes} folders={folderRecords} search={search} selectedNoteId={selectedID} selectedNoteIds={selectedNoteIdSet} activeFolderId={activeFolderID}
+          onSelectNotes={selectNotes} onClearNoteSelection={() => setSelectedNoteIDs(selectedID ? [selectedID] : [])}
+          onSelectFolder={selectFolder} onNewNote={(folderId) => void newNote(folderId)}
           onNewFolder={(parentId) => setFolderDialog({ kind: 'create', parentId })}
           onRenameFolder={(folderId) => setFolderDialog({ kind: 'rename', folderId })}
           onMoveNote={(id) => setMoveDialog({ kind: 'note', id })} onMoveFolder={(id) => setMoveDialog({ kind: 'folder', id })}
-          onDeleteNote={(id) => void deleteNote(id)} onDeleteFolder={(id) => void deleteFolder(id)} onDropItem={dropItem}
+          onMoveNotes={(ids) => setMoveDialog({ kind: 'notes', ids })}
+          onDeleteNote={(id) => void deleteNotes([id])} onDeleteNotes={(ids) => void deleteNotes(ids)}
+          onDeleteFolder={(id) => void deleteFolder(id)} onDropItem={dropItem}
         />
         <div className="sidebar-footer">
           <Connection status={connection} />
@@ -1077,6 +1244,10 @@ export default function App() {
               <textarea className="content-editor" value={selected.note.content} onChange={(event) => editNote({ content: event.target.value })} placeholder="Start writing…" aria-label="Note content" spellCheck />
             )}
           </section>
+        ) : connection === 'connecting' ? (
+          <section className="connecting-editor" role="status" aria-label="Connecting to your notebook">
+            <span className="loader" aria-hidden="true" />
+          </section>
         ) : (
           <section className="empty-editor"><div className="empty-art"><Sparkles /></div><p className="eyebrow">{activeFolder ? folderPath(activeFolder.id, folderRecords) : 'Your private workspace'}</p><h1>{activeFolder ? `“${activeFolder.name}” is ready.` : 'Capture what matters.'}</h1><p>Notes and folders are encrypted in this browser, saved locally first, and synchronized whenever you’re connected.</p><button className="button primary" onClick={() => void newNote(activeFolderID)}><FilePlus2 /> {activeFolder ? 'New note in this folder' : 'Create your first note'}</button></section>
         )}
@@ -1086,7 +1257,7 @@ export default function App() {
         theme={theme} mode={selected?.note.mode} publication={selected ? publications[selected.note.id] : undefined}
         onClose={() => setSettingsOpen(false)} onTheme={setTheme} onMode={(mode) => editNote({ mode })}
         onEncryptedExport={exportEncrypted} onPlaintextExport={exportPlaintext} onImport={() => fileInput.current?.click()}
-        onRotate={() => setRotationOpen(true)} onDelete={() => void deleteNote()} onUnpublish={unpublish} onLogout={() => void logout()}
+        onRotate={() => setRotationOpen(true)} onDelete={() => void deleteNotes(selectedID ? [selectedID] : [])} onUnpublish={unpublish} onLogout={() => void logout()}
       />}
       <input ref={fileInput} hidden type="file" accept=".json,.onp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importFile(file); event.target.value = '' }} />
       {folderDialog && <FolderDialog
@@ -1102,13 +1273,11 @@ export default function App() {
         onSubmit={(name) => folderDialog.kind === 'create' ? createFolder(name, folderDialog.parentId) : renameFolder(folderDialog.folderId, name)}
       />}
       {moveDialog && <MoveDialog
-        title={moveDialog.kind === 'note' ? 'Move note' : 'Move folder'} folders={folderRecords}
-        currentParentId={moveDialog.kind === 'note'
-          ? notesRef.current.find(({ note }) => note.id === moveDialog.id)?.note.folder_id ?? null
-          : foldersRef.current.find(({ folder }) => folder.id === moveDialog.id)?.folder.parent_id ?? null}
+        title={moveDialog.kind === 'notes' ? `Move ${moveDialog.ids.length} notes` : moveDialog.kind === 'note' ? 'Move note' : 'Move folder'} folders={folderRecords}
+        currentParentId={moveDialogParentId}
         unavailable={moveDialog.kind === 'folder' ? descendantFolderIds(moveDialog.id, folderRecords) : new Set()}
         onClose={() => setMoveDialog(null)}
-        onMove={(folderId) => moveDialog.kind === 'note' ? moveNote(moveDialog.id, folderId) : moveFolder(moveDialog.id, folderId)}
+        onMove={(folderId) => moveDialog.kind === 'notes' ? moveNotes(moveDialog.ids, folderId) : moveDialog.kind === 'note' ? moveNote(moveDialog.id, folderId) : moveFolder(moveDialog.id, folderId)}
       />}
       {rotationOpen && <PasswordDialog busy={busy} error={error} onClose={() => { setRotationOpen(false); setError('') }} onSubmit={(password) => void rotatePassword(password)} />}
       {toast && <div className="toast" role="status"><Check />{toast}</div>}
@@ -1134,21 +1303,32 @@ function ProjectFooter() {
 function Welcome({ restoring, busy, error, onAuthenticate }: { restoring: boolean; busy: boolean; error: string; onAuthenticate: (username: string, password: string) => Promise<void> }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [passwordVisible, setPasswordVisible] = useState(false)
   const submit = (event: FormEvent) => { event.preventDefault(); void onAuthenticate(username, password) }
   return <div className="welcome">
     <div className="welcome-shell">
-      <nav className="welcome-nav"><a className="brand" href="/"><span className="brand-mark"><NotebookPen aria-hidden="true" /></span><span>Offline Notepad</span></a><a className="welcome-blog-link" href="/blog">Blog</a></nav>
+      <nav className="welcome-nav">
+        <a className="brand" href="/" aria-label="Offline Notepad home"><span className="brand-mark"><NotebookPen aria-hidden="true" /></span><span>Offline Notepad</span></a>
+        <div className="welcome-page-links"><a href="/about">About</a><a href="/blog">Blog</a><a href="/contact">Contact</a></div>
+      </nav>
       <main>
         <section className="auth-section" aria-labelledby="notebook-access-title">
           <div className="auth-heading">
             <h1 id="notebook-access-title">Sign in or create a notebook</h1>
-            <p className="auth-intro">Enter a notebook name and password. Existing details sign you in; new details create a private notebook.</p>
           </div>
           {restoring ? <div className="auth-restoring" role="status"><span className="spinner" /><span>Opening your saved notebook…</span></div> : <>
             <form onSubmit={submit}>
               <div className="auth-fields">
                 <label>Notebook name<input autoFocus autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="e.g. north-star" /></label>
-                <label>Password<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Your password" /></label>
+                <div className="auth-field">
+                  <label htmlFor="notebook-password">Password</label>
+                  <div className="password-input">
+                    <input id="notebook-password" type={passwordVisible ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Your password" />
+                    <button type="button" className="password-toggle" aria-label={passwordVisible ? 'Hide password' : 'Show password'} aria-pressed={passwordVisible} onClick={() => setPasswordVisible((visible) => !visible)}>
+                      {passwordVisible ? <Eye aria-hidden="true" /> : <EyeClosed aria-hidden="true" />}
+                    </button>
+                  </div>
+                </div>
               </div>
               {error && <p className="form-error" role="alert">{error}</p>}
               <button className="button primary auth-submit" disabled={busy}>{busy ? <span className="spinner" /> : <LockKeyhole />}{busy ? 'Deriving encryption keys…' : 'Sign in or create notebook'}</button>
@@ -1157,8 +1337,9 @@ function Welcome({ restoring, busy, error, onAuthenticate }: { restoring: boolea
           </>}
         </section>
         <section className="welcome-details" aria-label="About Offline Notepad">
-          <p>Write, edit, search, and delete private notes without an internet connection. Changes are saved on this device first.</p>
-          <p>Encrypted synchronization makes the same notebook available on your other devices without sending readable notes or your password to the server.</p>
+          <h2>Welcome to the Offline Notepad.</h2>
+          <p>Offline Notepad is an <a href="https://github.com/schollz/offlinenotepad" rel="noreferrer" target="_blank">open-source</a>, offline-capable note-writing app that securely synchronizes across all your devices. Everything you write is encrypted and stored locally, with encrypted syncing via a server.</p>
+          <p>Offline Notepad is offline-first, which means you can create, edit, delete, and search notes without an internet connection. Your notes automatically sync with a server using end-to-end encryption when you come online.</p>
         </section>
       </main>
       <ProjectFooter />
@@ -1221,7 +1402,7 @@ function FolderDialog(props: {
 function MoveDialog(props: {
   title: string
   folders: FolderContent[]
-  currentParentId: string | null
+  currentParentId: string | null | undefined
   unavailable: Set<string>
   onClose: () => void
   onMove: (folderId: string | null) => void

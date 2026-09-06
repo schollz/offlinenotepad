@@ -4,6 +4,7 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import { decryptNote, decryptRecord, encryptNote, encryptRecord, normalizeUsername, signChallenge, workspaceID } from './crypto'
 import { encoder, fromBase64, toBase64 } from './encoding'
 import { deriveKeyMaterial } from './key-material'
+import { workspacePreferencesDocumentID } from './preferences'
 
 const golden = {
   workspace: 'ZKAbCLohP9bDxYv8F-5uXLSAD55bLNOQ-ZrNyeeV0qk',
@@ -48,6 +49,20 @@ describe('zero-knowledge cryptography', () => {
     expect(encrypted.ciphertext).not.toContain(folder.parent_id)
     expect(decryptRecord(encrypted.ciphertext, golden.workspace, folder.id, keys.contentKey)).toEqual(folder)
     expect(() => decryptNote(encrypted.ciphertext, golden.workspace, folder.id, keys.contentKey)).toThrow(/not a note/i)
+  })
+
+  it('encrypts workspace preferences so the server cannot read the last-opened note', () => {
+    const keys = deriveKeyMaterial('correct horse battery staple', fromBase64(golden.salt), 32_768, 1, 1)
+    const preferences = {
+      record_type: 'workspace_preferences' as const,
+      id: workspacePreferencesDocumentID,
+      last_opened_note_id: 'private-note-id',
+      updated_at: '2020-01-01T00:00:00Z',
+    }
+    const encrypted = encryptRecord(preferences, golden.workspace, keys.contentKey)
+    expect(encrypted.ciphertext).not.toContain(preferences.last_opened_note_id)
+    expect(decryptRecord(encrypted.ciphertext, golden.workspace, preferences.id, keys.contentKey)).toEqual(preferences)
+    expect(() => decryptNote(encrypted.ciphertext, golden.workspace, preferences.id, keys.contentKey)).toThrow(/not a note/i)
   })
 
   it('matches the Go encrypted-envelope golden byte for byte', () => {

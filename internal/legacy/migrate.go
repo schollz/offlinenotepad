@@ -28,7 +28,15 @@ type Options struct {
 	Password         []byte
 	DryRun           bool
 }
-type Result struct{ DocumentsImported, DocumentsSkipped, PublicationsImported, PublicationsSkipped int }
+type Result struct {
+	DocumentsImported, DocumentsSkipped, DocumentsVerified int
+	DocumentsRead, DocumentsRejectedDecrypt                int
+	DocumentsRejectedInvalid, DocumentsRecoveredHash       int
+	DocumentsSkippedDeleted                                int
+	HashesSkippedWithoutDocument                           int
+	PublicationsImported, PublicationsSkipped              int
+	PublicationsRejected                                   int
+}
 
 type legacyDocument struct {
 	UUID      string `json:"uuid"`
@@ -78,6 +86,7 @@ func Migrate(ctx context.Context, store *database.Store, options Options) (Resul
 	type encryptedRecord struct{ id, value, hash string }
 	records := make([]encryptedRecord, 0)
 	publishedRaw := make(map[string][]byte)
+	result := Result{}
 	err = db.View(func(tx *bolt.Tx) error {
 		data := tx.Bucket([]byte(legacyID + "-data"))
 		hashes := tx.Bucket([]byte(legacyID + "-hashes"))
@@ -88,18 +97,20 @@ func Migrate(ctx context.Context, store *database.Store, options Options) (Resul
 			if v == nil {
 				return nil
 			}
+			result.DocumentsRead++
 			hash := hashes.Get(k)
-			if hash == nil {
-				return fmt.Errorf("document %s has no legacy hash", k)
+			storedHash := ""
+			if hash != nil {
+				storedHash = string(append([]byte(nil), hash...))
 			}
-			records = append(records, encryptedRecord{id: string(k), value: string(append([]byte(nil), v...)), hash: string(append([]byte(nil), hash...))})
+			records = append(records, encryptedRecord{id: string(k), value: string(append([]byte(nil), v...)), hash: storedHash})
 			return nil
 		}); err != nil {
 			return err
 		}
 		if err := hashes.ForEach(func(k, v []byte) error {
 			if v != nil && data.Get(k) == nil {
-				return fmt.Errorf("legacy hash %s has no document", k)
+				result.HashesSkippedWithoutDocument++
 			}
 			return nil
 		}); err != nil {
@@ -116,7 +127,7 @@ func Migrate(ctx context.Context, store *database.Store, options Options) (Resul
 		return nil
 	})
 	if err != nil {
-		return Result{}, err
+		return result, err
 	}
 	workspaceID, err := cryptov2.WorkspaceID(options.Username)
 	if err != nil {
@@ -145,23 +156,33 @@ func Migrate(ctx context.Context, store *database.Store, options Options) (Resul
 	workspace.AuthPublicKey = publicKey
 	documents := make([]database.Document, 0, len(records))
 	publications := make([]database.Publication, 0)
+	documentsAuthenticated := 0
 	for _, record := range records {
 		plaintext, err := decryptLegacy(record.value, options.Password)
 		if err != nil {
-			return Result{}, fmt.Errorf("decrypt document %s: %w", record.id, err)
+			result.DocumentsRejectedDecrypt++
+			continue
 		}
 		var old legacyDocument
 		if err := json.Unmarshal([]byte(plaintext), &old); err != nil {
-			return Result{}, fmt.Errorf("parse document %s: %w", record.id, err)
+			result.DocumentsRejectedInvalid++
+			continue
 		}
-		if old.UUID != record.id {
-			return Result{}, fmt.Errorf("document %s UUID mismatch", record.id)
+		calculatedHash := legacyDocumentHash(old)
+		if old.UUID != record.id || !legacyDocumentIDPattern.MatchString(old.UUID) || old.Hash != calculatedHash {
+			result.DocumentsRejectedInvalid++
+			continue
 		}
-		if !legacyDocumentIDPattern.MatchString(old.UUID) {
-			return Result{}, fmt.Errorf("document %s has invalid UUID", record.id)
+		if record.hash != calculatedHash {
+			result.DocumentsRecoveredHash++
 		}
-		if legacyDocumentHash(old) != record.hash || old.Hash != record.hash {
-			return Result{}, fmt.Errorf("document %s hash mismatch", record.id)
+		documentsAuthenticated++
+		if isLegacyDeletedTitle(old.Title) {
+			result.DocumentsSkippedDeleted++
+			if _, published := publishedRaw[legacyPublicID(old.UUID)]; published {
+				result.PublicationsSkipped++
+			}
+			continue
 		}
 		mode := "markdown"
 		if strings.Contains(old.Title, ".") {
@@ -182,27 +203,42 @@ func Migrate(ctx context.Context, store *database.Store, options Options) (Resul
 		if raw, ok := publishedRaw[publicID]; ok {
 			var p legacyPublication
 			if err := json.Unmarshal(raw, &p); err != nil {
-				return Result{}, fmt.Errorf("parse publication %s: %w", publicID, err)
+				result.PublicationsRejected++
+				continue
 			}
 			if p.ID != publicID {
-				return Result{}, fmt.Errorf("publication %s ID mismatch", publicID)
+				result.PublicationsRejected++
+				continue
 			}
 			publications = append(publications, database.Publication{PublicID: publicID, WorkspaceID: workspaceID, DocumentID: old.UUID, Title: p.Title, Content: p.Markdown, ContentMode: mode, Legacy: true})
 		}
 	}
+	if len(records) > 0 && documentsAuthenticated == 0 {
+		return result, errors.New("no legacy documents could be authenticated with the supplied credentials")
+	}
 	if options.DryRun {
-		result := Result{}
 		newDocuments := make(map[string]struct{}, len(documents))
 		for _, document := range documents {
-			_, err := store.GetDocument(ctx, workspaceID, document.DocumentID)
+			existing, err := store.GetDocument(ctx, workspaceID, document.DocumentID)
 			switch {
 			case errors.Is(err, database.ErrNotFound):
 				result.DocumentsImported++
 				newDocuments[document.DocumentID] = struct{}{}
 			case err != nil:
-				return Result{}, err
+				return result, err
 			default:
+				plaintext, decryptErr := cryptov2.DecryptDocument(keys.ContentKey, workspaceID, existing.DocumentID, existing.Ciphertext)
+				if decryptErr != nil {
+					return result, errors.New("an existing migrated document could not be decrypted with these credentials")
+				}
+				var current modernDocument
+				parseErr := json.Unmarshal(plaintext, &current)
+				clear(plaintext)
+				if parseErr != nil || current.ID != existing.DocumentID {
+					return result, errors.New("an existing migrated document has an invalid encrypted payload")
+				}
 				result.DocumentsSkipped++
+				result.DocumentsVerified++
 			}
 		}
 		for _, publication := range publications {
@@ -215,9 +251,9 @@ func Migrate(ctx context.Context, store *database.Store, options Options) (Resul
 			case errors.Is(err, database.ErrNotFound):
 				result.PublicationsImported++
 			case err != nil:
-				return Result{}, err
+				return result, err
 			case existing.WorkspaceID != workspaceID || existing.DocumentID != publication.DocumentID:
-				return Result{}, fmt.Errorf("publication id collision: %w", database.ErrExists)
+				return result, fmt.Errorf("publication id collision: %w", database.ErrExists)
 			default:
 				result.PublicationsSkipped++
 			}
@@ -226,9 +262,13 @@ func Migrate(ctx context.Context, store *database.Store, options Options) (Resul
 	}
 	imported, err := store.ImportLegacy(ctx, workspace, documents, publications)
 	if err != nil {
-		return Result{}, err
+		return result, err
 	}
-	return Result(imported), nil
+	result.DocumentsImported = imported.DocumentsImported
+	result.DocumentsSkipped = imported.DocumentsSkipped
+	result.PublicationsImported = imported.PublicationsImported
+	result.PublicationsSkipped = imported.PublicationsSkipped
+	return result, nil
 }
 
 func legacyUserID(username string) string {
@@ -242,6 +282,9 @@ func legacyPublicID(id string) string {
 func legacyDocumentHash(d legacyDocument) string {
 	sum := sha256.Sum256([]byte("offlinenotepad" + d.UUID + d.Title + d.Markdown))
 	return hex.EncodeToString(sum[:])[:8]
+}
+func isLegacyDeletedTitle(title string) bool {
+	return strings.EqualFold(strings.TrimSpace(title), "deleted")
 }
 func stringValue(v any) string {
 	switch value := v.(type) {
@@ -280,7 +323,7 @@ func decryptLegacy(value string, password []byte) (string, error) {
 	}
 	decoded := make([]byte, len(encrypted))
 	cipher.NewCBCDecrypter(block, iv).CryptBlocks(decoded, encrypted)
-	decoded, err = unpadPKCS7(decoded, aes.BlockSize)
+	decoded, err = unpadCryptoJSPKCS7(decoded)
 	if err != nil {
 		return "", err
 	}
@@ -293,18 +336,18 @@ func decryptLegacy(value string, password []byte) (string, error) {
 	}
 	return decompressUTF16(units)
 }
-func unpadPKCS7(value []byte, size int) ([]byte, error) {
+
+// CryptoJS's historical PKCS#7 unpad implementation trusted the final byte
+// instead of checking every padding byte. Some legacy records depend on that
+// behavior. The decrypted document's internal hash is still verified before
+// migration, so accepting this padding form cannot authenticate bad plaintext.
+func unpadCryptoJSPKCS7(value []byte) ([]byte, error) {
 	if len(value) == 0 {
 		return nil, errors.New("empty padded value")
 	}
 	padding := int(value[len(value)-1])
-	if padding == 0 || padding > size || padding > len(value) {
+	if padding > len(value) {
 		return nil, errors.New("invalid password or padding")
-	}
-	for _, b := range value[len(value)-padding:] {
-		if int(b) != padding {
-			return nil, errors.New("invalid password or padding")
-		}
 	}
 	return value[:len(value)-padding], nil
 }

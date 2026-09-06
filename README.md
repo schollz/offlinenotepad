@@ -49,6 +49,7 @@ To stage every account from an old bbolt `data.db` into PostgreSQL:
 
 The archive-wide migration does not require usernames or passwords. Users complete migration by opening their notebook with its original credentials. Back up both databases first.
 The command reports aggregate progress while it reads and validates the archive and stages its records; it never prints notebook or document identifiers, ciphertext, or note content.
+Isolated malformed records do not stop the archive: recoverable missing or stale legacy sync hashes are validated from the encrypted document after the user signs in. Individually unreadable documents are left in legacy staging while valid documents are promoted. Authenticated legacy records whose title is exactly `deleted` (ignoring surrounding whitespace and letter case) are treated as deletion markers and omitted. The UI and server logs report unreadable records and omitted deletion markers as separate aggregate counts. Progress and completion logs include aggregate diagnostic counters for every recovered or skipped category.
 
 ## Development
 

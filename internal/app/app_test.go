@@ -36,7 +36,9 @@ func testServerWithConfig(t *testing.T, config Config) (*database.Store, *httpte
 		t.Fatal(err)
 	}
 	content := fstest.MapFS{
-		"index.html":                     &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:title" content="{{.PageTitle}}"><meta name="twitter:card" content="summary_large_image">{{if .StructuredData}}<script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>{{end}}{{if .IsHomepage}}<main>Private notes that work offline. <a href="/blog">Blog</a></main>{{else}}<main>app</main>{{end}}`)},
+		"index.html":                     &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:title" content="{{.PageTitle}}"><meta name="twitter:card" content="summary_large_image">{{if .StructuredData}}<script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>{{end}}{{if .IsHomepage}}<main>Private notes that work offline. <a href="/about">About</a> <a href="/blog">Blog</a> <a href="/contact">Contact</a></main>{{else}}<main>app</main>{{end}}`)},
+		"about.html":                     &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:type" content="{{.OpenGraphType}}"><meta name="twitter:card" content="summary_large_image"><script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script><h1>A quiet place to write, built around privacy.</h1><p>Your password, private keys, and readable private notes stay in the browser.</p><a href="/">Open Offline Notepad</a>`)},
+		"contact.html":                   &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:type" content="{{.OpenGraphType}}"><meta name="twitter:card" content="summary_large_image"><script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script><h1>Get in touch.</h1><form data-subsnail="https://subsnail.schollz.com/form/0e018f9b-3d62-48db-8f40-7398e6aecb0d/subscribe/"><input name="first_name"><input name="last_name"><input type="email" name="email" required><textarea name="textarea"></textarea><button type="submit">Subscribe</button></form><a href="mailto:admin@offlinenotepad.com">admin@offlinenotepad.com</a><script src="https://subsnail.schollz.com/form/embed.js"></script>`)},
 		"blog.html":                      &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:type" content="{{.OpenGraphType}}"><meta name="twitter:card" content="summary_large_image">{{if .PublishedAt}}<meta property="article:published_time" content="{{.PublishedAt}}">{{end}}<script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>{{if .IsIndex}}<h1>Offline Notepad blog</h1>{{range .Posts}}<a href="/blog/{{.Slug}}">{{.Title}}</a>{{end}}{{else}}<h1>{{.Post.Title}}</h1><time datetime="{{.Post.PublishedAt}}">{{.Post.PublishedDisplay}}</time><article>{{.Post.Body}}</article>{{end}}`)},
 		"public.html":                    &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:title" content="{{.PageTitle}}"><meta name="twitter:card" content="summary_large_image"><script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script><a href="{{.RawURL}}">raw</a><article>{{.Content}}</article>`)},
 		"static/app.js":                  &fstest.MapFile{Data: []byte(`console.log("app")`)},
@@ -84,7 +86,9 @@ func TestHomepageAndBlogSEO(t *testing.T) {
 		`name="twitter:card" content="summary_large_image"`,
 		`"@type":"WebApplication"`,
 		`Private notes that work offline`,
+		`href="/about"`,
 		`href="/blog"`,
+		`href="/contact"`,
 	} {
 		if !strings.Contains(home, expected) {
 			t.Errorf("homepage missing %q", expected)
@@ -109,6 +113,41 @@ func TestHomepageAndBlogSEO(t *testing.T) {
 	appResponse.Body.Close()
 	if !strings.Contains(string(appBody), `name="robots" content="noindex, nofollow, noarchive"`) || !strings.Contains(string(appBody), `href="https://notes.example/app"`) {
 		t.Fatalf("private app SEO metadata is incorrect: %s", appBody)
+	}
+
+	aboutResponse, err := http.Get(server.URL + "/about")
+	if err != nil {
+		t.Fatal(err)
+	}
+	aboutBody, _ := io.ReadAll(aboutResponse.Body)
+	aboutResponse.Body.Close()
+	about := string(aboutBody)
+	for _, expected := range []string{aboutTitle, aboutDescription, `https://notes.example/about`, `"@type":"AboutPage"`, `A quiet place to write, built around privacy`, `readable private notes stay in the browser`} {
+		if !strings.Contains(about, expected) {
+			t.Errorf("about page missing %q", expected)
+		}
+	}
+
+	contactResponse, err := http.Get(server.URL + "/contact")
+	if err != nil {
+		t.Fatal(err)
+	}
+	contactBody, _ := io.ReadAll(contactResponse.Body)
+	contactResponse.Body.Close()
+	contact := string(contactBody)
+	for _, expected := range []string{contactTitle, contactDescription, `https://notes.example/contact`, `"@type":"ContactPage"`, `Get in touch`, `data-subsnail="https://subsnail.schollz.com/form/0e018f9b-3d62-48db-8f40-7398e6aecb0d/subscribe/"`, `name="first_name"`, `name="last_name"`, `type="email" name="email" required`, `name="textarea"`, `>Subscribe</button>`, `src="https://subsnail.schollz.com/form/embed.js"`, `mailto:admin@offlinenotepad.com`} {
+		if !strings.Contains(contact, expected) {
+			t.Errorf("contact page missing %q", expected)
+		}
+	}
+	if !strings.Contains(contactResponse.Header.Get("Content-Security-Policy"), "script-src 'self' 'nonce-") || !strings.Contains(contactResponse.Header.Get("Content-Security-Policy"), "https://subsnail.schollz.com") {
+		t.Errorf("contact page CSP does not authorize Subsnail: %q", contactResponse.Header.Get("Content-Security-Policy"))
+	}
+	if !strings.Contains(contactResponse.Header.Get("Content-Security-Policy"), "style-src-attr 'unsafe-inline'") {
+		t.Errorf("contact page CSP does not authorize Subsnail's injected styles: %q", contactResponse.Header.Get("Content-Security-Policy"))
+	}
+	if strings.Contains(homeResponse.Header.Get("Content-Security-Policy"), "subsnail.schollz.com") {
+		t.Error("homepage CSP unexpectedly allows Subsnail")
 	}
 
 	blogResponse, err := http.Get(server.URL + "/blog")
@@ -189,6 +228,8 @@ func TestSitemapAndRobotsIncludeCrawlablePages(t *testing.T) {
 	}
 	for _, expected := range []string{
 		`<loc>https://notes.example/</loc>`,
+		`<loc>https://notes.example/about</loc>`,
+		`<loc>https://notes.example/contact</loc>`,
 		`<loc>https://notes.example/blog</loc>`,
 		`<loc>https://notes.example/blog/` + howItWorksPost.Slug + `</loc>`,
 		`<loc>https://notes.example/blog/` + releasePost.Slug + `</loc>`,
@@ -393,12 +434,18 @@ func TestPublicSnapshotIsSanitizedAndNotAppCached(t *testing.T) {
 func TestStagedLegacyWorkspaceAndPublicationRoutes(t *testing.T) {
 	store, server := testServer(t)
 	const (
-		username   = "legacy account"
-		documentID = "v9y7fxgx"
+		username            = "legacy account"
+		documentID          = "v9y7fxgx"
+		rejectedDocumentID  = "badnote1"
+		discardedDocumentID = "deleted1"
 	)
 	legacyID := legacyWorkspaceID(username)
 	archive := database.LegacyArchive{
-		Workspaces:   []database.LegacyWorkspace{{LegacyID: legacyID, Documents: []database.LegacyDocument{{DocumentID: documentID, Ciphertext: "legacy ciphertext", DocumentHash: "bb33cf65"}}}},
+		Workspaces: []database.LegacyWorkspace{{LegacyID: legacyID, Documents: []database.LegacyDocument{
+			{DocumentID: documentID, Ciphertext: "legacy ciphertext", DocumentHash: "bb33cf65"},
+			{DocumentID: rejectedDocumentID, Ciphertext: "damaged legacy ciphertext", DocumentHash: "deadbeef"},
+			{DocumentID: discardedDocumentID, Ciphertext: "legacy deletion marker", DocumentHash: "decafbad"},
+		}}},
 		Publications: []database.LegacyPublication{{PublicID: "abcd1234", LegacyID: legacyID, DocumentID: documentID, Title: "Legacy snapshot", Content: "# Safe\n\n<script>alert(1)</script>", ContentMode: "markdown"}},
 	}
 	if _, err := store.StageLegacyArchive(context.Background(), archive, false); err != nil {
@@ -449,7 +496,30 @@ func TestStagedLegacyWorkspaceAndPublicationRoutes(t *testing.T) {
 	if _, err := store.GetWorkspace(context.Background(), workspaceID); err != database.ErrNotFound {
 		t.Fatalf("invalid promotion wrote workspace: %v", err)
 	}
-	payload, err := json.Marshal(legacyPromotionRequest{Username: username, Workspace: workspace, Documents: []database.Document{{DocumentID: documentID, Ciphertext: ciphertext, CiphertextHash: ciphertextHash}}})
+	allRejectedPayload, err := json.Marshal(legacyPromotionRequest{
+		Username: username, Workspace: workspace,
+		RejectedDocumentIDs: []string{documentID, rejectedDocumentID, discardedDocumentID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allRejectedResponse, err := http.Post(server.URL+"/api/v1/legacy/workspaces/"+legacyID, "application/json", bytes.NewReader(allRejectedPayload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	allRejectedResponse.Body.Close()
+	if allRejectedResponse.StatusCode != http.StatusBadRequest {
+		t.Fatalf("all-rejected promotion status = %d", allRejectedResponse.StatusCode)
+	}
+	if _, err := store.GetWorkspace(context.Background(), workspaceID); err != database.ErrNotFound {
+		t.Fatalf("all-rejected promotion wrote workspace: %v", err)
+	}
+	payload, err := json.Marshal(legacyPromotionRequest{
+		Username: username, Workspace: workspace,
+		Documents:            []database.Document{{DocumentID: documentID, Ciphertext: ciphertext, CiphertextHash: ciphertextHash}},
+		RejectedDocumentIDs:  []string{rejectedDocumentID},
+		DiscardedDocumentIDs: []string{discardedDocumentID},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,6 +533,12 @@ func TestStagedLegacyWorkspaceAndPublicationRoutes(t *testing.T) {
 	}
 	if document, err := store.GetDocument(context.Background(), workspaceID, documentID); err != nil || document.CiphertextHash != ciphertextHash {
 		t.Fatalf("promoted document = %#v err=%v", document, err)
+	}
+	if _, err := store.GetDocument(context.Background(), workspaceID, rejectedDocumentID); err != database.ErrNotFound {
+		t.Fatalf("rejected legacy document was promoted: %v", err)
+	}
+	if _, err := store.GetDocument(context.Background(), workspaceID, discardedDocumentID); err != database.ErrNotFound {
+		t.Fatalf("discarded legacy document was promoted: %v", err)
 	}
 	if publication, err := store.GetPublication(context.Background(), "abcd1234"); err != nil || publication.WorkspaceID != workspaceID {
 		t.Fatalf("promoted publication = %#v err=%v", publication, err)

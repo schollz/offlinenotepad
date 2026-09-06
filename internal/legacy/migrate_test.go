@@ -2,7 +2,12 @@ package legacy
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/sha1"
 	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -12,10 +17,12 @@ import (
 	"github.com/schollz/offlinenotepad/internal/cryptov2"
 	"github.com/schollz/offlinenotepad/internal/database"
 	bolt "go.etcd.io/bbolt"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 const legacyGolden = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1fzfX6+lZfj1SrH6oQDTm/W0lUoUfyuss9ergu0hTHHSea7nzW7+XEdU6+7eeJyLYuek+ylZliq76lMbEo29ZEvCnYIhxq1pIh751Lbe3hEcMwyhSnlyIME8koPNGhl68UXIpdUJr7ykBwNKzEgarX2fpvuGbSWfYd78WGL4CFadM4iTGS71oXtM1a979lvO+BBhgbqCUsaTFNQlpy3QGKBPhQHXGGZZmbCq9K6Q/MOuY7cxRsQKXKLFlIf+Vjk1kK"
 const legacyShortPasswordGolden = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1fBdsehS8hkZAmv6Km/qNel77CgUp3GqVh+nkt82lzkfsCLhcozQ69iqUzGRmHxFxN1+VNYMOsJTuBNrR/AAJbuA1v2lG8Sinx3DFnFZYjpRT/VEEWhN+Y2/FuSlZ3MA+BgrnfNC/OWKlyQLPnOTR5qtjo8dF4leEIBhMGhQ/eb8hVx81pconDVtOG3RWvgsZ64assh4stogsFg1h9qbtsTdxcZZHHzEsp0DaUjLf1Wbf9hpC9j5tG/Vt+7VgdwhFO"
+const legacyDeletedGolden = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1fqtjxzV2F2EnjbFOnjcuNcz2d4oFma0XVG/svUjZZqpkoedIb5PC8sXNBAIKqt2LsvTkuKuh1i+HANrU5nZyNafoRp4wE2szDVBaCLWEpqntyOT5bFI4+CJjfWMNrKapd6UKMLDt23dH5ebcqMEDmfo2VyPNAuPv8cY2j0rWItp2F9k/cmJ3rTQsIqy1JBUW/qGY+itpemOEZAmjg/RtwFG30eGsGZfcTHI97lkEG4h8="
 
 func TestDecryptLegacyCryptoJSGolden(t *testing.T) {
 	got, err := decryptLegacy(legacyGolden, []byte("correct horse battery staple"))
@@ -44,6 +51,63 @@ func TestDecryptLegacyAllowsShortPassword(t *testing.T) {
 	}
 }
 
+func TestDecryptLegacyMatchesCryptoJSPadding(t *testing.T) {
+	value := withCryptoJSPadding(t, legacyGolden, []byte("correct horse battery staple"))
+	got, err := decryptLegacy(value, []byte("correct horse battery staple"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `"uuid":"abc12345"`) {
+		t.Fatalf("unexpected legacy plaintext: %q", got)
+	}
+}
+
+func TestLegacyDeletedTitle(t *testing.T) {
+	for _, title := range []string{"deleted", " Deleted ", "\tDELETED\n"} {
+		if !isLegacyDeletedTitle(title) {
+			t.Fatalf("title %q was not recognized as a deletion marker", title)
+		}
+	}
+	for _, title := range []string{"", "deleted note", "undeleted"} {
+		if isLegacyDeletedTitle(title) {
+			t.Fatalf("title %q was incorrectly recognized as a deletion marker", title)
+		}
+	}
+}
+
+func withCryptoJSPadding(t *testing.T, value string, password []byte) string {
+	t.Helper()
+	salt, err := hex.DecodeString(value[:32])
+	if err != nil {
+		t.Fatal(err)
+	}
+	iv, err := hex.DecodeString(value[32:64])
+	if err != nil {
+		t.Fatal(err)
+	}
+	encrypted, err := base64.StdEncoding.DecodeString(value[64:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := pbkdf2.Key(password, salt, 10, 16, sha1.New)
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	padded := make([]byte, len(encrypted))
+	cipher.NewCBCDecrypter(block, iv).CryptBlocks(padded, encrypted)
+	padding := int(padded[len(padded)-1])
+	if padding < 2 {
+		t.Fatal("fixture requires at least two padding bytes")
+	}
+	padded[len(padded)-2] ^= 1
+	malformed := make([]byte, len(padded))
+	cipher.NewCBCEncrypter(block, iv).CryptBlocks(malformed, padded)
+	clear(key)
+	clear(padded)
+	return value[:64] + base64.StdEncoding.EncodeToString(malformed)
+}
+
 func TestPostgreSQLLegacyMigration(t *testing.T) {
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
@@ -53,6 +117,8 @@ func TestPostgreSQLLegacyMigration(t *testing.T) {
 		username   = "migration-integration-workspace"
 		password   = "tiny"
 		documentID = "abc12345"
+		damagedID  = "damaged1"
+		deletedID  = "del12345"
 	)
 	source := filepath.Join(t.TempDir(), "data.db")
 	db, err := bolt.Open(source, 0600, nil)
@@ -76,6 +142,18 @@ func TestPostgreSQLLegacyMigration(t *testing.T) {
 			return err
 		}
 		if err := hashes.Put([]byte(documentID), []byte("bb33cf65")); err != nil {
+			return err
+		}
+		if err := data.Put([]byte(damagedID), []byte("not valid legacy ciphertext")); err != nil {
+			return err
+		}
+		if err := hashes.Put([]byte(damagedID), []byte("deadbeef")); err != nil {
+			return err
+		}
+		if err := data.Put([]byte(deletedID), []byte(legacyDeletedGolden)); err != nil {
+			return err
+		}
+		if err := hashes.Put([]byte(deletedID), []byte("3855f5d9")); err != nil {
 			return err
 		}
 		encoded, _ := json.Marshal(legacyPublication{ID: legacyPublicID(documentID), Title: "Published golden", Markdown: "# Stale public snapshot"})
@@ -116,7 +194,7 @@ func TestPostgreSQLLegacyMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if dryResult.DocumentsImported != 1 || dryResult.PublicationsImported != 1 {
+	if dryResult.DocumentsRead != 3 || dryResult.DocumentsImported != 1 || dryResult.DocumentsRejectedDecrypt != 1 || dryResult.DocumentsSkippedDeleted != 1 || dryResult.PublicationsImported != 1 {
 		t.Fatalf("dry-run result = %#v", dryResult)
 	}
 	if _, err := store.GetWorkspace(context.Background(), workspaceID); err != database.ErrNotFound {
@@ -127,15 +205,23 @@ func TestPostgreSQLLegacyMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.DocumentsImported != 1 || result.PublicationsImported != 1 {
+	if result.DocumentsImported != 1 || result.DocumentsRejectedDecrypt != 1 || result.DocumentsSkippedDeleted != 1 || result.PublicationsImported != 1 {
 		t.Fatalf("first migration result = %#v", result)
 	}
 	result, err = Migrate(context.Background(), store, options)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.DocumentsSkipped != 1 || result.PublicationsSkipped != 1 {
+	if result.DocumentsSkipped != 1 || result.DocumentsRejectedDecrypt != 1 || result.DocumentsSkippedDeleted != 1 || result.PublicationsSkipped != 1 {
 		t.Fatalf("repeated migration result = %#v", result)
+	}
+	options.DryRun = true
+	result, err = Migrate(context.Background(), store, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.DocumentsSkipped != 1 || result.DocumentsVerified != 1 || result.DocumentsRejectedDecrypt != 1 || result.DocumentsSkippedDeleted != 1 || result.PublicationsSkipped != 1 {
+		t.Fatalf("verification result = %#v", result)
 	}
 	publication, err := store.GetPublication(context.Background(), legacyPublicID(documentID))
 	if err != nil || publication.Content != "# Stale public snapshot" || publication.ContentMode != "markdown" {

@@ -29,7 +29,14 @@ export interface FolderContent {
   updated_at: string
 }
 
-export type PrivateRecord = NoteContent | FolderContent
+export interface WorkspacePreferences {
+  record_type: 'workspace_preferences'
+  id: string
+  last_opened_note_id: string
+  updated_at: string
+}
+
+export type PrivateRecord = NoteContent | FolderContent | WorkspacePreferences
 
 export interface StoredDocument {
   key: string

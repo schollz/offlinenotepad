@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { acknowledgeDocument, claimNextOutbox, clearLogin, documentKey, getLogin, notebookDB, queueDocument, reconcileDocument, saveLogin } from './db'
+import { acknowledgeDocument, claimNextOutbox, clearLogin, documentKey, getLogin, notebookDB, queueDocument, reconcileDocument, recoverUnreadableSyncedDocument, saveLogin } from './db'
 import type { KdfMetadata, SessionKeys, StoredDocument } from '../types'
 
 const workspaceId = 'workspace'
@@ -146,6 +146,21 @@ describe('offline outbox', () => {
     expect(await notebookDB.outbox.count()).toBe(0)
   })
 
+  it('replaces an unreadable synced cache entry with the authenticated server copy', async () => {
+    await notebookDB.documents.put({ ...stored('unreadable', 7), pending: false })
+
+    expect(await recoverUnreadableSyncedDocument(remote('server', 1))).toBe(true)
+    expect(await notebookDB.documents.get(key)).toMatchObject({ ciphertextHash: 'server', revision: 1, pending: false })
+  })
+
+  it('never replaces an unreadable cache entry that may contain an unsent edit', async () => {
+    await queueDocument(stored('unreadable', 7), 'upsert')
+
+    expect(await recoverUnreadableSyncedDocument(remote('server', 8))).toBe(false)
+    expect(await notebookDB.documents.get(key)).toMatchObject({ ciphertextHash: 'unreadable', revision: 7, pending: true })
+    expect(await notebookDB.outbox.where('key').equals(key).count()).toBe(1)
+  })
+
   it('stops retrying an impossible conflict at the queued base revision', async () => {
     await queueDocument(stored('local', 2), 'upsert')
     await claimNextOutbox(workspaceId)
@@ -182,4 +197,5 @@ describe('offline outbox', () => {
     await clearLogin()
     expect(await getLogin()).toBeUndefined()
   })
+
 })

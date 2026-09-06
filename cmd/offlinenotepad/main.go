@@ -66,8 +66,8 @@ func migrateLegacyArchive(args []string) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	store, err := openStore(ctx)
 	if err != nil {
 		return err
@@ -76,12 +76,15 @@ func migrateLegacyArchive(args []string) error {
 	progress := legacyMigrationProgressLogger{logger: slog.Default(), interval: time.Second}
 	result, err := legacy.StageArchive(ctx, store, legacy.ArchiveOptions{Source: *source, DryRun: *dryRun, Progress: progress.Report})
 	if err != nil {
+		progress.ReportFailure(err)
 		return err
 	}
-	slog.Info("legacy archive staged", "dry_run", *dryRun,
+	attributes := []any{"dry_run", *dryRun,
 		"workspaces_imported", result.WorkspacesImported, "workspaces_skipped", result.WorkspacesSkipped,
 		"documents_imported", result.DocumentsImported, "documents_skipped", result.DocumentsSkipped,
-		"publications_imported", result.PublicationsImported, "publications_skipped", result.PublicationsSkipped)
+		"publications_imported", result.PublicationsImported, "publications_skipped", result.PublicationsSkipped}
+	attributes = append(attributes, legacyDiagnosticsAttributes(result.Diagnostics)...)
+	slog.Info("legacy archive staged", attributes...)
 	return nil
 }
 
@@ -90,9 +93,11 @@ type legacyMigrationProgressLogger struct {
 	interval  time.Duration
 	lastPhase legacy.ArchiveProgressPhase
 	lastLog   time.Time
+	last      legacy.ArchiveProgress
 }
 
 func (reporter *legacyMigrationProgressLogger) Report(progress legacy.ArchiveProgress) {
+	reporter.last = progress
 	now := time.Now()
 	phaseChanged := progress.Phase != reporter.lastPhase
 	completed := progress.Total == 0 || progress.Completed >= progress.Total
@@ -104,9 +109,44 @@ func (reporter *legacyMigrationProgressLogger) Report(progress legacy.ArchivePro
 		percent := progress.Completed * 100 / progress.Total
 		attributes = append(attributes, "completed", progress.Completed, "total", progress.Total, "percent", percent)
 	}
+	attributes = append(attributes, legacyDiagnosticsAttributes(progress.Diagnostics)...)
 	reporter.logger.Info("legacy migration progress", attributes...)
 	reporter.lastPhase = progress.Phase
 	reporter.lastLog = now
+}
+
+func (reporter *legacyMigrationProgressLogger) ReportFailure(err error) {
+	progress := reporter.last
+	attributes := []any{"phase", progress.Phase, "error", err}
+	if progress.Total > 0 {
+		attributes = append(attributes, "completed", progress.Completed, "total", progress.Total, "percent", progress.Completed*100/progress.Total)
+	}
+	attributes = append(attributes, legacyDiagnosticsAttributes(progress.Diagnostics)...)
+	reporter.logger.Error("legacy migration failed", attributes...)
+}
+
+func legacyDiagnosticsAttributes(diagnostics legacy.ArchiveDiagnostics) []any {
+	attributes := []any{}
+	values := []struct {
+		name  string
+		value int
+	}{
+		{"workspaces_skipped_incomplete", diagnostics.WorkspacesSkippedIncomplete},
+		{"documents_recovered_missing_hash", diagnostics.DocumentsRecoveredMissingHash},
+		{"documents_recovered_invalid_hash", diagnostics.DocumentsRecoveredInvalidHash},
+		{"documents_skipped_invalid_id", diagnostics.DocumentsSkippedInvalidID},
+		{"documents_skipped_invalid_ciphertext", diagnostics.DocumentsSkippedInvalidCiphertext},
+		{"hashes_skipped_without_document", diagnostics.HashesSkippedWithoutDocument},
+		{"publications_skipped_invalid_id", diagnostics.PublicationsSkippedInvalidID},
+		{"publications_skipped_invalid_json", diagnostics.PublicationsSkippedInvalidJSON},
+		{"publications_skipped_id_mismatch", diagnostics.PublicationsSkippedIDMismatch},
+	}
+	for _, value := range values {
+		if value.value > 0 {
+			attributes = append(attributes, value.name, value.value)
+		}
+	}
+	return attributes
 }
 
 func legacyMigrationAlias(args []string) ([]string, bool, error) {
@@ -238,10 +278,23 @@ func migrateLegacy(args []string) error {
 	defer store.Close()
 	result, err := legacy.Migrate(ctx, store, legacy.Options{Source: *source, Username: *username, Password: password, DryRun: *dryRun})
 	if err != nil {
+		slog.Error("legacy migration failed", append([]any{"error", err}, legacyConversionAttributes(result)...)...)
 		return err
 	}
-	slog.Info("legacy migration complete", "dry_run", *dryRun, "documents_imported", result.DocumentsImported, "documents_skipped", result.DocumentsSkipped, "publications_imported", result.PublicationsImported, "publications_skipped", result.PublicationsSkipped)
+	slog.Info("legacy migration complete", append([]any{"dry_run", *dryRun}, legacyConversionAttributes(result)...)...)
 	return nil
+}
+
+func legacyConversionAttributes(result legacy.Result) []any {
+	return []any{
+		"documents_imported", result.DocumentsImported, "documents_skipped", result.DocumentsSkipped, "documents_verified", result.DocumentsVerified,
+		"documents_read", result.DocumentsRead, "documents_rejected_decrypt", result.DocumentsRejectedDecrypt,
+		"documents_rejected_invalid", result.DocumentsRejectedInvalid, "documents_recovered_hash", result.DocumentsRecoveredHash,
+		"documents_skipped_deleted", result.DocumentsSkippedDeleted,
+		"hashes_skipped_without_document", result.HashesSkippedWithoutDocument,
+		"publications_imported", result.PublicationsImported, "publications_skipped", result.PublicationsSkipped,
+		"publications_rejected", result.PublicationsRejected,
+	}
 }
 
 func envString(key, fallback string) string {

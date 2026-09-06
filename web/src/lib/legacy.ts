@@ -14,11 +14,16 @@ const legacyWorkspaceSchema = z.object({
   documents: z.array(z.object({
     document_id: z.string().regex(legacyDocumentIDPattern),
     ciphertext: z.string().min(65),
-    document_hash: z.string().regex(legacyIDPattern),
+    document_hash: z.union([z.literal(''), z.string().regex(legacyIDPattern)]),
   })).max(100_000),
 })
 
 export type StagedLegacyWorkspace = z.infer<typeof legacyWorkspaceSchema>
+export interface DecryptedLegacyWorkspace {
+  notes: NoteContent[]
+  rejectedDocumentIds: string[]
+  deletedDocumentIds: string[]
+}
 
 function hex(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
@@ -107,25 +112,29 @@ function decompressUTF16(values: number[]): string {
   }
 }
 
-function decryptLegacyDocument(ciphertext: string, password: string, documentID: string, storedHash: string): NoteContent {
+function decryptLegacyDocument(ciphertext: string, password: string, documentID: string): NoteContent {
   try {
     if (ciphertext.length <= 64) throw new Error('short ciphertext')
     const salt = fromHex(ciphertext.slice(0, 32))
     const iv = fromHex(ciphertext.slice(32, 64))
     const encrypted = fromBase64(ciphertext.slice(64))
     const key = pbkdf2(sha1, encoder.encode(password), salt, { c: 10, dkLen: 16 })
-    const decrypted = cbc(key, iv).decrypt(encrypted)
+    const padded = cbc(key, iv, { disablePadding: true }).decrypt(encrypted)
     key.fill(0)
+    const padding = padded[padded.length - 1]
+    if (padding > padded.length) throw new Error('invalid padding')
+    const decrypted = padded.slice(0, padded.length - padding)
+    padded.fill(0)
     if (decrypted.length % 2 !== 0) throw new Error('invalid UTF-16')
     const compressed: number[] = []
     for (let i = 0; i < decrypted.length; i += 2) compressed.push((decrypted[i] << 8) | decrypted[i + 1])
     decrypted.fill(0)
     const parsed = JSON.parse(decompressUTF16(compressed)) as Record<string, unknown>
-    if (parsed.uuid !== documentID || !legacyDocumentIDPattern.test(documentID) || typeof parsed.title !== 'string' || typeof parsed.markdown !== 'string' || typeof parsed.hash !== 'string') {
+    if (parsed.uuid !== documentID || !legacyDocumentIDPattern.test(documentID) || typeof parsed.title !== 'string' || typeof parsed.markdown !== 'string' || typeof parsed.hash !== 'string' || !legacyIDPattern.test(parsed.hash)) {
       throw new Error('invalid document')
     }
     const calculated = hex(sha256(encoder.encode(`offlinenotepad${documentID}${parsed.title}${parsed.markdown}`))).slice(0, 8)
-    if (parsed.hash !== storedHash || calculated !== storedHash) throw new Error('hash mismatch')
+    if (calculated !== parsed.hash) throw new Error('hash mismatch')
     return {
       id: documentID,
       title: parsed.title,
@@ -139,6 +148,10 @@ function decryptLegacyDocument(ciphertext: string, password: string, documentID:
   }
 }
 
+function isLegacyDeletedTitle(title: string): boolean {
+  return /^\s*deleted\s*$/iu.test(title)
+}
+
 export function legacyWorkspaceID(username: string): string {
   return hex(sha256(encoder.encode(`offlinenotepad${username}`))).slice(0, 8)
 }
@@ -147,7 +160,22 @@ export function parseLegacyWorkspace(value: unknown): StagedLegacyWorkspace {
   return legacyWorkspaceSchema.parse(value)
 }
 
-export function decryptLegacyWorkspace(workspace: StagedLegacyWorkspace, password: string): NoteContent[] {
+export function decryptLegacyWorkspace(workspace: StagedLegacyWorkspace, password: string): DecryptedLegacyWorkspace {
   if (password.length === 0) throw new Error('Enter your password.')
-  return workspace.documents.map((document) => decryptLegacyDocument(document.ciphertext, password, document.document_id, document.document_hash))
+  const notes: NoteContent[] = []
+  const rejectedDocumentIds: string[] = []
+  const deletedDocumentIds: string[] = []
+  for (const document of workspace.documents) {
+    try {
+      const note = decryptLegacyDocument(document.ciphertext, password, document.document_id)
+      if (isLegacyDeletedTitle(note.title)) deletedDocumentIds.push(document.document_id)
+      else notes.push(note)
+    } catch {
+      rejectedDocumentIds.push(document.document_id)
+    }
+  }
+  if (workspace.documents.length > 0 && notes.length === 0 && deletedDocumentIds.length === 0) {
+    throw new Error('The legacy username or password is incorrect, or its encrypted data is damaged.')
+  }
+  return { notes, rejectedDocumentIds, deletedDocumentIds }
 }

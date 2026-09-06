@@ -34,7 +34,9 @@ export default defineConfig({
           /^\/api\//,
           /^\/ws$/,
           /^\/healthz$/,
+          /^\/about(?:\/|$)/,
           /^\/blog(?:\/|$)/,
+          /^\/contact(?:\/|$)/,
           /^\/p\//,
           /^\/[a-f0-9]{8}(?:\/raw)?$/,
         ],
@@ -49,7 +51,9 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: resolve(import.meta.dirname, 'index.html'),
+        about: resolve(import.meta.dirname, 'about.html'),
         blog: resolve(import.meta.dirname, 'blog.html'),
+        contact: resolve(import.meta.dirname, 'contact.html'),
         public: resolve(import.meta.dirname, 'public.html'),
       },
       output: {

@@ -9,7 +9,7 @@ function notebookName(prefix: string): string {
 async function createNotebook(page: Page, name: string) {
   await page.goto('/')
   await page.getByLabel('Notebook name').fill(name)
-  await page.getByLabel('Password').fill(password)
+  await page.getByLabel('Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Sign in or create notebook' }).click()
   await expect(page).toHaveURL(/\/app/u)
 }
@@ -45,6 +45,24 @@ test('creates, edits in live preview, and publishes an explicit snapshot', async
   await expect(publicPage.getByRole('heading', { name: 'A field note' })).toBeVisible()
   await publicPage.getByRole('link', { name: 'View raw' }).click()
   await expect(publicPage.locator('body')).toContainText('# Hello')
+})
+
+test('clicking below a short note focuses the editor at the end', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile', 'covered by the desktop editor layout')
+  await createNotebook(page, notebookName('editor-focus'))
+  await page.getByRole('button', { name: 'Create your first note' }).click()
+  await page.getByLabel('Note title').fill('Easy focus')
+  await page.getByLabel('Note content').fill('A short note.')
+
+  const editor = page.locator('.markdown-editor')
+  const editorBox = await editor.boundingBox()
+  expect(editorBox).not.toBeNull()
+  await page.getByLabel('Note title').click()
+  await page.mouse.click(editorBox!.x + 20, editorBox!.y + editorBox!.height - 45)
+
+  await expect(page.getByLabel('Note content')).toBeFocused()
+  await page.keyboard.type(' Appended at the end.')
+  await expect(page.getByLabel('Note content')).toContainText('A short note. Appended at the end.')
 })
 
 test('creates an unknown notebook with a short password from the unified form', async ({ page }, testInfo) => {

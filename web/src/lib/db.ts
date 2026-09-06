@@ -241,3 +241,19 @@ export async function reconcileDocument(
 export async function acknowledgeDocument(document: StoredDocument): Promise<void> {
   await reconcileDocument(document, 'ack')
 }
+
+// Replace an unreadable cache entry only after the authenticated server sends
+// its copy. Pending records and outbox entries are never overwritten.
+export async function recoverUnreadableSyncedDocument(document: StoredDocument): Promise<boolean> {
+  return notebookDB.transaction('rw', notebookDB.documents, notebookDB.outbox, async () => {
+    const local = await notebookDB.documents.get(document.key)
+    if (!local) {
+      await notebookDB.documents.put({ ...document, pending: false })
+      return true
+    }
+    const queued = await notebookDB.outbox.where('key').equals(document.key).first()
+    if (local.pending || queued) return false
+    await notebookDB.documents.put({ ...document, pending: false })
+    return true
+  })
+}

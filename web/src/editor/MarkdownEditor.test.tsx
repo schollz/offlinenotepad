@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MarkdownEditor } from './MarkdownEditor'
 
@@ -33,5 +33,28 @@ describe('MarkdownEditor', () => {
     view.rerender(<MarkdownEditor documentId="note-two" value="second" mode="source" onChange={onChange} />)
     expect(document.querySelectorAll('.cm-editor')).toHaveLength(1)
     expect(screen.getByLabelText('Note content')).toHaveTextContent('second')
+  })
+
+  it('focuses the editor when its empty space below the note is clicked', () => {
+    render(<MarkdownEditor documentId="note-one" value="A short note." mode="source" onChange={vi.fn()} />)
+    const content = screen.getByLabelText('Note content')
+    const lastLine = document.querySelector<HTMLElement>('.cm-line')!
+    const editor = document.querySelector<HTMLElement>('.cm-editor')!
+    const scroller = document.querySelector<HTMLElement>('.cm-scroller')!
+    vi.spyOn(lastLine, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, top: 0, right: 300, bottom: 30, left: 0, width: 300, height: 30, toJSON: () => ({}),
+    })
+    vi.spyOn(editor, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, top: 0, right: 300, bottom: 200, left: 0, width: 300, height: 200, toJSON: () => ({}),
+    })
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, top: 0, right: 300, bottom: 100, left: 0, width: 300, height: 100, toJSON: () => ({}),
+    })
+    Object.defineProperty(scroller, 'clientWidth', { configurable: true, value: 300 })
+    Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 100 })
+
+    fireEvent.mouseDown(scroller, { button: 0, clientX: 20, clientY: 120 })
+
+    expect(content).toHaveFocus()
   })
 })

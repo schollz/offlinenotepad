@@ -19,3 +19,5 @@ web/test-results/
 web/*.tsbuildinfo
 /internal/site/build/*
 !/internal/site/build/.gitkeep
+cmd/offlinenotepad/offlinenotepad
+cmd/offlinenotepad/offlinenotepadv2

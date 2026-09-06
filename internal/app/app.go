@@ -55,6 +55,8 @@ type App struct {
 	logger    *slog.Logger
 	content   fs.FS
 	index     *template.Template
+	about     *template.Template
+	contact   *template.Template
 	public    *template.Template
 	blog      *template.Template
 	markdown  goldmark.Markdown
@@ -83,6 +85,14 @@ func New(store *database.Store, content fs.FS, logger *slog.Logger, config Confi
 	if err != nil {
 		return nil, fmt.Errorf("parse app template: %w", err)
 	}
+	about, err := template.ParseFS(content, "about.html")
+	if err != nil {
+		return nil, fmt.Errorf("parse about template: %w", err)
+	}
+	contact, err := template.ParseFS(content, "contact.html")
+	if err != nil {
+		return nil, fmt.Errorf("parse contact template: %w", err)
+	}
 	public, err := template.ParseFS(content, "public.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse public template: %w", err)
@@ -92,7 +102,7 @@ func New(store *database.Store, content fs.FS, logger *slog.Logger, config Confi
 		return nil, fmt.Errorf("parse blog template: %w", err)
 	}
 	analytics := newAnalyticsRelay(config.UmamiURL, config.UmamiWebsiteID, logger)
-	return &App{store: store, logger: logger, content: content, index: index, public: public, blog: blog, markdown: goldmark.New(goldmark.WithExtensions(extension.GFM)), sanitizer: bluemonday.UGCPolicy(), hub: newHub(), config: config, analytics: analytics}, nil
+	return &App{store: store, logger: logger, content: content, index: index, about: about, contact: contact, public: public, blog: blog, markdown: goldmark.New(goldmark.WithExtensions(extension.GFM)), sanitizer: bluemonday.UGCPolicy(), hub: newHub(), config: config, analytics: analytics}, nil
 }
 
 func (a *App) Handler() http.Handler {
@@ -105,6 +115,10 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", a.handleHealth)
 	mux.HandleFunc("GET /robots.txt", a.handleRobots)
 	mux.HandleFunc("GET /sitemap.xml", a.handleSitemap)
+	mux.HandleFunc("GET /about", a.handleAbout)
+	mux.HandleFunc("GET /about/", a.handleAboutSlash)
+	mux.HandleFunc("GET /contact", a.handleContact)
+	mux.HandleFunc("GET /contact/", a.handleContactSlash)
 	mux.HandleFunc("GET /blog", a.handleBlogIndex)
 	mux.HandleFunc("GET /blog/{slug}", a.handleBlogPost)
 	mux.HandleFunc("GET /blog/", a.handleBlogSlash)
@@ -140,7 +154,17 @@ func (a *App) middleware(next http.Handler) http.Handler {
 			return
 		}
 		r = r.WithContext(context.WithValue(r.Context(), requestNonceKey{}, nonce))
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'nonce-"+nonce+"'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
+		scriptSources := "'self' 'nonce-" + nonce + "'"
+		connectSources := "'self' ws: wss:"
+		formActionSources := "'self'"
+		styleAttributeSources := "'none'"
+		if r.URL.Path == "/contact" || r.URL.Path == "/contact/" {
+			scriptSources += " https://subsnail.schollz.com"
+			connectSources += " https://subsnail.schollz.com"
+			formActionSources += " https://subsnail.schollz.com"
+			styleAttributeSources = "'unsafe-inline'"
+		}
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src "+scriptSources+"; style-src 'self'; style-src-attr "+styleAttributeSources+"; img-src 'self' data:; connect-src "+connectSources+"; font-src 'self'; object-src 'none'; base-uri 'self'; form-action "+formActionSources+"; frame-ancestors 'none'")
 		if strings.HasPrefix(a.origin(r), "https://") {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
@@ -308,9 +332,11 @@ func (a *App) handleGetLegacyWorkspace(w http.ResponseWriter, r *http.Request) {
 }
 
 type legacyPromotionRequest struct {
-	Username  string              `json:"username"`
-	Workspace database.Workspace  `json:"workspace"`
-	Documents []database.Document `json:"documents"`
+	Username             string              `json:"username"`
+	Workspace            database.Workspace  `json:"workspace"`
+	Documents            []database.Document `json:"documents"`
+	RejectedDocumentIDs  []string            `json:"rejected_document_ids"`
+	DiscardedDocumentIDs []string            `json:"discarded_document_ids"`
 }
 
 func (a *App) handlePromoteLegacyWorkspace(w http.ResponseWriter, r *http.Request) {
@@ -333,7 +359,7 @@ func (a *App) handlePromoteLegacyWorkspace(w http.ResponseWriter, r *http.Reques
 		writeJSONError(w, http.StatusBadRequest, "invalid migrated workspace")
 		return
 	}
-	if len(request.Documents) > maxLegacyPromotionDocs {
+	if len(request.Documents)+len(request.RejectedDocumentIDs)+len(request.DiscardedDocumentIDs) > maxLegacyPromotionDocs {
 		writeJSONError(w, http.StatusRequestEntityTooLarge, "too many legacy documents")
 		return
 	}
@@ -345,7 +371,19 @@ func (a *App) handlePromoteLegacyWorkspace(w http.ResponseWriter, r *http.Reques
 		}
 		document.WorkspaceID = workspaceID
 	}
-	result, err := a.store.PromoteLegacyWorkspace(r.Context(), legacyID, request.Workspace, request.Documents)
+	for _, documentID := range request.RejectedDocumentIDs {
+		if !legacyDocumentPattern.MatchString(documentID) {
+			writeJSONError(w, http.StatusBadRequest, "invalid rejected legacy document")
+			return
+		}
+	}
+	for _, documentID := range request.DiscardedDocumentIDs {
+		if !legacyDocumentPattern.MatchString(documentID) {
+			writeJSONError(w, http.StatusBadRequest, "invalid discarded legacy document")
+			return
+		}
+	}
+	result, err := a.store.PromoteLegacyWorkspace(r.Context(), legacyID, request.Workspace, request.Documents, request.RejectedDocumentIDs, request.DiscardedDocumentIDs)
 	if errors.Is(err, database.ErrNotFound) {
 		writeJSONError(w, http.StatusNotFound, "legacy workspace not found")
 		return
@@ -362,6 +400,14 @@ func (a *App) handlePromoteLegacyWorkspace(w http.ResponseWriter, r *http.Reques
 		writeJSONError(w, http.StatusInternalServerError, "legacy migration failed")
 		return
 	}
+	a.logger.Info("legacy workspace migration complete",
+		"documents_imported", result.DocumentsImported,
+		"documents_skipped", result.DocumentsSkipped,
+		"documents_rejected", len(request.RejectedDocumentIDs),
+		"documents_skipped_deleted", len(request.DiscardedDocumentIDs),
+		"publications_imported", result.PublicationsImported,
+		"publications_skipped", result.PublicationsSkipped,
+	)
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusCreated, result)
 }
