@@ -4,6 +4,9 @@ tmp/
 /*.db
 /*.sqlite
 /*.sqlite3
+/*.sqlite*-journal
+/*.sqlite*-shm
+/*.sqlite*-wal
 *~
 *.exe
 /bindata.go
