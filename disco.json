@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "services": {
+    "web": {
+      "port": 8251,
+      "health": {
+        "command": "wget -q -O /dev/null http://127.0.0.1:8251/healthz"
+      }
+    }
+  }
+}

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en" prefix="og: https://ogp.me/ns# article: https://ogp.me/ns/article#">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1769e0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="{{.Description}}" />
+    <meta name="keywords" content="{{.Keywords}}" />
+    <meta name="author" content="Offline Notepad" />
+    <meta name="robots" content="{{.Robots}}" />
+    <meta name="googlebot" content="{{.Robots}}" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any" />
+    <link rel="canonical" href="{{.CanonicalURL}}" />
+    <link rel="alternate" type="application/atom+xml" title="Offline Notepad Blog" href="{{.FeedURL}}" />
+    <meta property="og:type" content="{{.OpenGraphType}}" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="Offline Notepad" />
+    <meta property="og:title" content="{{.PageTitle}}" />
+    <meta property="og:description" content="{{.Description}}" />
+    <meta property="og:url" content="{{.CanonicalURL}}" />
+    <meta property="og:image" content="{{.SocialImageURL}}" />
+    {{if .SocialImageSecureURL}}<meta property="og:image:secure_url" content="{{.SocialImageSecureURL}}" />{{end}}
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="{{.SocialImageAlt}}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{{.PageTitle}}" />
+    <meta name="twitter:description" content="{{.Description}}" />
+    <meta name="twitter:image" content="{{.SocialImageURL}}" />
+    <meta name="twitter:image:alt" content="{{.SocialImageAlt}}" />
+    {{if .StructuredData}}<script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>{{end}}
+    <title>{{.PageTitle}}</title>
+    <link rel="stylesheet" href="/src/blog.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="site-brand" href="/" aria-label="Offline Notepad home">
+        <span class="brand-mark">
+          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4" />
+            <path d="M2 6h4M2 10h4M2 14h4M2 18h4" />
+            <path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z" />
+          </svg>
+        </span>
+        <span>Offline Notepad</span>
+      </a>
+      <nav aria-label="Primary navigation"><a href="/">Open notepad</a><a href="/about" aria-current="page">About</a><a href="/blog">Blog</a><a href="/contact">Contact</a></nav>
+    </header>
+    <main class="about-page">
+      <header class="about-hero">
+        <p class="page-kicker">About</p>
+        <h1>A quiet place to write, built around privacy.</h1>
+        <p>Offline Notepad is a small, free, open-source notebook for people who want their notes to stay useful without a connection—and unreadable to the server that synchronizes them.</p>
+      </header>
+      <div class="about-content">
+        <section>
+          <h2>The idea</h2>
+          <p>Taking a note should be simple. You should be able to open a notebook, write, and trust that the change is already safe on your device. A dropped connection should not interrupt that, and synchronization should not require handing over the readable contents of your notebook.</p>
+        </section>
+        <section>
+          <h2>Local first, encrypted throughout</h2>
+          <p>Every private change is encrypted and saved in your browser before it is sent anywhere. When you are online, the server synchronizes encrypted records between your devices. Your password, private keys, and readable private notes stay in the browser.</p>
+          <p>That boundary has a real consequence: there is no password recovery or key escrow. Offline Notepad cannot unlock a notebook for you, because it never receives what it would need to do so.</p>
+        </section>
+        <section>
+          <h2>Sharing stays deliberate</h2>
+          <p>Private notes remain private unless you explicitly publish one. Publishing creates a separate, read-only snapshot. It does not expose the rest of the notebook, and later private edits do not silently change what is public.</p>
+        </section>
+        <section>
+          <h2>Small on purpose</h2>
+          <p>This is a notepad, not a workspace platform. There are no invitations, roles, presence indicators, or hidden recovery systems. The focus is dependable writing, folders, search, optional public snapshots, and encrypted synchronization.</p>
+        </section>
+        <section>
+          <h2>Open and self-hostable</h2>
+          <p>Offline Notepad is open source under the MIT license. It ships as one Go binary with the web app embedded, uses SQLite by default, and can use PostgreSQL for a hosted deployment. You can <a href="https://github.com/schollz/offlinenotepad">read the source and run it yourself</a>.</p>
+        </section>
+      </div>
+      <aside class="about-cta">
+        <p>If that sounds like the kind of notepad you want, you can start with a notebook name and password.</p>
+        <a href="/">Open Offline Notepad</a>
+      </aside>
+    </main>
+    <footer class="site-footer">
+      <nav class="footer-links" aria-label="Footer navigation">
+        <span>made by <a href="https://github.com/sponsors/schollz" rel="noreferrer" target="_blank">schollz</a></span>
+        <span aria-hidden="true">·</span>
+        <a href="https://github.com/schollz/offlinenotepad" rel="noreferrer" target="_blank">github</a>
+        <span aria-hidden="true">·</span>
+        <a href="https://disco.cloud/" rel="noreferrer" target="_blank">deployed with disco</a>
+      </nav>
+      <details class="tools-menu">
+        <summary>other tools</summary>
+        <ul>
+          <li><a href="https://getcroc.com" rel="noreferrer" target="_blank"><strong>croc</strong><span>fast, simple, secure file transfer</span></a></li>
+          <li><a href="https://wthrtxt.com" rel="noreferrer" target="_blank"><strong>wthrtxt</strong><span>weather without clutter</span></a></li>
+          <li><a href="https://cowyo.com" rel="noreferrer" target="_blank"><strong>cowyo</strong><span>write together, without the setup</span></a></li>
+          <li><a href="https://yesnotice.com" rel="noreferrer" target="_blank"><strong>yesnotice</strong><span>yes/no alerts when websites change</span></a></li>
+          <li><a href="https://makemydrivefun.com" rel="noreferrer" target="_blank"><strong>makemydrivefun</strong><span>strange roadside detours</span></a></li>
+          <li><a href="https://makestopmotion.com" rel="noreferrer" target="_blank"><strong>makestopmotion</strong><span>claymation in browsers</span></a></li>
+        </ul>
+      </details>
+    </footer>
+  </body>
+</html>

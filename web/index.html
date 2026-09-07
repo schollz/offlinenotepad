@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en" prefix="og: https://ogp.me/ns# article: https://ogp.me/ns/article#">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1769e0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="csp-nonce" content="{{.Nonce}}" />
+    <meta name="description" content="{{.Description}}" />
+    {{if .Keywords}}<meta name="keywords" content="{{.Keywords}}" />{{end}}
+    <meta name="author" content="Offline Notepad" />
+    <meta name="application-name" content="Offline Notepad" />
+    <meta name="apple-mobile-web-app-title" content="Offline Notepad" />
+    <meta name="robots" content="{{.Robots}}" />
+    <meta name="googlebot" content="{{.Robots}}" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="canonical" href="{{.CanonicalURL}}" />
+    <link rel="alternate" type="application/atom+xml" title="Offline Notepad Blog" href="{{.FeedURL}}" />
+    <meta property="og:type" content="{{.OpenGraphType}}" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="Offline Notepad" />
+    <meta property="og:title" content="{{.PageTitle}}" />
+    <meta property="og:description" content="{{.Description}}" />
+    <meta property="og:url" content="{{.CanonicalURL}}" />
+    <meta property="og:image" content="{{.SocialImageURL}}" />
+    {{if .SocialImageSecureURL}}<meta property="og:image:secure_url" content="{{.SocialImageSecureURL}}" />{{end}}
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="{{.SocialImageAlt}}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{{.PageTitle}}" />
+    <meta name="twitter:description" content="{{.Description}}" />
+    <meta name="twitter:image" content="{{.SocialImageURL}}" />
+    <meta name="twitter:image:alt" content="{{.SocialImageAlt}}" />
+    {{if .StructuredData}}<script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>{{end}}
+    <title>{{.PageTitle}}</title>
+  </head>
+  <body>
+    <div id="root">{{if .IsHomepage}}<main class="seo-fallback"><h1>Welcome to the Offline Notepad.</h1><p>Offline Notepad is a free, <a href="https://github.com/schollz/offlinenotepad">open-source</a>, offline-capable note-writing app that securely synchronizes across all your devices. Everything you write is encrypted and stored locally, with encrypted syncing via a server.</p><p>Offline Notepad is offline-first, which means you can create, edit, delete, and search notes without an internet connection. Your notes automatically sync with a server using end-to-end encryption when you come online.</p><p><a href="/about">About Offline Notepad</a>, <a href="/blog">read the blog</a>, or <a href="/contact">contact us</a>.</p></main>{{end}}</div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

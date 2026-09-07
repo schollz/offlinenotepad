@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en" prefix="og: https://ogp.me/ns# article: https://ogp.me/ns/article#">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1769e0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="{{.Description}}" />
+    <meta name="keywords" content="{{.Keywords}}" />
+    <meta name="author" content="Offline Notepad" />
+    <meta name="robots" content="{{.Robots}}" />
+    <meta name="googlebot" content="{{.Robots}}" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any" />
+    <link rel="canonical" href="{{.CanonicalURL}}" />
+    <link rel="alternate" type="application/atom+xml" title="Offline Notepad Blog" href="{{.FeedURL}}" />
+    <meta property="og:type" content="{{.OpenGraphType}}" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="Offline Notepad" />
+    <meta property="og:title" content="{{.PageTitle}}" />
+    <meta property="og:description" content="{{.Description}}" />
+    <meta property="og:url" content="{{.CanonicalURL}}" />
+    <meta property="og:image" content="{{.SocialImageURL}}" />
+    {{if .SocialImageSecureURL}}<meta property="og:image:secure_url" content="{{.SocialImageSecureURL}}" />{{end}}
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="{{.SocialImageAlt}}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{{.PageTitle}}" />
+    <meta name="twitter:description" content="{{.Description}}" />
+    <meta name="twitter:image" content="{{.SocialImageURL}}" />
+    <meta name="twitter:image:alt" content="{{.SocialImageAlt}}" />
+    {{if .StructuredData}}<script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>{{end}}
+    <title>{{.PageTitle}}</title>
+    <link rel="stylesheet" href="/src/blog.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="site-brand" href="/" aria-label="Offline Notepad home">
+        <span class="brand-mark">
+          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4" />
+            <path d="M2 6h4M2 10h4M2 14h4M2 18h4" />
+            <path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z" />
+          </svg>
+        </span>
+        <span>Offline Notepad</span>
+      </a>
+      <nav aria-label="Primary navigation"><a href="/">Open notepad</a><a href="/about">About</a><a href="/blog">Blog</a><a href="/contact" aria-current="page">Contact</a></nav>
+    </header>
+    <main class="contact-page">
+      <header class="contact-hero">
+        <p class="page-kicker">Contact</p>
+        <h1>Get in touch.</h1>
+        <p>Questions, feedback, and bug reports about our free notepad are welcome.</p>
+      </header>
+      <section class="contact-card" aria-labelledby="contact-form-title">
+        <h2 id="contact-form-title">Send a message</h2>
+        <p>Fill out the form and we’ll get back to you by email.</p>
+        <form class="contact-form" data-subsnail="https://subsnail.schollz.com/form/0e018f9b-3d62-48db-8f40-7398e6aecb0d/subscribe/" aria-label="Contact Offline Notepad" aria-live="polite">
+          <div class="contact-name-fields">
+            <label for="contact-first-name">First name<input id="contact-first-name" type="text" name="first_name" placeholder="First name" autocomplete="given-name" /></label>
+            <label for="contact-last-name">Last name<input id="contact-last-name" type="text" name="last_name" placeholder="Last name" autocomplete="family-name" /></label>
+          </div>
+          <label for="contact-email">Email<input id="contact-email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required /></label>
+          <label for="contact-message">Message<textarea id="contact-message" name="textarea" placeholder="Your message"></textarea></label>
+          <button type="submit">Subscribe</button>
+        </form>
+        <p class="contact-alternative">Prefer email? Write to <a href="mailto:admin@offlinenotepad.com">admin@offlinenotepad.com</a>.</p>
+        <p class="contact-note">Please do not include notebook passwords, encryption keys, or the contents of private notes.</p>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <nav class="footer-links" aria-label="Footer navigation">
+        <span>made by <a href="https://github.com/sponsors/schollz" rel="noreferrer" target="_blank">schollz</a></span>
+        <span aria-hidden="true">·</span>
+        <a href="https://github.com/schollz/offlinenotepad" rel="noreferrer" target="_blank">github</a>
+        <span aria-hidden="true">·</span>
+        <a href="https://disco.cloud/" rel="noreferrer" target="_blank">deployed with disco</a>
+      </nav>
+      <details class="tools-menu">
+        <summary>other tools</summary>
+        <ul>
+          <li><a href="https://getcroc.com" rel="noreferrer" target="_blank"><strong>croc</strong><span>fast, simple, secure file transfer</span></a></li>
+          <li><a href="https://wthrtxt.com" rel="noreferrer" target="_blank"><strong>wthrtxt</strong><span>weather without clutter</span></a></li>
+          <li><a href="https://cowyo.com" rel="noreferrer" target="_blank"><strong>cowyo</strong><span>write together, without the setup</span></a></li>
+          <li><a href="https://yesnotice.com" rel="noreferrer" target="_blank"><strong>yesnotice</strong><span>yes/no alerts when websites change</span></a></li>
+          <li><a href="https://makemydrivefun.com" rel="noreferrer" target="_blank"><strong>makemydrivefun</strong><span>strange roadside detours</span></a></li>
+          <li><a href="https://makestopmotion.com" rel="noreferrer" target="_blank"><strong>makestopmotion</strong><span>claymation in browsers</span></a></li>
+        </ul>
+      </details>
+    </footer>
+    <script src="https://subsnail.schollz.com/form/embed.js"></script>
+  </body>
+</html>

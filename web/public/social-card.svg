@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#f5f7fb"/>
+  <circle cx="1090" cy="-20" r="330" fill="#e4efff"/>
+  <rect x="76" y="72" width="84" height="84" rx="20" fill="#1769e0"/>
+  <rect x="97" y="92" width="42" height="48" rx="5" fill="#fff"/>
+  <path d="M106 106h24M106 116h24M106 126h16" stroke="#1769e0" stroke-width="4" stroke-linecap="round"/>
+  <text x="184" y="128" fill="#182235" font-family="Arial, sans-serif" font-size="34" font-weight="600">Offline Notepad</text>
+  <text x="76" y="294" fill="#182235" font-family="Arial, sans-serif" font-size="76" font-weight="600" letter-spacing="-3">Private notes.</text>
+  <text x="76" y="382" fill="#182235" font-family="Arial, sans-serif" font-size="76" font-weight="600" letter-spacing="-3">Ready offline.</text>
+  <text x="80" y="484" fill="#53627a" font-family="Arial, sans-serif" font-size="31">Saved locally first. Synced securely when connected.</text>
+  <rect x="76" y="548" width="1048" height="2" fill="#d5dfec"/>
+</svg>

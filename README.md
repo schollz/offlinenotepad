@@ -1,57 +1,67 @@
+# Offline Notepad
 
-<p align="center">
-<img
-    src="https://user-images.githubusercontent.com/6550035/58387410-d2e33780-7fc2-11e9-8823-ce290b1cce7a.png"
-    width="408px" border="0" alt="offlinenotepad">
-</p>
+Offline Notepad is a minimal, offline-first notebook that securely syncs across browsers and devices.
 
-<p align="center"><code><a href="https://offlinenotepad.com">https://offlinenotepad.com</a></code></p>
+**Offline-first.** Notes and folders are saved to IndexedDB before network synchronization, so organizing, editing, and searching work without a connection.
 
-*offlinenotepad* is an [open-source](https://github.com/schollz/offlinenotepad) offline note taking app. It is a browser-based offline-first notepad that securely syncs across your devices - including smartphones, laptops, and chromebooks. Ideally, its a minimalist note-writing experience that can be accessed anywhere, anytime. 
+**Private.** Notes and folder metadata are encrypted in the browser with XChaCha20-Poly1305. Passwords, private keys, folder names, and plaintext notes never reach the server. There is no password recovery.
 
-**Offline-first.** All information is stored as encrypted data in the browser. Saving, editing, viewing, and searching are all done on the client.
+**Organized.** Nested folders, a compact file tree, drag-and-drop, and accessible move controls keep larger notebooks easy to navigate.
 
-**Secure.** offlinenotepad uses AES with the PBE algorithm (PBKDF2) with the [crypto-js library](https://github.com/brix/crypto-js) to encrypt data on the client and the server.
+**Simple.** Any notebook name and non-empty password opens an existing notebook or creates a new one. A saved browser login reopens automatically until you log out.
 
-**Minimal.** This offline notepad aims to do as much as possible with as little as possible.
+**Publish.** A note can be shared as an explicit read-only snapshot. Later private edits are not published automatically.
 
-**Publish.** Any page can be "published" so that is accessible by anyone with a simple random link, like [`offlinenotepad.com/50e5791a`](https://offlinenotepad.com/50e5791a). The raw data can easily be easily cURLed by adding `/raw` to the end, e.g. [`offlinenotepad.com/50e5791a/raw`](https://offlinenotepad.com/50e5791a/raw).
-
-**Code.** If the title of any document contains a period (".") then it will force the editor to be monospace and it will show the plain text in the viewer instead of transformed Markdown to HTML.
-
-This writing tool is largely based of its predecessors: [cowyo](https://cowyo.com) and [rwtxt.com](https://rwtxt.com) (both also available on Github).
+The app ships as one CGO-free Go binary with an embedded React frontend. It uses PostgreSQL when `DATABASE_URL` is set and SQLite otherwise.
 
 ## Install
 
-To run your own server for backing up notes you can simply install with Go.
+Requires Go 1.27.1, Node.js 24, and npm.
 
-```
-$ git clone https://github.com/schollz/offlinenotepad
-$ cd offlinenotepad
-$ go generate -v -x
-$ go build -v
-```
-
-And then you can run
-
+```sh
+git clone https://github.com/schollz/offlinenotepad
+cd offlinenotepad
+make build
+./offlinenotepad
 ```
 
-$ ./offlinenotepad
-```
+`make build` installs the locked frontend dependencies when needed, generates the ignored frontend output in `internal/site/build`, and embeds it in the Go binary. Docker performs the same frontend build in its Node stage, so generated assets are not kept in Git or required in the Docker build context.
 
-Log into `localhost:8251` to see the site.
+Open `http://localhost:8251`. Without `DATABASE_URL`, data is stored in `offlinenotepad.sqlite3` by default. See `.env.example` for configuration.
+
+For a public deployment, set `SITE_URL` to the site's HTTPS origin (for example, `https://notes.example.com`). Canonical links, social previews, `robots.txt`, JSON-LD, the XML sitemap, and the blog's Atom feed use this value.
 
 ### Docker
 
-Alternatively you can run with docker:
-
+```sh
+docker build -t offlinenotepad .
+docker run -p 8251:8251 -v offlinenotepad-data:/data offlinenotepad
 ```
-$ docker run -v /location/to/save/data:/data -p 8251:8251 schollz/offlinenotepad
+
+## Legacy migration
+
+To stage every account from an old bbolt `data.db` into PostgreSQL:
+
+```sh
+./offlinenotepad -migrate /path/to/data.db --dry-run
+./offlinenotepad -migrate /path/to/data.db
 ```
 
-## Acknowledgements
+The archive-wide migration does not require usernames or passwords. Users complete migration by opening their notebook with its original credentials. Back up both databases first.
+The command reports aggregate progress while it reads and validates the archive and stages its records; it never prints notebook or document identifiers, ciphertext, or note content.
+Isolated malformed records do not stop the archive: recoverable missing or stale legacy sync hashes are validated from the encrypted document after the user signs in. Individually unreadable documents are left in legacy staging while valid documents are promoted. Authenticated legacy records whose title is exactly `deleted` (ignoring surrounding whitespace and letter case) are treated as deletion markers and omitted. The UI and server logs report unreadable records and omitted deletion markers as separate aggregate counts. Progress and completion logs include aggregate diagnostic counters for every recovered or skipped category.
 
-I took a lot of help from @GoogleChromeLabs with their [airhorn](https://github.com/GoogleChromeLabs/airhorn).
+## Development
+
+```sh
+make serve
+make test
+make lint
+make test-race
+```
+
+`make serve` uses Air to rebuild the embedded frontend and Go server, then reloads the browser at `http://localhost:8251` when their source files change. `make dev` is an alias for the same development server.
+Set `AIR_PROXY_PORT` and `AIR_APP_PORT` to use another pair of ports when running more than one development server.
 
 ## License
 

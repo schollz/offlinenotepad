@@ -1,0 +1,619 @@
+package app
+
+import (
+	"bytes"
+	"context"
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"io"
+	"io/fs"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"path/filepath"
+	"strings"
+	"testing"
+	"testing/fstest"
+	"time"
+
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
+	"github.com/schollz/offlinenotepad/internal/cryptov2"
+	"github.com/schollz/offlinenotepad/internal/database"
+)
+
+func testServer(t *testing.T) (*database.Store, *httptest.Server) {
+	return testServerWithConfig(t, Config{LegacyMigrationEnabled: true})
+}
+
+func testServerWithConfig(t *testing.T, config Config) (*database.Store, *httptest.Server) {
+	t.Helper()
+	store, err := database.Open(context.Background(), database.Config{SQLitePath: filepath.Join(t.TempDir(), "app.sqlite3")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := fstest.MapFS{
+		"index.html":                     &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><link rel="alternate" type="application/atom+xml" href="{{.FeedURL}}"><meta property="og:title" content="{{.PageTitle}}"><meta name="twitter:card" content="summary_large_image">{{if .StructuredData}}<script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>{{end}}{{if .IsHomepage}}<main>Private notes that work offline. <a href="/about">About</a> <a href="/blog">Blog</a> <a href="/contact">Contact</a></main>{{else}}<main>app</main>{{end}}`)},
+		"about.html":                     &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:type" content="{{.OpenGraphType}}"><meta name="twitter:card" content="summary_large_image"><script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script><h1>A quiet place to write, built around privacy.</h1><p>Your password, private keys, and readable private notes stay in the browser.</p><a href="/">Open Offline Notepad</a>`)},
+		"contact.html":                   &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:type" content="{{.OpenGraphType}}"><meta name="twitter:card" content="summary_large_image"><script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script><h1>Get in touch.</h1><form data-subsnail="https://subsnail.schollz.com/form/0e018f9b-3d62-48db-8f40-7398e6aecb0d/subscribe/"><input name="first_name"><input name="last_name"><input type="email" name="email" required><textarea name="textarea"></textarea><button type="submit">Subscribe</button></form><a href="mailto:admin@offlinenotepad.com">admin@offlinenotepad.com</a><script src="https://subsnail.schollz.com/form/embed.js"></script>`)},
+		"blog.html":                      &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><link rel="alternate" type="application/atom+xml" href="{{.FeedURL}}"><meta property="og:type" content="{{.OpenGraphType}}"><meta name="twitter:card" content="summary_large_image">{{if .PublishedAt}}<meta property="article:published_time" content="{{.PublishedAt}}">{{end}}{{if .ArticleSection}}<meta property="article:section" content="{{.ArticleSection}}">{{end}}{{range .ArticleTags}}<meta property="article:tag" content="{{.}}">{{end}}<script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>{{if .IsIndex}}<h1>Offline Notepad blog</h1>{{range .Posts}}<a href="/blog/{{.Slug}}">{{.Title}}</a>{{end}}{{else}}<h1>{{.Post.Title}}</h1><time datetime="{{.Post.PublishedAt}}">{{.Post.PublishedDisplay}}</time><article>{{.Post.Body}}</article>{{end}}`)},
+		"public.html":                    &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:title" content="{{.PageTitle}}"><meta name="twitter:card" content="summary_large_image"><script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script><a href="{{.RawURL}}">raw</a><article>{{.Content}}</article>`)},
+		"static/app.js":                  &fstest.MapFile{Data: []byte(`console.log("app")`)},
+		"fonts/OpenAISans-Regular.woff2": &fstest.MapFile{Data: []byte("font")},
+	}
+	application, err := New(store, fs.FS(content), slog.New(slog.NewTextHandler(io.Discard, nil)), config)
+	if err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(application.Handler())
+	t.Cleanup(func() { server.Close(); store.Close() })
+	return store, server
+}
+
+func assertValidStructuredData(t *testing.T, body string) {
+	t.Helper()
+	const marker = `type="application/ld+json">`
+	start := strings.Index(body, marker)
+	if start < 0 {
+		t.Fatal("page has no JSON-LD")
+	}
+	start += len(marker)
+	end := strings.Index(body[start:], "</script>")
+	if end < 0 {
+		t.Fatal("page has unterminated JSON-LD")
+	}
+	var document any
+	if err := json.Unmarshal([]byte(body[start:start+end]), &document); err != nil {
+		t.Fatalf("page has invalid JSON-LD: %v", err)
+	}
+}
+
+func TestEmbeddedFontRoute(t *testing.T) {
+	_, server := testServer(t)
+	response, err := http.Get(server.URL + "/fonts/OpenAISans-Regular.woff2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, _ := io.ReadAll(response.Body)
+	if response.StatusCode != http.StatusOK || string(body) != "font" {
+		t.Fatalf("font response status=%d body=%q", response.StatusCode, body)
+	}
+}
+
+func TestHomepageAndBlogSEO(t *testing.T) {
+	_, server := testServerWithConfig(t, Config{SiteURL: "https://notes.example", LegacyMigrationEnabled: true})
+
+	homeResponse, err := http.Get(server.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	homeBody, _ := io.ReadAll(homeResponse.Body)
+	homeResponse.Body.Close()
+	home := string(homeBody)
+	assertValidStructuredData(t, home)
+	for _, expected := range []string{
+		`<title>` + homeTitle + `</title>`,
+		`name="description" content="` + homeDescription + `"`,
+		`name="robots" content="index, follow`,
+		`rel="canonical" href="https://notes.example/"`,
+		`property="og:title"`,
+		`name="twitter:card" content="summary_large_image"`,
+		`rel="alternate" type="application/atom+xml" href="https://notes.example/blog/feed.xml"`,
+		`"alternateName":"OfflineNotepad"`,
+		`"@type":"WebApplication"`,
+		`"applicationCategory":"UtilitiesApplication"`,
+		`Private notes that work offline`,
+		`href="/about"`,
+		`href="/blog"`,
+		`href="/contact"`,
+	} {
+		if !strings.Contains(home, expected) {
+			t.Errorf("homepage missing %q", expected)
+		}
+	}
+	nonceMarker := `nonce="`
+	nonceStart := strings.Index(home, nonceMarker)
+	if nonceStart < 0 {
+		t.Fatal("homepage JSON-LD has no CSP nonce")
+	}
+	nonceStart += len(nonceMarker)
+	nonceEnd := strings.Index(home[nonceStart:], `"`)
+	if nonceEnd < 0 || !strings.Contains(homeResponse.Header.Get("Content-Security-Policy"), "'nonce-"+home[nonceStart:nonceStart+nonceEnd]+"'") {
+		t.Fatalf("CSP does not authorize homepage JSON-LD: %q", homeResponse.Header.Get("Content-Security-Policy"))
+	}
+
+	appResponse, err := http.Get(server.URL + "/app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	appBody, _ := io.ReadAll(appResponse.Body)
+	appResponse.Body.Close()
+	if !strings.Contains(string(appBody), `name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex"`) || !strings.Contains(string(appBody), `href="https://notes.example/app"`) {
+		t.Fatalf("private app SEO metadata is incorrect: %s", appBody)
+	}
+	if got := appResponse.Header.Get("X-Robots-Tag"); got != "noindex, nofollow, noarchive, nosnippet, noimageindex" {
+		t.Fatalf("private app X-Robots-Tag = %q", got)
+	}
+
+	aboutResponse, err := http.Get(server.URL + "/about")
+	if err != nil {
+		t.Fatal(err)
+	}
+	aboutBody, _ := io.ReadAll(aboutResponse.Body)
+	aboutResponse.Body.Close()
+	about := string(aboutBody)
+	assertValidStructuredData(t, about)
+	for _, expected := range []string{aboutTitle, aboutDescription, `https://notes.example/about`, `"@type":"AboutPage"`, `"@type":"BreadcrumbList"`, `A quiet place to write, built around privacy`, `readable private notes stay in the browser`} {
+		if !strings.Contains(about, expected) {
+			t.Errorf("about page missing %q", expected)
+		}
+	}
+
+	contactResponse, err := http.Get(server.URL + "/contact")
+	if err != nil {
+		t.Fatal(err)
+	}
+	contactBody, _ := io.ReadAll(contactResponse.Body)
+	contactResponse.Body.Close()
+	contact := string(contactBody)
+	assertValidStructuredData(t, contact)
+	for _, expected := range []string{contactTitle, contactDescription, `https://notes.example/contact`, `"@type":"ContactPage"`, `"@type":"ContactPoint"`, `Get in touch`, `data-subsnail="https://subsnail.schollz.com/form/0e018f9b-3d62-48db-8f40-7398e6aecb0d/subscribe/"`, `name="first_name"`, `name="last_name"`, `type="email" name="email" required`, `name="textarea"`, `>Subscribe</button>`, `src="https://subsnail.schollz.com/form/embed.js"`, `mailto:admin@offlinenotepad.com`} {
+		if !strings.Contains(contact, expected) {
+			t.Errorf("contact page missing %q", expected)
+		}
+	}
+	if !strings.Contains(contactResponse.Header.Get("Content-Security-Policy"), "script-src 'self' 'nonce-") || !strings.Contains(contactResponse.Header.Get("Content-Security-Policy"), "https://subsnail.schollz.com") {
+		t.Errorf("contact page CSP does not authorize Subsnail: %q", contactResponse.Header.Get("Content-Security-Policy"))
+	}
+	if !strings.Contains(contactResponse.Header.Get("Content-Security-Policy"), "style-src-attr 'unsafe-inline'") {
+		t.Errorf("contact page CSP does not authorize Subsnail's injected styles: %q", contactResponse.Header.Get("Content-Security-Policy"))
+	}
+	if strings.Contains(homeResponse.Header.Get("Content-Security-Policy"), "subsnail.schollz.com") {
+		t.Error("homepage CSP unexpectedly allows Subsnail")
+	}
+
+	blogResponse, err := http.Get(server.URL + "/blog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	blogBody, _ := io.ReadAll(blogResponse.Body)
+	blogResponse.Body.Close()
+	blog := string(blogBody)
+	assertValidStructuredData(t, blog)
+	for _, expected := range []string{blogTitle, `https://notes.example/blog`, `https://notes.example/blog/feed.xml`, `"@type":"Blog"`, howItWorksPost.Title, `/blog/` + howItWorksPost.Slug, releasePost.Title, `/blog/` + releasePost.Slug} {
+		if !strings.Contains(blog, expected) {
+			t.Errorf("blog index missing %q", expected)
+		}
+	}
+	if strings.Index(blog, howItWorksPost.Title) > strings.Index(blog, releasePost.Title) {
+		t.Error("how-it-works post should appear before the v2 release post")
+	}
+
+	howResponse, err := http.Get(server.URL + "/blog/" + howItWorksPost.Slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	howBody, _ := io.ReadAll(howResponse.Body)
+	howResponse.Body.Close()
+	assertValidStructuredData(t, string(howBody))
+	for _, expected := range []string{howItWorksPost.Title, howItWorksPost.Description, `"@type":"BlogPosting"`, `Argon2id`, `https://github.com/schollz/offlinenotepad`} {
+		if !strings.Contains(string(howBody), expected) {
+			t.Errorf("how-it-works post missing %q", expected)
+		}
+	}
+
+	postResponse, err := http.Get(server.URL + "/blog/" + releasePost.Slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	postBody, _ := io.ReadAll(postResponse.Body)
+	postResponse.Body.Close()
+	assertValidStructuredData(t, string(postBody))
+	for _, expected := range []string{releasePost.Title, releasePost.Description, `"@type":"BlogPosting"`, `article:published_time`, `property="article:section" content="Release notes"`, `property="article:tag" content="Offline Notepad v2"`, `Every private note is encrypted in your browser`} {
+		if !strings.Contains(string(postBody), expected) {
+			t.Errorf("blog post missing %q", expected)
+		}
+	}
+	missingResponse, err := http.Get(server.URL + "/blog/not-a-post")
+	if err != nil {
+		t.Fatal(err)
+	}
+	missingResponse.Body.Close()
+	if missingResponse.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing blog post status = %d", missingResponse.StatusCode)
+	}
+
+	noRedirects := &http.Client{CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	for path, location := range map[string]string{"/index.html": "/", "/app/": "/app", "/about/": "/about", "/blog/": "/blog", "/contact/": "/contact"} {
+		response, err := noRedirects.Get(server.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusPermanentRedirect || response.Header.Get("Location") != location {
+			t.Errorf("%s redirect status=%d location=%q", path, response.StatusCode, response.Header.Get("Location"))
+		}
+	}
+}
+
+func TestSitemapAndRobotsIncludeCrawlablePages(t *testing.T) {
+	store, server := testServerWithConfig(t, Config{SiteURL: "https://notes.example", LegacyMigrationEnabled: true})
+	workspace, _ := createTestWorkspace(t, store)
+	document := database.Document{WorkspaceID: workspace.ID, DocumentID: "document-one", Ciphertext: "encrypted", CiphertextHash: base64.RawURLEncoding.EncodeToString(sha256.New().Sum(nil))}
+	if _, err := store.PutDocument(context.Background(), document, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.PutPublication(context.Background(), database.Publication{PublicID: "public-document-one", WorkspaceID: workspace.ID, DocumentID: document.DocumentID, Title: "Public", Content: "Public note", ContentMode: "plaintext"}); err != nil {
+		t.Fatal(err)
+	}
+	legacyArchive := database.LegacyArchive{
+		Workspaces:   []database.LegacyWorkspace{{LegacyID: "1234abcd", Documents: []database.LegacyDocument{{DocumentID: "abc12345", Ciphertext: "legacy ciphertext", DocumentHash: "bb33cf65"}}}},
+		Publications: []database.LegacyPublication{{PublicID: "abcd1234", LegacyID: "1234abcd", DocumentID: "abc12345", Title: "Legacy", Content: "Legacy public note", ContentMode: "plaintext"}},
+	}
+	if _, err := store.StageLegacyArchive(context.Background(), legacyArchive, false); err != nil {
+		t.Fatal(err)
+	}
+
+	sitemapResponse, err := http.Get(server.URL + "/sitemap.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sitemapBody, _ := io.ReadAll(sitemapResponse.Body)
+	sitemapResponse.Body.Close()
+	if sitemapResponse.Header.Get("Content-Type") != "application/xml; charset=utf-8" {
+		t.Fatalf("sitemap Content-Type = %q", sitemapResponse.Header.Get("Content-Type"))
+	}
+	for _, expected := range []string{
+		`<loc>https://notes.example/</loc>`,
+		`<loc>https://notes.example/about</loc>`,
+		`<loc>https://notes.example/contact</loc>`,
+		`<loc>https://notes.example/blog</loc>`,
+		`<loc>https://notes.example/blog/` + howItWorksPost.Slug + `</loc>`,
+		`<loc>https://notes.example/blog/` + releasePost.Slug + `</loc>`,
+		`<loc>https://notes.example/p/public-document-one</loc>`,
+		`<loc>https://notes.example/abcd1234</loc>`,
+	} {
+		if !strings.Contains(string(sitemapBody), expected) {
+			t.Errorf("sitemap missing %q", expected)
+		}
+	}
+
+	robotsResponse, err := http.Get(server.URL + "/robots.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	robotsBody, _ := io.ReadAll(robotsResponse.Body)
+	robotsResponse.Body.Close()
+	robots := string(robotsBody)
+	for _, expected := range []string{"User-agent: *", "Allow: /", "Disallow: /api/", "Disallow: /ws", "Disallow: /healthz", "Sitemap: https://notes.example/sitemap.xml", "Sitemap: https://notes.example/blog/feed.xml"} {
+		if !strings.Contains(robots, expected) {
+			t.Errorf("robots.txt missing %q", expected)
+		}
+	}
+	if strings.Contains(robots, "Disallow: /blog") {
+		t.Error("robots.txt blocks the blog")
+	}
+	if strings.Contains(robots, "Disallow: /app") || strings.Contains(robots, "Disallow: /*/raw") {
+		t.Error("robots.txt prevents crawlers from seeing page-level noindex directives")
+	}
+	if strings.Contains(string(sitemapBody), "<changefreq>") || strings.Contains(string(sitemapBody), "<priority>") {
+		t.Error("sitemap contains unsupported hint fields")
+	}
+	if !strings.Contains(string(sitemapBody), "<lastmod>"+staticModifiedDate+"</lastmod>") {
+		t.Error("sitemap does not include an accurate static-page lastmod")
+	}
+
+	feedResponse, err := http.Get(server.URL + "/blog/feed.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	feedBody, _ := io.ReadAll(feedResponse.Body)
+	feedResponse.Body.Close()
+	if feedResponse.Header.Get("Content-Type") != "application/atom+xml; charset=utf-8" {
+		t.Fatalf("feed Content-Type = %q", feedResponse.Header.Get("Content-Type"))
+	}
+	for _, expected := range []string{`<feed xmlns="http://www.w3.org/2005/Atom">`, `<id>https://notes.example/blog/feed.xml</id>`, `<link href="https://notes.example/blog/feed.xml" rel="self" type="application/atom+xml"></link>`, releasePost.Title, howItWorksPost.Title} {
+		if !strings.Contains(string(feedBody), expected) {
+			t.Errorf("blog feed missing %q", expected)
+		}
+	}
+}
+
+func createTestWorkspace(t *testing.T, store *database.Store) (database.Workspace, cryptov2.Keys) {
+	t.Helper()
+	salt := "AAECAwQFBgcICQoLDA0ODw"
+	keys, err := cryptov2.DeriveKeys([]byte("correct horse battery staple"), salt, 32*1024, 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := cryptov2.WorkspaceID("websocket test")
+	workspace := database.Workspace{ID: id, KDFVersion: 1, KDFSalt: salt, KDFMemory: 32 * 1024, KDFIterations: 1, KDFParallelism: 1, AuthPublicKey: cryptov2.EncodePublicKey(keys.PublicKey)}
+	if created, err := store.CreateWorkspace(context.Background(), workspace); err != nil || !created {
+		t.Fatalf("create workspace: created=%v err=%v", created, err)
+	}
+	return workspace, keys
+}
+
+func authenticatedConnection(t *testing.T, server *httptest.Server, workspace database.Workspace, keys cryptov2.Keys) (*websocket.Conn, context.Context, context.CancelFunc) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": []string{server.URL}}})
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	var challenge socketMessage
+	if err := wsjson.Read(ctx, conn, &challenge); err != nil {
+		conn.CloseNow()
+		cancel()
+		t.Fatal(err)
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(challenge.Challenge)
+	if err != nil {
+		conn.CloseNow()
+		cancel()
+		t.Fatal(err)
+	}
+	signature := ed25519.Sign(keys.PrivateKey, append([]byte(authenticationContext), decoded...))
+	if err := wsjson.Write(ctx, conn, socketMessage{Type: messageAuthenticate, WorkspaceID: workspace.ID, Signature: base64.RawURLEncoding.EncodeToString(signature)}); err != nil {
+		conn.CloseNow()
+		cancel()
+		t.Fatal(err)
+	}
+	var authenticated socketMessage
+	if err := wsjson.Read(ctx, conn, &authenticated); err != nil || authenticated.Type != messageAuthenticated {
+		conn.CloseNow()
+		cancel()
+		t.Fatalf("authentication response = %#v err=%v", authenticated, err)
+	}
+	return conn, ctx, cancel
+}
+
+func TestWebsocketAuthenticationAndMutation(t *testing.T) {
+	store, server := testServer(t)
+	workspace, keys := createTestWorkspace(t, store)
+	conn, ctx, cancel := authenticatedConnection(t, server, workspace, keys)
+	defer cancel()
+	defer conn.CloseNow()
+	ciphertext, hash, err := cryptov2.EncryptDocument(keys.ContentKey, workspace.ID, "document-one", []byte(`{"id":"document-one"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := wsjson.Write(ctx, conn, socketMessage{Type: messageUpsert, DocumentID: "document-one", Ciphertext: ciphertext, CiphertextHash: hash}); err != nil {
+		t.Fatal(err)
+	}
+	var ack socketMessage
+	if err := wsjson.Read(ctx, conn, &ack); err != nil || ack.Type != messageAck || len(ack.Documents) != 1 || ack.Documents[0].Revision != 1 {
+		t.Fatalf("upsert response = %#v err=%v", ack, err)
+	}
+	if err := wsjson.Write(ctx, conn, socketMessage{Type: messageUpsert, DocumentID: "document-one", Ciphertext: ciphertext, CiphertextHash: hash, BaseRevision: 0}); err != nil {
+		t.Fatal(err)
+	}
+	var conflict socketMessage
+	if err := wsjson.Read(ctx, conn, &conflict); err != nil || conflict.Type != messageConflict || len(conflict.Documents) != 1 || conflict.Documents[0].Revision != 1 {
+		t.Fatalf("conflict response = %#v err=%v", conflict, err)
+	}
+	if err := wsjson.Write(ctx, conn, socketMessage{Type: messageUpsert, DocumentID: "document-one", Ciphertext: ciphertext, CiphertextHash: "wrong", BaseRevision: 1}); err != nil {
+		t.Fatal(err)
+	}
+	var failure socketMessage
+	if err := wsjson.Read(ctx, conn, &failure); err != nil || failure.Type != messageError || failure.ErrorCode != "invalid-message" {
+		t.Fatalf("invalid mutation response = %#v err=%v", failure, err)
+	}
+}
+
+func TestWebsocketRejectsMalformedAndOversizedMessages(t *testing.T) {
+	t.Run("malformed authentication", func(t *testing.T) {
+		_, server := testServer(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+		conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": []string{server.URL}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.CloseNow()
+		var challenge socketMessage
+		if err := wsjson.Read(ctx, conn, &challenge); err != nil {
+			t.Fatal(err)
+		}
+		if err := conn.Write(ctx, websocket.MessageText, []byte(`{"type":`)); err != nil {
+			t.Fatal(err)
+		}
+		var failure socketMessage
+		if err := wsjson.Read(ctx, conn, &failure); websocket.CloseStatus(err) != websocket.StatusInvalidFramePayloadData {
+			t.Fatalf("malformed message close status = %v, err=%v", websocket.CloseStatus(err), err)
+		}
+	})
+
+	t.Run("oversized document", func(t *testing.T) {
+		store, server := testServer(t)
+		workspace, keys := createTestWorkspace(t, store)
+		conn, ctx, cancel := authenticatedConnection(t, server, workspace, keys)
+		defer cancel()
+		defer conn.CloseNow()
+		if err := wsjson.Write(ctx, conn, socketMessage{Type: messageUpsert, DocumentID: "document-one", Ciphertext: strings.Repeat("x", maxWebsocketMessage/2+1), CiphertextHash: "unused"}); err != nil {
+			t.Fatal(err)
+		}
+		var failure socketMessage
+		if err := wsjson.Read(ctx, conn, &failure); err != nil || failure.Type != messageError || !strings.Contains(failure.Error, "too large") {
+			t.Fatalf("oversized response = %#v err=%v", failure, err)
+		}
+	})
+}
+
+func TestWebsocketRejectsForeignOrigin(t *testing.T) {
+	_, server := testServer(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	_, response, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": []string{"https://attacker.invalid"}}})
+	if err == nil || response == nil || response.StatusCode != http.StatusForbidden {
+		t.Fatalf("foreign origin: response=%v err=%v", response, err)
+	}
+}
+
+func TestPublicSnapshotIsSanitizedAndNotAppCached(t *testing.T) {
+	store, server := testServer(t)
+	workspace, _ := createTestWorkspace(t, store)
+	document := database.Document{WorkspaceID: workspace.ID, DocumentID: "document-one", Ciphertext: "encrypted", CiphertextHash: base64.RawURLEncoding.EncodeToString(sha256.New().Sum(nil))}
+	if _, err := store.PutDocument(context.Background(), document, 0); err != nil {
+		t.Fatal(err)
+	}
+	publication := database.Publication{PublicID: "public-document-one", WorkspaceID: workspace.ID, DocumentID: document.DocumentID, Title: "Snapshot", Content: "# Safe\n\n<script>alert(1)</script>", ContentMode: "markdown"}
+	if err := store.PutPublication(context.Background(), publication); err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.Get(server.URL + "/p/" + url.PathEscape(publication.PublicID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, _ := io.ReadAll(response.Body)
+	assertValidStructuredData(t, string(body))
+	if response.Header.Get("Cache-Control") != "public, max-age=60" || strings.Contains(string(body), "<script>alert") || !strings.Contains(string(body), "Safe") || !strings.Contains(string(body), `type="application/ld+json"`) || !strings.Contains(string(body), `name="description" content="Read “Snapshot”, a public, read-only note shared with Offline Notepad. Safe"`) {
+		t.Fatalf("public response headers=%v body=%q", response.Header, body)
+	}
+	rawResponse, err := http.Get(server.URL + "/p/" + url.PathEscape(publication.PublicID) + "/raw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawResponse.Body.Close()
+	if rawResponse.Header.Get("X-Robots-Tag") != "noindex, nofollow, noarchive, nosnippet" {
+		t.Fatalf("raw public X-Robots-Tag = %q", rawResponse.Header.Get("X-Robots-Tag"))
+	}
+	if rawResponse.Header.Get("Link") != `<`+server.URL+`/p/public-document-one>; rel="canonical"` {
+		t.Fatalf("raw public canonical Link = %q", rawResponse.Header.Get("Link"))
+	}
+	appResponse, err := http.Get(server.URL + "/app/notes/document-one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer appResponse.Body.Close()
+	if appResponse.Header.Get("Cache-Control") != "no-cache" {
+		t.Fatalf("app Cache-Control = %q", appResponse.Header.Get("Cache-Control"))
+	}
+	if !strings.Contains(appResponse.Header.Get("X-Robots-Tag"), "noindex") {
+		t.Fatalf("app X-Robots-Tag = %q", appResponse.Header.Get("X-Robots-Tag"))
+	}
+}
+
+func TestStagedLegacyWorkspaceAndPublicationRoutes(t *testing.T) {
+	store, server := testServer(t)
+	const (
+		username            = "legacy account"
+		documentID          = "v9y7fxgx"
+		rejectedDocumentID  = "badnote1"
+		discardedDocumentID = "deleted1"
+	)
+	legacyID := legacyWorkspaceID(username)
+	archive := database.LegacyArchive{
+		Workspaces: []database.LegacyWorkspace{{LegacyID: legacyID, Documents: []database.LegacyDocument{
+			{DocumentID: documentID, Ciphertext: "legacy ciphertext", DocumentHash: "bb33cf65"},
+			{DocumentID: rejectedDocumentID, Ciphertext: "damaged legacy ciphertext", DocumentHash: "deadbeef"},
+			{DocumentID: discardedDocumentID, Ciphertext: "legacy deletion marker", DocumentHash: "decafbad"},
+		}}},
+		Publications: []database.LegacyPublication{{PublicID: "abcd1234", LegacyID: legacyID, DocumentID: documentID, Title: "Legacy snapshot", Content: "# Safe\n\n<script>alert(1)</script>", ContentMode: "markdown"}},
+	}
+	if _, err := store.StageLegacyArchive(context.Background(), archive, false); err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.Get(server.URL + "/api/v1/legacy/workspaces/" + legacyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK || response.Header.Get("Cache-Control") != "no-store" || !strings.Contains(string(body), "legacy ciphertext") {
+		t.Fatalf("legacy workspace response status=%d headers=%v body=%q", response.StatusCode, response.Header, body)
+	}
+	publicResponse, err := http.Get(server.URL + "/abcd1234")
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicBody, _ := io.ReadAll(publicResponse.Body)
+	publicResponse.Body.Close()
+	if publicResponse.StatusCode != http.StatusOK || strings.Contains(string(publicBody), "<script>alert") || !strings.Contains(string(publicBody), "Safe") || !strings.Contains(string(publicBody), `type="application/ld+json"`) {
+		t.Fatalf("legacy publication response status=%d body=%q", publicResponse.StatusCode, publicBody)
+	}
+
+	workspaceID, _ := cryptov2.WorkspaceID(username)
+	salt := "AAECAwQFBgcICQoLDA0ODw"
+	keys, err := cryptov2.DeriveKeys([]byte("tiny"), salt, 32*1024, 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace := database.Workspace{ID: workspaceID, KDFVersion: 1, KDFSalt: salt, KDFMemory: 32 * 1024, KDFIterations: 1, KDFParallelism: 1, AuthPublicKey: cryptov2.EncodePublicKey(keys.PublicKey)}
+	ciphertext, ciphertextHash, err := cryptov2.EncryptDocument(keys.ContentKey, workspaceID, documentID, []byte(`{"id":"v9y7fxgx"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidPayload, err := json.Marshal(legacyPromotionRequest{Username: username, Workspace: workspace, Documents: []database.Document{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidResponse, err := http.Post(server.URL+"/api/v1/legacy/workspaces/"+legacyID, "application/json", bytes.NewReader(invalidPayload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidResponse.Body.Close()
+	if invalidResponse.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid promotion status = %d", invalidResponse.StatusCode)
+	}
+	if _, err := store.GetWorkspace(context.Background(), workspaceID); err != database.ErrNotFound {
+		t.Fatalf("invalid promotion wrote workspace: %v", err)
+	}
+	allRejectedPayload, err := json.Marshal(legacyPromotionRequest{
+		Username: username, Workspace: workspace,
+		RejectedDocumentIDs: []string{documentID, rejectedDocumentID, discardedDocumentID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allRejectedResponse, err := http.Post(server.URL+"/api/v1/legacy/workspaces/"+legacyID, "application/json", bytes.NewReader(allRejectedPayload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	allRejectedResponse.Body.Close()
+	if allRejectedResponse.StatusCode != http.StatusBadRequest {
+		t.Fatalf("all-rejected promotion status = %d", allRejectedResponse.StatusCode)
+	}
+	if _, err := store.GetWorkspace(context.Background(), workspaceID); err != database.ErrNotFound {
+		t.Fatalf("all-rejected promotion wrote workspace: %v", err)
+	}
+	payload, err := json.Marshal(legacyPromotionRequest{
+		Username: username, Workspace: workspace,
+		Documents:            []database.Document{{DocumentID: documentID, Ciphertext: ciphertext, CiphertextHash: ciphertextHash}},
+		RejectedDocumentIDs:  []string{rejectedDocumentID},
+		DiscardedDocumentIDs: []string{discardedDocumentID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	promotionResponse, err := http.Post(server.URL+"/api/v1/legacy/workspaces/"+legacyID, "application/json", bytes.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	promotionResponse.Body.Close()
+	if promotionResponse.StatusCode != http.StatusCreated {
+		t.Fatalf("promotion status = %d", promotionResponse.StatusCode)
+	}
+	if document, err := store.GetDocument(context.Background(), workspaceID, documentID); err != nil || document.CiphertextHash != ciphertextHash {
+		t.Fatalf("promoted document = %#v err=%v", document, err)
+	}
+	if _, err := store.GetDocument(context.Background(), workspaceID, rejectedDocumentID); err != database.ErrNotFound {
+		t.Fatalf("rejected legacy document was promoted: %v", err)
+	}
+	if _, err := store.GetDocument(context.Background(), workspaceID, discardedDocumentID); err != database.ErrNotFound {
+		t.Fatalf("discarded legacy document was promoted: %v", err)
+	}
+	if publication, err := store.GetPublication(context.Background(), "abcd1234"); err != nil || publication.WorkspaceID != workspaceID {
+		t.Fatalf("promoted publication = %#v err=%v", publication, err)
+	}
+}

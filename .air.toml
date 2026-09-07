@@ -1,0 +1,19 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "npm --prefix web run build && go build -o ./tmp/offlinenotepad ./cmd/offlinenotepad"
+entrypoint = ["./tmp/offlinenotepad", "serve"]
+include_ext = ["go", "sql", "html", "css", "ts", "tsx"]
+exclude_dir = ["tmp", "web/node_modules", "internal/site/build"]
+delay = 300
+stop_on_error = true
+send_interrupt = true
+
+[log]
+time = true
+
+[proxy]
+enabled = true
+proxy_port = 8251
+app_port = 8252
