@@ -60,7 +60,7 @@
     <main class="blog-index">
       <header class="page-intro">
         <h1>Offline Notepad blog</h1>
-        <p>Release notes and practical writing about private, offline-first notes.</p>
+        <p>Release notes and practical writing about our free, private, offline-first notepad.</p>
       </header>
       <div class="post-list">
         {{range .Posts}}
@@ -83,7 +83,7 @@
           <p class="post-meta"><time datetime="{{.Post.PublishedAt}}">{{.Post.PublishedDisplay}}</time> · {{.Post.ReadingTime}}</p>
         </header>
         <div class="article-body">{{.Post.Body}}</div>
-        <footer class="article-footer">Try <a href="/">Offline Notepad</a> or read more on the <a href="/blog">blog</a>.</footer>
+        <footer class="article-footer">Try <a href="/">Offline Notepad</a> for free or read more on the <a href="/blog">blog</a>.</footer>
       </article>
     </main>
     {{end}}

@@ -1340,7 +1340,7 @@ function Welcome({ restoring, busy, error, onAuthenticate }: { restoring: boolea
         </section>
         <section className="welcome-details" aria-label="About Offline Notepad">
           <h2>Welcome to the Offline Notepad.</h2>
-          <p>Offline Notepad is an <a href="https://github.com/schollz/offlinenotepad" rel="noreferrer" target="_blank">open-source</a>, offline-capable note-writing app that securely synchronizes across all your devices. Everything you write is encrypted and stored locally, with encrypted syncing via a server.</p>
+          <p>Offline Notepad is a free, <a href="https://github.com/schollz/offlinenotepad" rel="noreferrer" target="_blank">open-source</a>, offline-capable note-writing app that securely synchronizes across all your devices. Everything you write is encrypted and stored locally, with encrypted syncing via a server.</p>
           <p>Offline Notepad is offline-first, which means you can create, edit, delete, and search notes without an internet connection. Your notes automatically sync with a server using end-to-end encryption when you come online.</p>
         </section>
       </main>
