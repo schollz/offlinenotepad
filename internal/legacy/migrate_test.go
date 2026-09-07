@@ -22,7 +22,7 @@ import (
 
 const legacyGolden = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1fzfX6+lZfj1SrH6oQDTm/W0lUoUfyuss9ergu0hTHHSea7nzW7+XEdU6+7eeJyLYuek+ylZliq76lMbEo29ZEvCnYIhxq1pIh751Lbe3hEcMwyhSnlyIME8koPNGhl68UXIpdUJr7ykBwNKzEgarX2fpvuGbSWfYd78WGL4CFadM4iTGS71oXtM1a979lvO+BBhgbqCUsaTFNQlpy3QGKBPhQHXGGZZmbCq9K6Q/MOuY7cxRsQKXKLFlIf+Vjk1kK"
 const legacyShortPasswordGolden = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1fBdsehS8hkZAmv6Km/qNel77CgUp3GqVh+nkt82lzkfsCLhcozQ69iqUzGRmHxFxN1+VNYMOsJTuBNrR/AAJbuA1v2lG8Sinx3DFnFZYjpRT/VEEWhN+Y2/FuSlZ3MA+BgrnfNC/OWKlyQLPnOTR5qtjo8dF4leEIBhMGhQ/eb8hVx81pconDVtOG3RWvgsZ64assh4stogsFg1h9qbtsTdxcZZHHzEsp0DaUjLf1Wbf9hpC9j5tG/Vt+7VgdwhFO"
-const legacyDeletedGolden = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1fqtjxzV2F2EnjbFOnjcuNcz2d4oFma0XVG/svUjZZqpkoedIb5PC8sXNBAIKqt2LsvTkuKuh1i+HANrU5nZyNafoRp4wE2szDVBaCLWEpqntyOT5bFI4+CJjfWMNrKapd6UKMLDt23dH5ebcqMEDmfo2VyPNAuPv8cY2j0rWItp2F9k/cmJ3rTQsIqy1JBUW/qGY+itpemOEZAmjg/RtwFG30eGsGZfcTHI97lkEG4h8="
+const legacyShortPasswordDeletedGolden = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1foI+5yuTPMr57FkllJa7Km1xP5Hd7/TScO92a7XoMUauD9D6DvxuJybQlRtTOgTK4P/4Q0Z3GO8l4LQVp2YU8nJRxXXYphZlOjrfas9VHS3Ko9b+M8on+Roy90lfjRO2kTn0kTK4qtZ5fJvTgFulRwE6Z7g7G9V4gytnzL1G+1+NwLWbIQQ3XQvFrIDmHclGZEKuglaBgmels65L1U3TNDv0ekIJB3xpcUsAPzVeiGZc="
 
 func TestDecryptLegacyCryptoJSGolden(t *testing.T) {
 	got, err := decryptLegacy(legacyGolden, []byte("correct horse battery staple"))
@@ -48,6 +48,20 @@ func TestDecryptLegacyAllowsShortPassword(t *testing.T) {
 	}
 	if !strings.Contains(got, `"uuid":"abc12345"`) {
 		t.Fatalf("unexpected legacy plaintext: %q", got)
+	}
+}
+
+func TestDecryptLegacyDeletedShortPassword(t *testing.T) {
+	got, err := decryptLegacy(legacyShortPasswordDeletedGolden, []byte("tiny"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document legacyDocument
+	if err := json.Unmarshal([]byte(got), &document); err != nil {
+		t.Fatal(err)
+	}
+	if document.UUID != "del12345" || !isLegacyDeletedTitle(document.Title) || document.Hash != legacyDocumentHash(document) {
+		t.Fatal("deleted fixture is not an authenticated legacy deletion marker")
 	}
 }
 
@@ -150,7 +164,7 @@ func TestPostgreSQLLegacyMigration(t *testing.T) {
 		if err := hashes.Put([]byte(damagedID), []byte("deadbeef")); err != nil {
 			return err
 		}
-		if err := data.Put([]byte(deletedID), []byte(legacyDeletedGolden)); err != nil {
+		if err := data.Put([]byte(deletedID), []byte(legacyShortPasswordDeletedGolden)); err != nil {
 			return err
 		}
 		if err := hashes.Put([]byte(deletedID), []byte("3855f5d9")); err != nil {
