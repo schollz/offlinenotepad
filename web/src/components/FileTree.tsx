@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent, type ReactNode } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent, type ReactNode } from 'react'
 import {
   ChevronRight,
   Cloud,
@@ -65,7 +65,7 @@ function dropOnFolder(event: DragEvent, folderId: string | null, onDrop: FileTre
   if (item) onDrop(item, folderId)
 }
 
-export function FileTree(props: FileTreeProps) {
+export const FileTree = memo(function FileTree(props: FileTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [menu, setMenu] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null | undefined>(undefined)
@@ -314,4 +314,15 @@ export function FileTree(props: FileTreeProps) {
     {(childNotes.get(null) ?? []).map((note) => noteRow(note, 0))}
     {!props.notes.length && !props.folders.length && <div className="empty-list"><FileText /><span>Your notes and folders will appear here</span></div>}
   </nav>
-}
+}, (previous, next) => {
+  // The tree displays metadata only; content and ciphertext changes must not
+  // rebuild its sorted groups or hundreds of rows on every keystroke.
+  for (const key of Object.keys(next) as Array<keyof FileTreeProps>) {
+    if (key !== 'notes' && previous[key] !== next[key]) return false
+  }
+  return previous.notes.length === next.notes.length && previous.notes.every((item, i) => {
+    const other = next.notes[i]
+    return item.note.id === other.note.id && item.note.title === other.note.title
+      && item.note.folder_id === other.note.folder_id && item.stored.pending === other.stored.pending
+  })
+})

@@ -116,7 +116,7 @@ func (q *Queries) GetDocument(ctx context.Context, arg GetDocumentParams) (Docum
 }
 
 const getPublication = `-- name: GetPublication :one
-SELECT public_id, workspace_id, document_id, title, content, content_mode, legacy, updated_at
+SELECT public_id, workspace_id, document_id, title, content, content_mode, legacy, updated_at, render_mode
 FROM publications WHERE public_id = $1
 `
 
@@ -132,12 +132,13 @@ func (q *Queries) GetPublication(ctx context.Context, publicID string) (Publicat
 		&i.ContentMode,
 		&i.Legacy,
 		&i.UpdatedAt,
+		&i.RenderMode,
 	)
 	return i, err
 }
 
 const getPublicationByDocument = `-- name: GetPublicationByDocument :one
-SELECT public_id, workspace_id, document_id, title, content, content_mode, legacy, updated_at
+SELECT public_id, workspace_id, document_id, title, content, content_mode, legacy, updated_at, render_mode
 FROM publications WHERE workspace_id = $1 AND document_id = $2
 `
 
@@ -158,6 +159,7 @@ func (q *Queries) GetPublicationByDocument(ctx context.Context, arg GetPublicati
 		&i.ContentMode,
 		&i.Legacy,
 		&i.UpdatedAt,
+		&i.RenderMode,
 	)
 	return i, err
 }
@@ -330,10 +332,10 @@ func (q *Queries) ListStagedLegacyDocuments(ctx context.Context, legacyID string
 }
 
 const putPublication = `-- name: PutPublication :exec
-INSERT INTO publications (public_id, workspace_id, document_id, title, content, content_mode, legacy)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO publications (public_id, workspace_id, document_id, title, content, content_mode, legacy, render_mode)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (public_id) DO UPDATE SET
-    title = EXCLUDED.title, content = EXCLUDED.content, content_mode = EXCLUDED.content_mode,
+    title = EXCLUDED.title, content = EXCLUDED.content, content_mode = EXCLUDED.content_mode, render_mode = EXCLUDED.render_mode,
     updated_at = CURRENT_TIMESTAMP
 WHERE publications.workspace_id = EXCLUDED.workspace_id
   AND publications.document_id = EXCLUDED.document_id
@@ -347,6 +349,7 @@ type PutPublicationParams struct {
 	Content     string
 	ContentMode string
 	Legacy      bool
+	RenderMode  string
 }
 
 func (q *Queries) PutPublication(ctx context.Context, arg PutPublicationParams) error {
@@ -358,6 +361,7 @@ func (q *Queries) PutPublication(ctx context.Context, arg PutPublicationParams) 
 		arg.Content,
 		arg.ContentMode,
 		arg.Legacy,
+		arg.RenderMode,
 	)
 	return err
 }

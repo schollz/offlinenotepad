@@ -365,7 +365,11 @@ kbd { padding: 2px 6px; border: 1px solid #ffffff55; border-radius: 5px; font-fa
 .markdown-editor .cm-editor { height: 100%; color: var(--text); background: transparent; }
 .markdown-editor .cm-editor.cm-focused, .markdown-editor .cm-content:focus, .markdown-editor .cm-content:focus-visible { border: 0; outline: 0 !important; box-shadow: none; }
 .markdown-editor .cm-scroller { height: 100%; max-height: 100%; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; scrollbar-gutter: stable; scroll-snap-type: y proximity; font-family: inherit; line-height: inherit; }
-.markdown-editor[data-mode='source'] .cm-scroller { font-family: var(--font-mono); }
+.markdown-editor[data-mode='source'][data-content-mode='markdown'] .cm-scroller { font-family: var(--font-mono); }
+.publish-dialog { color: var(--text); border: 1px solid var(--border); max-width: min(520px, calc(100vw - 32px)); }
+.publish-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.publish-dialog select { display: block; width: 100%; margin: 8px 0 16px; padding: 12px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font: inherit; }
+.publication-explanation { font-size: .9rem; }
 .markdown-editor .cm-scroller[data-content-overflow='true'] { scrollbar-width: auto; }
 .markdown-editor .cm-scroller::-webkit-scrollbar { display: none; }
 .markdown-editor .cm-scroller[data-content-overflow='true']::-webkit-scrollbar { display: block; }

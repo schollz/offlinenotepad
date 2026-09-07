@@ -53,6 +53,7 @@ type Publication struct {
 	ContentMode string
 	Legacy      bool
 	UpdatedAt   time.Time
+	RenderMode  string
 }
 
 type Workspace struct {

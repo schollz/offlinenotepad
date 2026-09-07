@@ -1,9 +1,9 @@
 import { commonmarkLanguage, markdown } from '@codemirror/lang-markdown'
 import { EditorSelection, EditorState, type Range } from '@codemirror/state'
-import { Decoration, type EditorView } from '@codemirror/view'
+import { Decoration, EditorView, type DecorationSet } from '@codemirror/view'
 import { GFM } from '@lezer/markdown'
 import { describe, expect, it } from 'vitest'
-import { buildLivePreviewDecorations, safeImageSource, safeLinkTarget } from './livePreview'
+import { buildLivePreviewDecorations, livePreview, safeImageSource, safeLinkTarget } from './livePreview'
 
 function state(doc: string, cursor = 0): EditorState {
   return EditorState.create({
@@ -70,5 +70,38 @@ describe('preview URL policy', () => {
     expect(safeLinkTarget('javascript:alert(1)', 'https://notes.test/app')).toBeNull()
     expect(safeLinkTarget('/local', 'https://notes.test/app')).toBe('https://notes.test/local')
     expect(safeLinkTarget('mailto:person@example.com', 'https://notes.test/app')).toBe('mailto:person@example.com')
+  })
+})
+
+describe('incremental preview', () => {
+  function describeDecorations(decorations: DecorationSet, document: EditorState) {
+    const result: unknown[] = []
+    decorations.between(0, document.doc.length, (from, to, decoration) => {
+      result.push([from, to, decoration.spec.class, decoration.spec.attributes, decoration.spec.block,
+        decoration.spec.widget?.constructor.name])
+    })
+    return result
+  }
+
+  it('matches a fresh render after edits, cursor moves, parser boundary changes, and reference changes', () => {
+    let document = EditorState.create({
+      doc: '# Header\n\nA **bold** [reference][target].\n\n[target]: https://one.example\n\n| A | B |\n|---|---|\n| x | y |\n\n- [ ] Task\n\n```js\nconst x = 1\n```\n\nEnd.',
+      extensions: [markdown({ base: commonmarkLanguage, extensions: [GFM] }), livePreview],
+    })
+    const check = () => {
+      const direct = document.facet(EditorView.decorations).filter((source): source is DecorationSet => typeof source !== 'function')
+      expect(direct).toHaveLength(1)
+      expect(describeDecorations(direct[0], document)).toEqual(describeDecorations(buildLivePreviewDecorations(document), document))
+    }
+    check()
+    for (let i = 0; i < 80; i++) {
+      const position = (i * 19) % document.doc.length
+      document = document.update(i % 3 === 0
+        ? { selection: { anchor: position } }
+        : { changes: { from: position, to: Math.min(document.doc.length, position + i % 4), insert: ['x', '\n', '`', '**', '[a]: /path'][i % 5] } }).state
+      check()
+    }
+    document = document.update({ changes: { from: 0, to: document.doc.length, insert: 'Entire replacement\n\n**new**' } }).state
+    check()
   })
 })

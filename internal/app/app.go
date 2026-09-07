@@ -25,6 +25,7 @@ import (
 	"github.com/schollz/offlinenotepad/internal/database"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
+	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 )
 
 const (
@@ -52,20 +53,21 @@ type Config struct {
 }
 
 type App struct {
-	store     *database.Store
-	logger    *slog.Logger
-	content   fs.FS
-	index     *template.Template
-	about     *template.Template
-	contact   *template.Template
-	public    *template.Template
-	blog      *template.Template
-	markdown  goldmark.Markdown
-	sanitizer *bluemonday.Policy
-	textOnly  *bluemonday.Policy
-	hub       *hub
-	config    Config
-	analytics *analyticsRelay
+	store               *database.Store
+	logger              *slog.Logger
+	content             fs.FS
+	index               *template.Template
+	about               *template.Template
+	contact             *template.Template
+	public              *template.Template
+	blog                *template.Template
+	markdown            goldmark.Markdown
+	interactiveMarkdown goldmark.Markdown
+	sanitizer           *bluemonday.Policy
+	textOnly            *bluemonday.Policy
+	hub                 *hub
+	config              Config
+	analytics           *analyticsRelay
 }
 
 func New(store *database.Store, content fs.FS, logger *slog.Logger, config Config) (*App, error) {
@@ -104,7 +106,7 @@ func New(store *database.Store, content fs.FS, logger *slog.Logger, config Confi
 		return nil, fmt.Errorf("parse blog template: %w", err)
 	}
 	analytics := newAnalyticsRelay(config.UmamiURL, config.UmamiWebsiteID, logger)
-	return &App{store: store, logger: logger, content: content, index: index, about: about, contact: contact, public: public, blog: blog, markdown: goldmark.New(goldmark.WithExtensions(extension.GFM)), sanitizer: bluemonday.UGCPolicy(), textOnly: bluemonday.StrictPolicy(), hub: newHub(), config: config, analytics: analytics}, nil
+	return &App{store: store, logger: logger, content: content, index: index, about: about, contact: contact, public: public, blog: blog, markdown: goldmark.New(goldmark.WithExtensions(extension.GFM)), interactiveMarkdown: goldmark.New(goldmark.WithExtensions(extension.GFM), goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe())), sanitizer: bluemonday.UGCPolicy(), textOnly: bluemonday.StrictPolicy(), hub: newHub(), config: config, analytics: analytics}, nil
 }
 
 func (a *App) Handler() http.Handler {
@@ -134,6 +136,7 @@ func (a *App) Handler() http.Handler {
 	}
 	mux.HandleFunc("GET /p/{id}", a.handleNewPublication)
 	mux.HandleFunc("GET /p/{id}/raw", a.handleNewPublicationRaw)
+	mux.HandleFunc("GET /p/{id}/render", a.handleExecutablePublication)
 	mux.HandleFunc("GET /ws", a.handleWebsocket)
 	mux.HandleFunc("/", a.handleFallback)
 	return a.middleware(mux)
@@ -275,6 +278,7 @@ type publicTemplateData struct {
 	RawURL       string
 	CanonicalURL string
 	Plaintext    bool
+	RenderURL    string
 }
 
 func (a *App) renderPublication(w http.ResponseWriter, r *http.Request, id string, raw bool) {
@@ -331,7 +335,12 @@ func (a *App) renderPublication(w http.ResponseWriter, r *http.Request, id strin
 	meta.ArticleSection = "Shared note"
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=60")
-	if err := a.public.Execute(w, publicTemplateData{metaTemplateData: meta, Title: displayTitle, Content: template.HTML(safe), RawURL: r.URL.Path + "/raw", CanonicalURL: canonical, Plaintext: p.ContentMode == "plaintext"}); err != nil {
+	renderURL := ""
+	if p.RenderMode == "html" || p.RenderMode == "markdown-html" {
+		renderURL = "/p/" + url.PathEscape(p.PublicID) + "/render"
+		w.Header().Set("Cache-Control", "no-store")
+	}
+	if err := a.public.Execute(w, publicTemplateData{metaTemplateData: meta, Title: displayTitle, Content: template.HTML(safe), RawURL: r.URL.Path + "/raw", CanonicalURL: canonical, Plaintext: p.ContentMode == "plaintext", RenderURL: renderURL}); err != nil {
 		a.logger.Error("render publication", "error", err)
 	}
 }

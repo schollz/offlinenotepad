@@ -73,6 +73,7 @@ type Publication struct {
 	Title       string    `json:"title"`
 	Content     string    `json:"content"`
 	ContentMode string    `json:"content_mode"`
+	RenderMode  string    `json:"render_mode"`
 	Legacy      bool      `json:"legacy"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -230,6 +231,12 @@ func (s *Store) ListSitemapPublications(ctx context.Context, limit int) ([]Sitem
 	return s.q.ListSitemapPublications(ctx, limit)
 }
 func (s *Store) PutPublication(ctx context.Context, p Publication) error {
+	if p.RenderMode == "" {
+		p.RenderMode = "document"
+	}
+	if p.RenderMode != "document" && p.RenderMode != "html" && p.RenderMode != "markdown-html" {
+		return ErrInvalid
+	}
 	return s.q.PutPublication(ctx, p)
 }
 func (s *Store) DeletePublication(ctx context.Context, wid, did string) (bool, error) {

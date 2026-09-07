@@ -44,7 +44,7 @@
     <main class="public-note">
       <p class="eyebrow">Shared snapshot</p>
       <h1>{{.Title}}</h1>
-      <article>{{.Content}}</article>
+      {{if .RenderURL}}<iframe class="public-executable" title="Interactive published note" sandbox="allow-scripts allow-forms" referrerpolicy="no-referrer" src="{{.RenderURL}}"></iframe>{{else}}<article>{{.Content}}</article>{{end}}
     </main>
     <footer>Published as a read-only snapshot. Later private edits are not shown here.</footer>
     <script type="module" src="/src/public-analytics.ts"></script>

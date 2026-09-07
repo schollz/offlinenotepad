@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type MouseEvent } from 'react'
+import { memo, useLayoutEffect, useRef, type MouseEvent } from 'react'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { bracketMatching, indentOnInput, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
 import { commonmarkLanguage, markdown } from '@codemirror/lang-markdown'
@@ -9,6 +9,7 @@ import { classHighlighter } from '@lezer/highlight'
 import { GFM } from '@lezer/markdown'
 import { insertLink, toggleBold, toggleInlineCode, toggleItalic, toggleStrikethrough } from './commands'
 import { codeLanguages } from './languages'
+import type { ContentMode } from '../types'
 import { disableCodeSpellcheck, livePreview, openLiveLink } from './livePreview'
 
 export type MarkdownEditorMode = 'live' | 'source'
@@ -17,6 +18,7 @@ interface MarkdownEditorProps {
   documentId: string
   value: string
   mode: MarkdownEditorMode
+  contentMode?: ContentMode
   onChange: (markdown: string) => void
 }
 
@@ -44,15 +46,37 @@ const formattingKeymap = Prec.highest(keymap.of([
   { key: 'Mod-k', run: insertLink },
 ]))
 
-export function MarkdownEditor({ documentId, value, mode, onChange }: MarkdownEditorProps) {
+function formatExtensions(contentMode: ContentMode, mode: MarkdownEditorMode) {
+  if (contentMode === 'plaintext') return [placeholderExtension('Start writing…')]
+  return [
+    placeholderExtension('Start writing in Markdown…'),
+    markdown({
+      base: commonmarkLanguage,
+      extensions: [GFM],
+      codeLanguages: (info) => /^(?:md|markdown)$/iu.test(info)
+        ? commonmarkLanguage
+        : LanguageDescription.matchLanguageName(codeLanguages, info),
+    }),
+    syntaxHighlighting(classHighlighter),
+    disableCodeSpellcheck,
+    formattingKeymap,
+    openLiveLink,
+    ...(mode === 'live' ? [livePreview] : []),
+  ]
+}
+
+export const MarkdownEditor = memo(function MarkdownEditor({ documentId, value, mode, contentMode = 'markdown', onChange }: MarkdownEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const modeCompartment = useRef(new Compartment())
   const valueRef = useRef(value)
   const modeRef = useRef(mode)
+  const contentModeRef = useRef(contentMode)
   const onChangeRef = useRef(onChange)
+  const lastEmittedValue = useRef(value)
   valueRef.current = value
   modeRef.current = mode
+  contentModeRef.current = contentMode
   onChangeRef.current = onChange
 
   useLayoutEffect(() => {
@@ -75,32 +99,23 @@ export function MarkdownEditor({ documentId, value, mode, onChange }: MarkdownEd
         highlightSelectionMatches(),
         keymap.of([...defaultKeymap, ...searchKeymap, ...historyKeymap]),
         EditorView.lineWrapping,
-        EditorView.contentAttributes.of({
+        EditorView.contentAttributes.of((view) => ({
           'aria-label': 'Note content',
           'aria-multiline': 'true',
           autocapitalize: 'sentences',
-          spellcheck: 'true',
-        }),
-        placeholderExtension('Start writing in Markdown…'),
-        markdown({
-          base: commonmarkLanguage,
-          extensions: [GFM],
-          codeLanguages: (info) => /^(?:md|markdown)$/iu.test(info)
-            ? commonmarkLanguage
-            : LanguageDescription.matchLanguageName(codeLanguages, info),
-        }),
-        syntaxHighlighting(classHighlighter),
-        disableCodeSpellcheck,
-        formattingKeymap,
-        openLiveLink,
-        viewMode.of(modeRef.current === 'live' ? livePreview : []),
+          spellcheck: view.state.doc.length <= 100_000 ? 'true' : 'false',
+        })),
+        viewMode.of(formatExtensions(contentModeRef.current, modeRef.current)),
         EditorView.updateListener.of((update) => {
           if (update.docChanged || update.geometryChanged) updateScrollbarVisibility(update.view)
           if (!update.docChanged || update.transactions.some((transaction) => transaction.annotation(externalUpdate))) return
-          onChangeRef.current(update.state.doc.toString())
+          const content = update.state.doc.toString()
+          lastEmittedValue.current = content
+          onChangeRef.current(content)
         }),
       ],
     })
+    lastEmittedValue.current = valueRef.current
     const view = new EditorView({ state, parent: host })
     updateScrollbarVisibility(view)
     viewRef.current = view
@@ -112,7 +127,9 @@ export function MarkdownEditor({ documentId, value, mode, onChange }: MarkdownEd
 
   useLayoutEffect(() => {
     const view = viewRef.current
-    if (!view || view.state.doc.toString() === value) return
+    if (!view || lastEmittedValue.current === value) return
+    lastEmittedValue.current = value
+    if (view.state.doc.toString() === value) return
     const selection = view.state.selection.main
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: value },
@@ -127,8 +144,8 @@ export function MarkdownEditor({ documentId, value, mode, onChange }: MarkdownEd
   useLayoutEffect(() => {
     const view = viewRef.current
     if (!view) return
-    view.dispatch({ effects: modeCompartment.current.reconfigure(mode === 'live' ? livePreview : []) })
-  }, [documentId, mode])
+    view.dispatch({ effects: modeCompartment.current.reconfigure(formatExtensions(contentMode, mode)) })
+  }, [documentId, mode, contentMode])
 
   function focusAtEndFromEmptySpace(event: MouseEvent<HTMLDivElement>): void {
     const view = viewRef.current
@@ -152,5 +169,5 @@ export function MarkdownEditor({ documentId, value, mode, onChange }: MarkdownEd
     view.focus()
   }
 
-  return <div ref={hostRef} className="markdown-editor" data-document-id={documentId} data-mode={mode} onMouseDownCapture={focusAtEndFromEmptySpace} />
-}
+  return <div ref={hostRef} className="markdown-editor" data-document-id={documentId} data-mode={mode} data-content-mode={contentMode} onMouseDownCapture={focusAtEndFromEmptySpace} />
+})

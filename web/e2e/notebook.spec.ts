@@ -33,8 +33,8 @@ test('creates, edits in live preview, and publishes an explicit snapshot', async
   await page.getByRole('button', { name: 'Source' }).click()
   await expect(page.getByLabel('Note content')).toContainText('# Hello')
   await page.getByRole('button', { name: 'Live' }).click()
-  page.once('dialog', (dialog) => dialog.accept())
-  await page.getByRole('button', { name: 'Publish' }).click()
+  await page.getByRole('button', { name: 'Publish', exact: true }).click()
+  await page.getByRole('button', { name: 'Publish snapshot', exact: true }).click()
   const snapshot = page.getByRole('link', { name: /Public snapshot/ })
   await expect(snapshot).toBeVisible()
   const publicPage = await page.context().newPage()
@@ -92,14 +92,16 @@ test('scrolls long Markdown and plain-text note bodies', async ({ page }) => {
   await settings.getByRole('button', { name: 'Close settings' }).click()
 
   const plainTextEditor = page.getByLabel('Note content')
-  await expect(plainTextEditor).toHaveValue(longNote)
-  await expect.poll(() => plainTextEditor.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0)
-  await expect.poll(() => plainTextEditor.evaluate((element) => getComputedStyle(element).scrollbarGutter)).toContain('stable')
+  const plainTextScroller = page.locator('.cm-scroller')
+  await plainTextScroller.evaluate((element) => { element.scrollTop = 0 })
+  await expect(plainTextEditor).toContainText('Line 1: scrollable note content')
+  await expect.poll(() => plainTextScroller.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0)
+  await expect.poll(() => plainTextScroller.evaluate((element) => getComputedStyle(element).scrollbarGutter)).toContain('stable')
   await expect.poll(() => plainTextEditor.evaluate((element) => parseFloat(getComputedStyle(element).paddingRight))).toBeGreaterThanOrEqual(18)
-  await plainTextEditor.evaluate((element) => { element.scrollTop = 0 })
+  await plainTextScroller.evaluate((element) => { element.scrollTop = 0 })
   await plainTextEditor.hover()
   await page.mouse.wheel(0, 700)
-  await expect.poll(() => plainTextEditor.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+  await expect.poll(() => plainTextScroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
 })
 
 test('creates an unknown notebook with a short password from the unified form', async ({ page }, testInfo) => {
@@ -379,8 +381,8 @@ test('analytics stays normalized and outside the service worker cache', async ({
   await page.getByLabel('Search notes').fill(search)
   await page.getByLabel('Search notes').clear()
 
-  page.once('dialog', (dialog) => dialog.accept())
-  await page.getByRole('button', { name: 'Publish' }).click()
+  await page.getByRole('button', { name: 'Publish', exact: true }).click()
+  await page.getByRole('button', { name: 'Publish snapshot', exact: true }).click()
   const snapshot = page.getByRole('link', { name: /Public snapshot/ })
   await expect(snapshot).toBeVisible()
   const snapshotHref = await snapshot.getAttribute('href') ?? ''

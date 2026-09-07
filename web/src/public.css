@@ -18,6 +18,7 @@ body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 10% 0
 h1 { margin: .25em 0 1em; font-size: clamp(2rem, 6vw, 3.8rem); line-height: 1.05; letter-spacing: -.045em; }
 article { line-height: 1.75; font-size: 1.06rem; }
 article img { max-width: 100%; } article pre { overflow: auto; padding: 18px; border-radius: 12px; background: #101827; color: #e6edf7; } article blockquote { margin-left: 0; padding-left: 20px; border-left: 3px solid #80adf2; color: #53627a; }
+.public-executable { display: block; width: 100%; height: 75vh; min-height: 320px; border: 1px solid #dbe3ef; border-radius: 8px; background: white; }
 footer { text-align: center; padding: 22px; color: #68758a; font-size: .84rem; }
 @media (max-width: 700px) { .public-note { margin: 0; border-radius: 0; border-inline: 0; } }
 @media (prefers-color-scheme: dark) { :root { color: #e8eef8; background: #0c111b; } body { background: radial-gradient(circle at 10% 0%, #153665 0, transparent 30rem), #0c111b; } .public-note { border-color: #29364a; box-shadow: none; } article blockquote, footer { color: #9babbe; } }

@@ -135,8 +135,22 @@ func runStoreContract(t *testing.T, store *Store, workspaceID string) {
 	if err := store.PutPublication(ctx, publication); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := store.GetPublication(ctx, publication.PublicID); err != nil || got.Content != publication.Content {
+	if got, err := store.GetPublication(ctx, publication.PublicID); err != nil || got.Content != publication.Content || got.RenderMode != "document" {
 		t.Fatalf("publication = %#v err=%v", got, err)
+	}
+	for _, mode := range []string{"html", "markdown-html", "document"} {
+		publication.RenderMode = mode
+		if err := store.PutPublication(ctx, publication); err != nil {
+			t.Fatal(err)
+		}
+		got, err := store.GetPublicationByDocument(ctx, workspaceID, document.DocumentID)
+		if err != nil || got.RenderMode != mode || got.PublicID != publication.PublicID {
+			t.Fatalf("publication format = %q err=%v", got.RenderMode, err)
+		}
+	}
+	publication.RenderMode = "unsupported"
+	if err := store.PutPublication(ctx, publication); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("invalid format: %v", err)
 	}
 	if sitemapPublications, err := store.ListSitemapPublications(ctx, 100); err != nil || len(sitemapPublications) != 1 || sitemapPublications[0].PublicID != publication.PublicID {
 		t.Fatalf("sitemap publications = %#v err=%v", sitemapPublications, err)

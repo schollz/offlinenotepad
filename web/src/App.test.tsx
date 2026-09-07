@@ -6,6 +6,8 @@ import { decryptRecord, encryptRecord } from './lib/crypto'
 import { documentKey, getLogin, notebookDB, saveLogin } from './lib/db'
 import { toBase64 } from './lib/encoding'
 import { workspacePreferencesDocumentID } from './lib/preferences'
+import { SearchIndex, type SearchRequest } from './lib/search-index'
+import type { PrivateRecord } from './types'
 
 const legacyGolden = '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1fzfX6+lZfj1SrH6oQDTm/W0lUoUfyuss9ergu0hTHHSea7nzW7+XEdU6+7eeJyLYuek+ylZliq76lMbEo29ZEvCnYIhxq1pIh751Lbe3hEcMwyhSnlyIME8koPNGhl68UXIpdUJr7ykBwNKzEgarX2fpvuGbSWfYd78WGL4CFadM4iTGS71oXtM1a979lvO+BBhgbqCUsaTFNQlpy3QGKBPhQHXGGZZmbCq9K6Q/MOuY7cxRsQKXKLFlIf+Vjk1kK'
 const legacyDeletedGolden = '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1fqtjxzV2F2EnjbFOnjcuNcz2d4oFma0XVG/svUjZZqpkoedIb5PC8sXNBAIKqt2LsvTkuKuh1i+HANrU5nZyNafoRp4wE2szDVBaCLWEpqntyOT5bFI4+CJjfWMNrKapd6UKMLDt23dH5ebcqMEDmfo2VyPNAuPv8cY2j0rWItp2F9k/cmJ3rTQsIqy1JBUW/qGY+itpemOEZAmjg/RtwFG30eGsGZfcTHI97lkEG4h8='
@@ -36,8 +38,23 @@ class FakeWebSocket {
 class FakeWorker {
   onmessage: ((event: MessageEvent) => void) | null = null
   onerror: (() => void) | null = null
+  private key?: Uint8Array
+  private workspace = ''
+  private readonly index = new SearchIndex()
+  constructor(private readonly url: URL) {}
 
-  postMessage(message: { id: number }): void {
+  postMessage(message: { id: number; key?: Uint8Array; workspace?: string; record?: PrivateRecord } & SearchRequest): void {
+    if (this.url.pathname.includes('search.worker')) {
+      const ids = this.index.apply(message)
+      if (ids) queueMicrotask(() => this.onmessage?.({ data: { id: message.id, ids } } as MessageEvent))
+      return
+    }
+    if (message.key) { this.key = message.key; this.workspace = message.workspace!; return }
+    if (message.record) {
+      const encrypted = encryptRecord(message.record, this.workspace, this.key!)
+      queueMicrotask(() => this.onmessage?.({ data: { id: message.id, ...encrypted } } as MessageEvent))
+      return
+    }
     queueMicrotask(() => this.onmessage?.({ data: {
       id: message.id,
       contentKey: new Uint8Array(32).fill(8),
@@ -49,6 +66,7 @@ class FakeWorker {
 }
 
 beforeEach(async () => {
+  vi.stubGlobal('Worker', FakeWorker)
   FakeWebSocket.instances.length = 0
   await notebookDB.accounts.clear()
   await notebookDB.documents.clear()
@@ -103,6 +121,7 @@ describe('landing and notebook access experience', () => {
   })
 
   it('accepts a short password and attempts to create an unknown notebook', async () => {
+    vi.stubGlobal('Worker', undefined)
     const fetchMock = vi.fn().mockResolvedValue({ status: 404, ok: false })
     vi.stubGlobal('fetch', fetchMock)
     render(<MemoryRouter><App /></MemoryRouter>)

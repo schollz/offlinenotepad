@@ -58,14 +58,14 @@ func (a postgresAdapter) UpdateDocument(ctx context.Context, d Document, rev int
 	return n == 1, err
 }
 func (a postgresAdapter) PutPublication(ctx context.Context, p Publication) error {
-	return a.q.PutPublication(ctx, postgresdb.PutPublicationParams{PublicID: p.PublicID, WorkspaceID: p.WorkspaceID, DocumentID: p.DocumentID, Title: p.Title, Content: p.Content, ContentMode: p.ContentMode, Legacy: p.Legacy})
+	return a.q.PutPublication(ctx, postgresdb.PutPublicationParams{PublicID: p.PublicID, WorkspaceID: p.WorkspaceID, DocumentID: p.DocumentID, Title: p.Title, Content: p.Content, ContentMode: p.ContentMode, RenderMode: p.RenderMode, Legacy: p.Legacy})
 }
 func (a postgresAdapter) DeletePublication(ctx context.Context, wid, did string) (bool, error) {
 	n, err := a.q.DeletePublication(ctx, postgresdb.DeletePublicationParams{WorkspaceID: wid, DocumentID: did})
 	return n == 1, err
 }
 func postgresPublication(p postgresdb.Publication) Publication {
-	return Publication{PublicID: p.PublicID, WorkspaceID: p.WorkspaceID, DocumentID: p.DocumentID, Title: p.Title, Content: p.Content, ContentMode: p.ContentMode, Legacy: p.Legacy, UpdatedAt: p.UpdatedAt}
+	return Publication{PublicID: p.PublicID, WorkspaceID: p.WorkspaceID, DocumentID: p.DocumentID, Title: p.Title, Content: p.Content, ContentMode: p.ContentMode, RenderMode: p.RenderMode, Legacy: p.Legacy, UpdatedAt: p.UpdatedAt}
 }
 func (a postgresAdapter) GetPublication(ctx context.Context, id string) (Publication, error) {
 	p, err := a.q.GetPublication(ctx, id)
@@ -163,14 +163,14 @@ func (a sqliteAdapter) PutPublication(ctx context.Context, p Publication) error 
 	if p.Legacy {
 		legacy = 1
 	}
-	return a.q.PutPublication(ctx, sqlitedb.PutPublicationParams{PublicID: p.PublicID, WorkspaceID: p.WorkspaceID, DocumentID: p.DocumentID, Title: p.Title, Content: p.Content, ContentMode: p.ContentMode, Legacy: legacy})
+	return a.q.PutPublication(ctx, sqlitedb.PutPublicationParams{PublicID: p.PublicID, WorkspaceID: p.WorkspaceID, DocumentID: p.DocumentID, Title: p.Title, Content: p.Content, ContentMode: p.ContentMode, RenderMode: p.RenderMode, Legacy: legacy})
 }
 func (a sqliteAdapter) DeletePublication(ctx context.Context, wid, did string) (bool, error) {
 	n, err := a.q.DeletePublication(ctx, sqlitedb.DeletePublicationParams{WorkspaceID: wid, DocumentID: did})
 	return n == 1, err
 }
 func sqlitePublication(p sqlitedb.Publication) Publication {
-	return Publication{PublicID: p.PublicID, WorkspaceID: p.WorkspaceID, DocumentID: p.DocumentID, Title: p.Title, Content: p.Content, ContentMode: p.ContentMode, Legacy: p.Legacy != 0, UpdatedAt: parseSQLiteTime(p.UpdatedAt)}
+	return Publication{PublicID: p.PublicID, WorkspaceID: p.WorkspaceID, DocumentID: p.DocumentID, Title: p.Title, Content: p.Content, ContentMode: p.ContentMode, RenderMode: p.RenderMode, Legacy: p.Legacy != 0, UpdatedAt: parseSQLiteTime(p.UpdatedAt)}
 }
 func (a sqliteAdapter) GetPublication(ctx context.Context, id string) (Publication, error) {
 	p, err := a.q.GetPublication(ctx, id)

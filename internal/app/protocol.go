@@ -38,6 +38,7 @@ type socketMessage struct {
 	Title             string                      `json:"title,omitempty"`
 	Content           string                      `json:"content,omitempty"`
 	ContentMode       string                      `json:"content_mode,omitempty"`
+	RenderMode        string                      `json:"render_mode,omitempty"`
 	KDFSalt           string                      `json:"kdf_salt,omitempty"`
 	KDFMemory         int32                       `json:"kdf_memory,omitempty"`
 	KDFIterations     int32                       `json:"kdf_iterations,omitempty"`

@@ -40,7 +40,7 @@ func testServerWithConfig(t *testing.T, config Config) (*database.Store, *httpte
 		"about.html":                     &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:type" content="{{.OpenGraphType}}"><meta name="twitter:card" content="summary_large_image"><script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script><h1>A quiet place to write, built around privacy.</h1><p>Your password, private keys, and readable private notes stay in the browser.</p><a href="/">Open Offline Notepad</a>`)},
 		"contact.html":                   &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:type" content="{{.OpenGraphType}}"><meta name="twitter:card" content="summary_large_image"><script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script><h1>Get in touch.</h1><form data-subsnail="https://subsnail.schollz.com/form/0e018f9b-3d62-48db-8f40-7398e6aecb0d/subscribe/"><input name="first_name"><input name="last_name"><input type="email" name="email" required><textarea name="textarea"></textarea><button type="submit">Subscribe</button></form><a href="mailto:admin@offlinenotepad.com">admin@offlinenotepad.com</a><script src="https://subsnail.schollz.com/form/embed.js"></script>`)},
 		"blog.html":                      &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><meta name="robots" content="{{.Robots}}"><link rel="canonical" href="{{.CanonicalURL}}"><link rel="alternate" type="application/atom+xml" href="{{.FeedURL}}"><meta property="og:type" content="{{.OpenGraphType}}"><meta name="twitter:card" content="summary_large_image">{{if .PublishedAt}}<meta property="article:published_time" content="{{.PublishedAt}}">{{end}}{{if .ArticleSection}}<meta property="article:section" content="{{.ArticleSection}}">{{end}}{{range .ArticleTags}}<meta property="article:tag" content="{{.}}">{{end}}<script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script>{{if .IsIndex}}<h1>Offline Notepad blog</h1>{{range .Posts}}<a href="/blog/{{.Slug}}">{{.Title}}</a>{{end}}{{else}}<h1>{{.Post.Title}}</h1><time datetime="{{.Post.PublishedAt}}">{{.Post.PublishedDisplay}}</time><article>{{.Post.Body}}</article>{{end}}`)},
-		"public.html":                    &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:title" content="{{.PageTitle}}"><meta name="twitter:card" content="summary_large_image"><script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script><a href="{{.RawURL}}">raw</a><article>{{.Content}}</article>`)},
+		"public.html":                    &fstest.MapFile{Data: []byte(`<title>{{.PageTitle}}</title><meta name="description" content="{{.Description}}"><link rel="canonical" href="{{.CanonicalURL}}"><meta property="og:title" content="{{.PageTitle}}"><meta name="twitter:card" content="summary_large_image"><script nonce="{{.Nonce}}" type="application/ld+json">{{.StructuredData}}</script><a href="{{.RawURL}}">raw</a>{{if .RenderURL}}<iframe sandbox="allow-scripts allow-forms" src="{{.RenderURL}}"></iframe>{{else}}<article>{{.Content}}</article>{{end}}`)},
 		"static/app.js":                  &fstest.MapFile{Data: []byte(`console.log("app")`)},
 		"fonts/OpenAISans-Regular.woff2": &fstest.MapFile{Data: []byte("font")},
 	}
@@ -453,9 +453,11 @@ func TestWebsocketRejectsForeignOrigin(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
-	_, response, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": []string{"https://attacker.invalid"}}})
-	if err == nil || response == nil || response.StatusCode != http.StatusForbidden {
-		t.Fatalf("foreign origin: response=%v err=%v", response, err)
+	for _, origin := range []string{"https://attacker.invalid", "null"} {
+		_, response, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": []string{origin}}})
+		if err == nil || response == nil || response.StatusCode != http.StatusForbidden {
+			t.Fatalf("foreign origin %q: response=%v err=%v", origin, response, err)
+		}
 	}
 }
 

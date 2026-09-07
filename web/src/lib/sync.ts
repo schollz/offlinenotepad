@@ -1,6 +1,6 @@
 import { claimNextOutbox } from './db'
 import { signChallenge } from './crypto'
-import type { KdfMetadata, Publication, SessionKeys, SocketMessage, WireDocument } from '../types'
+import type { KdfMetadata, Publication, PublicationRenderMode, SessionKeys, SocketMessage, WireDocument } from '../types'
 
 const synchronizationDebounceMilliseconds = 500
 const documentSyncChannelPrefix = 'offlinenotepad-document-sync:'
@@ -45,7 +45,7 @@ export class SyncClient {
   private readonly resume = () => {
     if (!this.stopped && (!this.socket || this.socket.readyState === WebSocket.CLOSED)) this.open()
   }
-  private readonly suspend = () => this.socket?.close(1001, 'offline')
+  private readonly suspend = () => this.socket?.close(1000, 'offline')
 
   constructor(
     private readonly metadata: KdfMetadata,
@@ -265,8 +265,8 @@ export class SyncClient {
     })) this.inFlight = false
   }
 
-  publish(documentId: string, title: string, content: string, mode: 'markdown' | 'plaintext', publicId?: string): boolean {
-    return this.send({ type: 'publish', document_id: documentId, title, content, content_mode: mode, public_id: publicId })
+  publish(documentId: string, title: string, content: string, mode: 'markdown' | 'plaintext', publicId?: string, renderMode: PublicationRenderMode = 'document'): boolean {
+    return this.send({ type: 'publish', document_id: documentId, title, content, content_mode: mode, public_id: publicId, render_mode: renderMode })
   }
 
   unpublish(documentId: string): boolean {

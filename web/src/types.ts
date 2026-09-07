@@ -1,4 +1,5 @@
 export type ContentMode = 'markdown' | 'plaintext'
+export type PublicationRenderMode = 'document' | 'html' | 'markdown-html'
 
 export interface KdfMetadata {
   id: string
@@ -73,6 +74,7 @@ export interface Publication {
   title: string
   content: string
   content_mode: ContentMode
+  render_mode?: PublicationRenderMode
   legacy: boolean
   updated_at: string
 }
@@ -104,6 +106,7 @@ export interface SocketMessage {
   title?: string
   content?: string
   content_mode?: ContentMode
+  render_mode?: PublicationRenderMode
   kdf_salt?: string
   kdf_memory?: number
   kdf_iterations?: number

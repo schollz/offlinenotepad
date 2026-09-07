@@ -26,10 +26,10 @@ SET ciphertext = ?3, ciphertext_hash = ?4, revision = revision + 1, deleted = ?5
 WHERE workspace_id = ?1 AND document_id = ?2 AND revision = ?6 AND deleted = 0;
 
 -- name: PutPublication :exec
-INSERT INTO publications (public_id, workspace_id, document_id, title, content, content_mode, legacy)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+INSERT INTO publications (public_id, workspace_id, document_id, title, content, content_mode, legacy, render_mode)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
 ON CONFLICT (public_id) DO UPDATE SET
-    title = excluded.title, content = excluded.content, content_mode = excluded.content_mode,
+    title = excluded.title, content = excluded.content, content_mode = excluded.content_mode, render_mode = excluded.render_mode,
     updated_at = CURRENT_TIMESTAMP
 WHERE publications.workspace_id = excluded.workspace_id
   AND publications.document_id = excluded.document_id;
@@ -38,11 +38,11 @@ WHERE publications.workspace_id = excluded.workspace_id
 DELETE FROM publications WHERE workspace_id = ?1 AND document_id = ?2;
 
 -- name: GetPublication :one
-SELECT public_id, workspace_id, document_id, title, content, content_mode, legacy, updated_at
+SELECT public_id, workspace_id, document_id, title, content, content_mode, legacy, updated_at, render_mode
 FROM publications WHERE public_id = ?1;
 
 -- name: GetPublicationByDocument :one
-SELECT public_id, workspace_id, document_id, title, content, content_mode, legacy, updated_at
+SELECT public_id, workspace_id, document_id, title, content, content_mode, legacy, updated_at, render_mode
 FROM publications WHERE workspace_id = ?1 AND document_id = ?2;
 
 -- name: ListSitemapPublications :many

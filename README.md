@@ -12,6 +12,8 @@ Offline Notepad is a minimal, offline-first notebook that securely syncs across 
 
 **Publish.** A note can be shared as an explicit read-only snapshot. Later private edits are not published automatically.
 
+Published snapshots can also run HTML, CSS, and JavaScript through the explicit **HTML page** and **Markdown with HTML** formats. See [HTML publishing and editing](docs/html-publishing.md) for examples, sandbox compatibility, save status, and performance checks.
+
 The app ships as one CGO-free Go binary with an embedded React frontend. It uses PostgreSQL when `DATABASE_URL` is set and SQLite otherwise.
 
 ## Install

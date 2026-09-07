@@ -163,6 +163,12 @@ func (a *App) handleSocketMessage(client *socketClient, workspace database.Works
 		a.hub.broadcast(client, socketMessage{Type: messageDocuments, Documents: []database.Document{saved}})
 		return nil
 	case messagePublish:
+		if m.RenderMode == "" {
+			m.RenderMode = "document"
+		}
+		if m.RenderMode != "document" && m.RenderMode != "html" && m.RenderMode != "markdown-html" {
+			return errors.New("invalid publication format")
+		}
 		if !documentIDPattern.MatchString(m.DocumentID) || len(m.Title) > 300 || len(m.Content) > maxPublishedBody || (m.ContentMode != "markdown" && m.ContentMode != "plaintext") {
 			return errors.New("invalid publication")
 		}
@@ -180,7 +186,7 @@ func (a *App) handleSocketMessage(client *socketClient, workspace database.Works
 		if !publicIDPattern.MatchString(id) && !legacyPublicPattern.MatchString(id) {
 			return errors.New("invalid public id")
 		}
-		publication := database.Publication{PublicID: id, WorkspaceID: client.workspaceID, DocumentID: m.DocumentID, Title: strings.TrimSpace(m.Title), Content: m.Content, ContentMode: m.ContentMode}
+		publication := database.Publication{PublicID: id, WorkspaceID: client.workspaceID, DocumentID: m.DocumentID, Title: strings.TrimSpace(m.Title), Content: m.Content, ContentMode: m.ContentMode, RenderMode: m.RenderMode}
 		if publication.Title == "" {
 			publication.Title = "Untitled note"
 		}

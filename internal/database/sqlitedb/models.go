@@ -52,6 +52,7 @@ type Publication struct {
 	ContentMode string
 	Legacy      int64
 	UpdatedAt   string
+	RenderMode  string
 }
 
 type Workspace struct {

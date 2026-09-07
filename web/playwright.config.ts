@@ -7,17 +7,19 @@ export default defineConfig({
   fullyParallel: false,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://127.0.0.1:8251',
+    baseURL: 'http://127.0.0.1:18252',
     trace: 'retain-on-failure',
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
     { name: 'mobile', use: { ...devices['iPhone 13'], browserName: 'chromium' } },
+    { name: 'firefox', testMatch: /publishing\.spec\.ts/u, use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', testMatch: /publishing\.spec\.ts/u, use: { ...devices['Desktop Safari'] } },
   ],
   webServer: {
-    command: "npm run build && cd .. && DATABASE_URL='' SQLITE_PATH=/tmp/offlinenotepad-e2e.sqlite3 go run ./cmd/offlinenotepad serve",
-    url: 'http://127.0.0.1:8251/healthz',
-    reuseExistingServer: !process.env.CI,
+    command: 'npm run build && node scripts/test-server.mjs',
+    url: 'http://127.0.0.1:18252/healthz',
+    reuseExistingServer: process.env.ONP_REUSE_TEST_SERVER === '1',
     timeout: 120_000,
   },
 })

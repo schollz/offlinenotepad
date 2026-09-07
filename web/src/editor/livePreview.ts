@@ -1,7 +1,7 @@
 import { syntaxTree } from '@codemirror/language'
-import { EditorSelection, StateField, type EditorState, type Extension, type Range } from '@codemirror/state'
-import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
-import type { SyntaxNode } from '@lezer/common'
+import { EditorSelection, StateField, type EditorState, type Extension, type Range, type Transaction } from '@codemirror/state'
+import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from '@codemirror/view'
+import type { SyntaxNode, Tree } from '@lezer/common'
 import { GFM, parser as markdownParser } from '@lezer/markdown'
 
 interface TablePreview {
@@ -25,11 +25,15 @@ function reveal(view: EditorView, from: number, to: number): void {
 function activateWidget(element: HTMLElement, view: EditorView, from: number, to: number): void {
   element.contentEditable = 'false'
   element.tabIndex = 0
-  element.addEventListener('click', () => reveal(view, from, to))
+  const activate = () => {
+    const position = view.posAtDOM(element)
+    reveal(view, position, Math.min(view.state.doc.length, position + to - from))
+  }
+  element.addEventListener('click', activate)
   element.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return
     event.preventDefault()
-    reveal(view, from, to)
+    activate()
   })
 }
 
@@ -61,7 +65,7 @@ class TaskWidget extends WidgetType {
   constructor(private readonly from: number, private readonly checked: boolean) { super() }
 
   eq(other: TaskWidget): boolean {
-    return this.from === other.from && this.checked === other.checked
+    return this.checked === other.checked
   }
 
   toDOM(view: EditorView): HTMLElement {
@@ -71,8 +75,9 @@ class TaskWidget extends WidgetType {
     checkbox.checked = this.checked
     checkbox.setAttribute('aria-label', this.checked ? 'Mark task incomplete' : 'Mark task complete')
     checkbox.addEventListener('change', () => {
+      const from = view.posAtDOM(checkbox)
       view.dispatch({
-        changes: { from: this.from + 1, to: this.from + 2, insert: checkbox.checked ? 'x' : ' ' },
+        changes: { from: from + 1, to: from + 2, insert: checkbox.checked ? 'x' : ' ' },
         userEvent: 'input',
       })
       view.focus()
@@ -106,7 +111,7 @@ class ImageWidget extends WidgetType {
   ) { super() }
 
   eq(other: ImageWidget): boolean {
-    return this.from === other.from && this.to === other.to && this.source === other.source
+    return this.to - this.from === other.to - other.from && this.source === other.source
       && this.alt === other.alt && this.title === other.title
   }
 
@@ -143,7 +148,7 @@ class TableWidget extends WidgetType {
   constructor(private readonly from: number, private readonly to: number, private readonly table: TablePreview) { super() }
 
   eq(other: TableWidget): boolean {
-    return this.from === other.from && this.to === other.to
+    return this.to - this.from === other.to - other.from
       && JSON.stringify(this.table) === JSON.stringify(other.table)
   }
 
@@ -252,7 +257,7 @@ function referenceLinks(state: EditorState): Map<string, string> {
   const links = new Map<string, string>()
   syntaxTree(state).iterate({
     enter(node) {
-      if (node.name !== 'LinkReference') return
+      if (node.name !== 'LinkReference') return ['Document', 'Blockquote', 'BulletList', 'OrderedList', 'ListItem'].includes(node.name) ? undefined : false
       const syntaxNode = node.node
       const label = syntaxNode.getChild('LinkLabel')
       const url = syntaxNode.getChild('URL')
@@ -289,21 +294,22 @@ function addLineClasses(state: EditorState, ranges: Range<Decoration>[], node: S
   }
 }
 
-function addCodeLineClasses(state: EditorState, ranges: Range<Decoration>[], node: SyntaxNode): void {
-  let line = state.doc.lineAt(node.from)
-  const firstNumber = line.number
+function addCodeLineClasses(state: EditorState, ranges: Range<Decoration>[], node: SyntaxNode, from = node.from, to = node.to): void {
+  let line = state.doc.lineAt(Math.max(node.from, from))
+  const firstNumber = state.doc.lineAt(node.from).number
   const lastNumber = state.doc.lineAt(node.to).number
-  while (line.number <= lastNumber) {
+  const visibleLast = Math.min(lastNumber, state.doc.lineAt(to).number)
+  while (line.number <= visibleLast) {
     const edges = `${line.number === firstNumber ? ' cm-live-code-first' : ''}${line.number === lastNumber ? ' cm-live-code-last' : ''}`
     ranges.push(Decoration.line({ class: `cm-live-code-line${edges}` }).range(line.from))
-    if (line.number === lastNumber) break
+    if (line.number === visibleLast) break
     line = state.doc.line(line.number + 1)
   }
 }
 
-function addCodeSpellcheckAttributes(state: EditorState, ranges: Range<Decoration>[], node: SyntaxNode): void {
-  let line = state.doc.lineAt(node.from)
-  const lastNumber = state.doc.lineAt(node.to).number
+function addCodeSpellcheckAttributes(state: EditorState, ranges: Range<Decoration>[], node: SyntaxNode, from: number, to: number): void {
+  let line = state.doc.lineAt(Math.max(node.from, from))
+  const lastNumber = state.doc.lineAt(Math.min(node.to, to)).number
   while (line.number <= lastNumber) {
     ranges.push(Decoration.line({ attributes: { spellcheck: 'false' } }).range(line.from))
     if (line.number === lastNumber) break
@@ -438,7 +444,6 @@ function decorateNode(state: EditorState, node: SyntaxNode, ranges: Range<Decora
   }
 
   if (node.name === 'FencedCode') {
-    addCodeLineClasses(state, ranges, node)
     const marks = node.getChildren('CodeMark')
     const info = node.getChild('CodeInfo')
     if (!active && marks.length) {
@@ -448,12 +453,11 @@ function decorateNode(state: EditorState, node: SyntaxNode, ranges: Range<Decora
       const closing = marks.at(-1)
       if (closing && closing !== marks[0]) hideRange(ranges, closing.from, closing.to)
     }
-  } else if (node.name === 'CodeBlock') {
-    addCodeLineClasses(state, ranges, node)
   } else if (node.name === 'HTMLBlock') {
     addLineClasses(state, ranges, node, 'cm-live-html-source')
   }
 
+  if (['FencedCode', 'CodeBlock', 'HTMLBlock'].includes(node.name)) return
   for (let child = node.firstChild; child; child = child.nextSibling) decorateNode(state, child, ranges, references)
 }
 
@@ -464,38 +468,112 @@ export function buildLivePreviewDecorations(state: EditorState): DecorationSet {
   return Decoration.set(ranges, true)
 }
 
-function buildCodeSpellcheckDecorations(state: EditorState): DecorationSet {
-  const ranges: Range<Decoration>[] = []
-  syntaxTree(state).iterate({
-    enter(node) {
-      if (node.name === 'FencedCode' || node.name === 'CodeBlock') {
-        addCodeSpellcheckAttributes(state, ranges, node.node)
-      }
-    },
+interface CachedBlock {
+  from: number
+  to: number
+  syntax: Tree | string
+  selection: string
+}
+
+interface PreviewState {
+  decorations: DecorationSet
+  blocks: CachedBlock[]
+  references: Map<string, string>
+  tree: Tree
+}
+
+function selectionKey(state: EditorState, node: SyntaxNode): string {
+  return state.selection.ranges.filter((range) => range.from <= node.to && range.to >= node.from)
+    .map((range) => `${range.anchor - node.from}:${range.head - node.from}`).join(',')
+}
+
+function updatePreview(state: EditorState, previous?: PreviewState, transaction?: Transaction): PreviewState {
+  const tree = syntaxTree(state)
+  if (previous && !transaction?.docChanged && tree === previous.tree && !transaction?.selection) return previous
+  const references = previous && tree === previous.tree ? previous.references : referenceLinks(state)
+  const referencesChanged = !previous || references.size !== previous.references.size
+    || [...references].some(([key, value]) => previous.references.get(key) !== value)
+  const oldBlocks = previous?.blocks.map((block) => transaction?.docChanged ? {
+    ...block, from: transaction.changes.mapPos(block.from, -1), to: transaction.changes.mapPos(block.to, 1),
+  } : block) ?? []
+  const byStart = new Map(oldBlocks.map((block) => [block.from, block]))
+  const reused = new Set<CachedBlock>()
+  const blocks: CachedBlock[] = []
+  const add: Range<Decoration>[] = []
+  for (let node = tree.topNode.firstChild; node; node = node.nextSibling) {
+    const syntax = node.tree ?? state.sliceDoc(node.from, node.to)
+    const selection = selectionKey(state, node)
+    const old = byStart.get(node.from)
+    if (!referencesChanged && old?.to === node.to && old.syntax === syntax && old.selection === selection) {
+      reused.add(old)
+      blocks.push(old)
+    } else {
+      decorateNode(state, node, add, references)
+      blocks.push({ from: node.from, to: node.to, syntax, selection })
+    }
+  }
+  const removed = oldBlocks.filter((block) => !reused.has(block))
+  const containsRemoved = (position: number): boolean => {
+    let low = 0, high = removed.length - 1
+    while (low <= high) {
+      const mid = (low + high) >>> 1
+      const block = removed[mid]
+      if (position < block.from) high = mid - 1
+      else if (position > block.to) low = mid + 1
+      else return true
+    }
+    return false
+  }
+  let decorations = previous?.decorations ?? Decoration.none
+  if (transaction?.docChanged) decorations = decorations.map(transaction.changes)
+  if (removed.length || add.length) decorations = decorations.update({
+    filterFrom: removed[0]?.from,
+    filterTo: removed.at(-1)?.to,
+    filter: (from) => !containsRemoved(from),
+    add,
+    sort: true,
   })
+  return { decorations, blocks, references, tree }
+}
+
+const livePreviewField = StateField.define<PreviewState>({
+  create: (state) => updatePreview(state),
+  update: (previous, transaction) => updatePreview(transaction.state, previous, transaction),
+  provide: (field) => EditorView.decorations.from(field, (value) => value.decorations),
+})
+
+function visibleCodeDecorations(view: EditorView, style: boolean): DecorationSet {
+  const ranges: Range<Decoration>[] = []
+  for (const visible of view.visibleRanges) {
+    syntaxTree(view.state).iterate({
+      from: visible.from, to: visible.to,
+      enter(node) {
+        if (node.name === 'FencedCode' || node.name === 'CodeBlock') {
+          if (style) addCodeLineClasses(view.state, ranges, node.node, visible.from, visible.to)
+          else addCodeSpellcheckAttributes(view.state, ranges, node.node, visible.from, visible.to)
+          return false
+        }
+        return ['Document', 'Blockquote', 'BulletList', 'OrderedList', 'ListItem'].includes(node.name) ? undefined : false
+      },
+    })
+  }
   return Decoration.set(ranges, true)
 }
 
-const codeSpellcheckField = StateField.define<DecorationSet>({
-  create: buildCodeSpellcheckDecorations,
-  update(decorations, transaction) {
-    return transaction.docChanged ? buildCodeSpellcheckDecorations(transaction.state) : decorations
-  },
-  provide: (field) => EditorView.decorations.from(field),
-})
+function codeDecorations(style: boolean): Extension {
+  return ViewPlugin.fromClass(class {
+    decorations: DecorationSet
+    constructor(view: EditorView) { this.decorations = visibleCodeDecorations(view, style) }
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.viewportChanged || syntaxTree(update.startState) !== syntaxTree(update.state)) {
+        this.decorations = visibleCodeDecorations(update.view, style)
+      }
+    }
+  }, { decorations: (plugin) => plugin.decorations })
+}
 
-const livePreviewField = StateField.define<DecorationSet>({
-  create: buildLivePreviewDecorations,
-  update(decorations, transaction) {
-    return transaction.docChanged || transaction.selection !== undefined
-      ? buildLivePreviewDecorations(transaction.state)
-      : decorations
-  },
-  provide: (field) => EditorView.decorations.from(field),
-})
-
-export const livePreview: Extension = livePreviewField
-export const disableCodeSpellcheck: Extension = codeSpellcheckField
+export const livePreview: Extension = [livePreviewField, codeDecorations(true)]
+export const disableCodeSpellcheck: Extension = codeDecorations(false)
 
 export function safeImageSource(source: string, base = globalThis.location?.href ?? 'http://localhost/'): string | null {
   const value = source.trim().replace(/^<|>$/gu, '')
