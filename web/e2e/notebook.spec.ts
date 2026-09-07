@@ -15,9 +15,7 @@ async function createNotebook(page: Page, name: string) {
 }
 
 async function createNote(page: Page, title = 'A field note') {
-  const first = page.getByRole('button', { name: 'Create your first note' })
-  if (await first.isVisible()) await first.click()
-  else await page.getByRole('button', { name: /New note/ }).click()
+  await page.getByRole('button', { name: 'Create your first note' }).click()
   await page.getByLabel('Note title').fill(title)
   await expect(page.getByLabel('Note title')).toHaveValue(title)
   await page.getByLabel('Note content').fill('# Hello\n\nAn encrypted note.')
@@ -109,7 +107,7 @@ test('creates an unknown notebook with a short password from the unified form', 
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Sign in or create a notebook' })).toBeVisible()
   await page.getByLabel('Notebook name').fill(notebookName('short-password'))
-  await page.getByLabel('Password').fill('tiny')
+  await page.getByLabel('Password', { exact: true }).fill('tiny')
   await page.getByRole('button', { name: 'Sign in or create notebook' }).click()
   await expect(page).toHaveURL(/\/app/u)
   await expect(page.getByRole('button', { name: 'Create your first note' })).toBeVisible()
@@ -233,9 +231,12 @@ test('mobile layout uses a drawer and preserves editor access', async ({ page },
   test.skip(testInfo.project.name !== 'mobile', 'mobile-only layout assertion')
   await createNotebook(page, notebookName('mobile'))
   await createNote(page, 'Pocket note')
+  const files = page.getByRole('complementary', { name: 'Files' })
+  await expect(files).not.toBeInViewport()
   await page.getByRole('button', { name: 'Open notes' }).click()
-  await expect(page.getByRole('complementary', { name: 'Files' })).toBeVisible()
+  await expect(files).toBeInViewport()
   await page.getByRole('button', { name: /Pocket note/ }).click()
+  await expect(files).not.toBeInViewport()
   await expect(page.getByLabel('Note content')).toBeVisible()
 })
 
@@ -249,7 +250,7 @@ test('rebases an offline edit in place without creating a duplicate note', async
   const second = await secondContext.newPage()
   await second.goto('/')
   await second.getByLabel('Notebook name').fill(name)
-  await second.getByLabel('Password').fill(password)
+  await second.getByLabel('Password', { exact: true }).fill(password)
   await second.getByRole('button', { name: 'Sign in or create notebook' }).click()
   await second.getByRole('button', { name: /Shared note/ }).click()
   await secondContext.setOffline(true)
@@ -331,10 +332,10 @@ test('rotates credentials and requires the new password', async ({ page }, testI
   await page.getByRole('button', { name: /Log out/ }).click()
 
   await page.getByLabel('Notebook name').fill(name)
-  await page.getByLabel('Password').fill(password)
+  await page.getByLabel('Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Sign in or create notebook' }).click()
   await expect(page.getByText('The password is incorrect.')).toBeVisible()
-  await page.getByLabel('Password').fill(nextPassword)
+  await page.getByLabel('Password', { exact: true }).fill(nextPassword)
   await page.getByRole('button', { name: 'Sign in or create notebook' }).click()
   await expect(page.getByRole('button', { name: /Rotated note/ })).toBeVisible()
 })
@@ -365,7 +366,7 @@ test('analytics stays normalized and outside the service worker cache', async ({
 
   await page.goto('/')
   await page.getByLabel('Notebook name').fill(name)
-  await page.getByLabel('Password').fill(originalPassword)
+  await page.getByLabel('Password', { exact: true }).fill(originalPassword)
   await page.getByRole('button', { name: 'Sign in or create notebook' }).click()
   await expect(page).toHaveURL(/\/app/u)
   await createNote(page, title)
@@ -425,7 +426,7 @@ test('analytics stays normalized and outside the service worker cache', async ({
   await expect(page.getByText('Password changed. Other devices must open the notebook again.')).toBeVisible()
   await page.getByRole('button', { name: /Log out/ }).click()
   await page.getByLabel('Notebook name').fill(name)
-  await page.getByLabel('Password').fill(nextPassword)
+  await page.getByLabel('Password', { exact: true }).fill(nextPassword)
   await page.getByRole('button', { name: 'Sign in or create notebook' }).click()
   await expect(page.getByRole('button', { name: new RegExp(title) })).toBeVisible()
 
