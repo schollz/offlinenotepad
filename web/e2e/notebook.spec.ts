@@ -63,6 +63,38 @@ test('clicking below a short note focuses the editor at the end', async ({ page 
   await expect(page.getByLabel('Note content')).toContainText('A short note. Appended at the end.')
 })
 
+test('keeps the caret inside the editor on empty lines', async ({ page }) => {
+  await createNotebook(page, notebookName('empty-line-caret'))
+  await page.getByRole('button', { name: 'Create your first note' }).click()
+  const content = page.getByLabel('Note content')
+
+  for (const mode of ['Live', 'Source', 'Plain text']) {
+    if (mode === 'Plain text') {
+      await page.getByRole('button', { name: 'More options' }).click()
+      const settings = page.locator('aside[aria-label="Notebook settings"]')
+      await settings.getByRole('button', { name: /Format: Markdown/ }).click()
+      await settings.getByRole('button', { name: 'Close settings' }).click()
+    } else {
+      await page.getByRole('button', { name: mode, exact: true }).click()
+    }
+    await content.fill('A line')
+    await content.press('End')
+    for (let line = 0; line < 2; line++) {
+      await content.press('Enter')
+      await expect(content).toBeFocused()
+      await expect.poll(() => page.locator('.cm-cursor-primary').evaluate((cursor) => {
+        const caret = cursor.getBoundingClientRect()
+        const scroller = document.querySelector('.cm-scroller')!.getBoundingClientRect()
+        const emptyLine = document.querySelector('.cm-line:last-child')!.getBoundingClientRect()
+        return caret.width > 0 && caret.height > 0
+          && caret.left >= scroller.left && caret.right <= scroller.right
+          && caret.top >= emptyLine.top && caret.bottom <= emptyLine.bottom
+          && caret.top >= scroller.top && caret.bottom <= scroller.bottom
+      }), { message: `${mode}: blank-line caret must not be clipped` }).toBe(true)
+    }
+  }
+})
+
 test('scrolls long Markdown and plain-text note bodies', async ({ page }) => {
   await createNotebook(page, notebookName('editor-scroll'))
   await page.getByRole('button', { name: 'Create your first note' }).click()

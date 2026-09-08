@@ -379,7 +379,8 @@ kbd { padding: 2px 6px; border: 1px solid #ffffff55; border-radius: 5px; font-fa
 .markdown-editor .cm-editor .cm-activeLine:not(.cm-live-code-line), .markdown-editor .cm-editor .cm-activeLineGutter { background: transparent !important; box-shadow: none; }
 .markdown-editor .cm-selectionBackground, .markdown-editor .cm-content ::selection { background: color-mix(in srgb, var(--blue) 22%, transparent) !important; }
 .markdown-editor .cm-placeholder { color: var(--faint); font-style: normal; }
-.markdown-editor .cm-cursor { border-left-color: var(--text); }
+/* Keep CodeMirror's caret inside the scroller at the unpadded start of a line. */
+.markdown-editor .cm-cursor, .markdown-editor .cm-dropCursor { margin-left: 0; border-left-color: var(--text); }
 .markdown-editor .tok-heading { color: var(--text); font-weight: 500; }
 .markdown-editor .tok-strong { font-weight: 650; }
 .markdown-editor .tok-emphasis { font-style: italic; }
