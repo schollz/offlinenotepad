@@ -1,20 +1,16 @@
 package main
 
-//go:generate go install -v github.com/jteeuwen/go-bindata/go-bindata@latest
-//go:generate go-bindata static/ static/css/ static/images/ static/js/ static/images/touch/ static/images/icons/
+//go:generate npm ci
+//go:generate npm run build
 
 import (
-	"compress/gzip"
 	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"math"
 	"net/http"
-	"path"
-	"path/filepath"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -128,94 +124,39 @@ func (s *server) handle(w http.ResponseWriter, r *http.Request) (err error) {
 		return s.handlePost(w, r)
 	}
 
-	// check to see if path is in the database
-	doc, err := s.handleGetPublished(r.URL.Path)
-	if err == nil {
-		if strings.Contains(r.URL.Path, "raw") {
+	switch r.URL.Path {
+	case "/ws":
+		return s.handleWebsocket(w, r)
+	case "/robots.txt":
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, err = w.Write([]byte("User-agent: *\nDisallow: /"))
+		return
+	case "/sitemap.xml":
+		return nil
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/api/published/") {
+		doc, lookupErr := s.handleGetPublished(strings.TrimPrefix(r.URL.Path, "/api/published"))
+		if lookupErr != nil {
+			http.NotFound(w, r)
+			return nil
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-cache")
+		return json.NewEncoder(w).Encode(doc)
+	}
+
+	if doc, lookupErr := s.handleGetPublished(r.URL.Path); lookupErr == nil {
+		if strings.HasSuffix(r.URL.Path, "/raw") {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-cache")
 			_, err = w.Write([]byte(doc.Markdown))
 			return
 		}
-		// use template
-		var t *template.Template
-		log.Tracef("found doc: %+v", doc)
-		b, _ := Asset("static/view.html")
-		t, err = template.New("view").Parse(string(b))
-		if err != nil {
-			log.Error(err)
-			return err
-		}
-		type view struct {
-			Title string
-			HTML  string
-		}
-		return t.Execute(w, view{doc.Title, doc.HTML})
+		return serveFrontend(w, r, &doc)
 	}
 
-	// very special paths
-	if r.URL.Path == "/robots.txt" {
-		// special path
-		w.Write([]byte(`User-agent: * 
-Disallow: /`))
-	} else if r.URL.Path == "/ws" {
-		return s.handleWebsocket(w, r)
-	} else if r.URL.Path == "/sitemap.xml" {
-		// TODO
-	} else {
-		if r.URL.Path == "/sw.js" {
-			r.URL.Path = "/static/js/sw.js"
-		} else if r.URL.Path == "/favicon.ico" {
-			r.URL.Path = "/static/images/favicon.ico"
-		} else if !strings.HasPrefix(r.URL.Path, "/static") {
-			r.URL.Path = "/static/index.html"
-		}
-		urlPath := r.URL.Path
-
-		var b []byte
-		b, err = Asset(path.Clean(r.URL.Path[1:]))
-		if err != nil {
-			// try to see if index is nested
-			b, err = Asset(path.Join(path.Clean(r.URL.Path[1:]), "index.html"))
-			if err != nil {
-				err = fmt.Errorf("could not find file")
-				return
-			} else {
-				urlPath = path.Join(path.Clean(r.URL.Path[1:]), "index.html")
-			}
-		}
-
-		var kind string
-		if len(b) > 512 {
-			kind = http.DetectContentType(b)
-		} else {
-			kind = http.DetectContentType(b[:512])
-		}
-
-		if strings.HasPrefix(kind, "application/octet-stream") || strings.HasPrefix(kind, "text/plain") {
-			// https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types
-			switch filepath.Ext(urlPath) {
-			case ".js":
-				kind = "text/javascript"
-			case ".css":
-				kind = "text/css"
-			case ".md":
-				kind = "text/plain"
-			case ".html":
-				kind = "text/html"
-			}
-		}
-		if kind != "text/html" {
-			w.Header().Set("Cache-Control", "max-age:290304000, public")
-			w.Header().Set("Last-Modified", time.Now().Format(http.TimeFormat))
-			w.Header().Set("Expires", time.Now().AddDate(60, 0, 0).Format(http.TimeFormat))
-		}
-		w.Header().Set("Content-Encoding", "gzip")
-		w.Header().Set("Content-Type", kind)
-
-		gz := gzip.NewWriter(w)
-		defer gz.Close()
-		gz.Write(b)
-	}
-	return
+	return serveFrontend(w, r, nil)
 }
 
 var wsupgrader = websocket.Upgrader{
@@ -348,7 +289,6 @@ func (s *server) handleGetPublished(urlpath string) (d Document, err error) {
 		} else {
 			return json.Unmarshal(v, &d)
 		}
-		return nil
 	})
 	return
 }

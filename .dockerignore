@@ -1,0 +1,11 @@
+.git
+.env
+node_modules
+frontend/dist
+offlinenotepad
+bindata.go
+cmd
+tmp
+*.db
+test-results
+playwright-report

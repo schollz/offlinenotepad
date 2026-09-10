@@ -4,3 +4,8 @@ tmp/
 *~
 *.exe
 bindata.go
+node_modules/
+frontend/dist/
+test-results/
+playwright-report/
+.playwright-mcp/
