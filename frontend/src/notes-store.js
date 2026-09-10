@@ -1,22 +1,14 @@
 import localforage from 'localforage';
 import Cookies from 'js-cookie';
 import moment from 'moment';
-import Swal from 'sweetalert2';
 import { decode, encode, getHash } from './crypto.js';
 import { documentHash, newDocument, parseDocument, renderMarkdown, slugify } from './documents.js';
 
 const initialState = () => ({
   username: '', docs: {}, doc: null, mode: 'intro', showSearchBar: false,
   searchText: '', searchedText: '', showCheck: false, hasData: false, installed: false,
+  loginUser: '', needsUnlock: false, confirmation: null, notice: null,
 });
-
-export async function confirmAction(text, confirmButtonText) {
-  const result = await Swal.fire({
-    title: 'Are you sure?', text, type: 'warning', showCancelButton: true,
-    confirmButtonColor: '#3085d6', cancelButtonColor: '#d33', confirmButtonText,
-  });
-  return Boolean(result.value);
-}
 
 class NotesStore {
   state = initialState();
@@ -25,6 +17,7 @@ class NotesStore {
   session = 0;
   pending = null;
   socket = null;
+  confirmationID = 0;
 
   subscribe = listener => {
     this.listeners.add(listener);
@@ -37,7 +30,21 @@ class NotesStore {
   };
   report = error => {
     console.error(error);
-    Swal.fire({ type: 'error', title: 'Could not save your notes', text: String(error.message || error) });
+    this.set({ notice: { title: 'Something went wrong.', text: String(error.message || error) } });
+  };
+
+  askConfirmation(options, action) {
+    this.set({ confirmation: { ...options, action, id: ++this.confirmationID }, notice: null });
+  }
+
+  cancelConfirmation = () => this.set({ confirmation: null });
+
+  confirmAction = async () => {
+    const confirmation = this.state.confirmation;
+    if (!confirmation) return;
+    // Consume the action before awaiting work so a second click cannot run it again.
+    this.set({ confirmation: null });
+    await confirmation.action();
   };
 
   async initialize() {
@@ -61,13 +68,7 @@ class NotesStore {
     if (!username || username === 'undefined') return;
     const password = decode(sessionStorage.getItem('app.p'), this.sessionKey(username));
     if (password) return this.login(username, password);
-    const result = await Swal.fire({
-      title: 'Welcome ' + username, html: 'Enter a password to decrypt your data.',
-      input: 'password', inputPlaceholder: 'Enter your password',
-      inputAttributes: { autocapitalize: 'off', autocorrect: 'off' },
-      inputValidator: value => !value && 'You need to write something!',
-    });
-    if (result.value) await this.login(username, result.value);
+    this.set({ loginUser: username, needsUnlock: true });
   }
 
   sessionKey(username = this.state.username) {
@@ -92,23 +93,34 @@ class NotesStore {
       if (doc) docs[doc.uuid] = doc;
     });
     if (session !== this.session) return;
-    this.set({ docs, mode: 'list', doc: null, hasData: (await localforage.keys()).length > 0 });
+    this.set({ docs, mode: 'list', doc: null, needsUnlock: false, confirmation: null, notice: null,
+      hasData: (await localforage.keys()).length > 0 });
     this.restoreLocation(history.state);
     this.connect();
   }
 
-  async logout() {
-    if (!await confirmAction('This will clear log you out, but your encrypted data is saved.', 'Yes, log me out.')) return;
-    await this.flush();
-    this.resetSession();
+  logout() {
+    this.askConfirmation({
+      title: 'Log out?',
+      text: 'Your encrypted notes will stay on this device. Enter your username and password to open them again.',
+      label: 'log out',
+    }, async () => {
+      await this.flush();
+      this.resetSession();
+    });
   }
 
-  async clearAllData() {
-    if (!await confirmAction('This will clear all local data, but your encrypted data is safely stored on the server.', 'Yes, clear all.')) return;
-    await this.flush();
-    this.resetSession();
-    await localforage.clear();
-    this.set({ hasData: false });
+  clearAllData() {
+    this.askConfirmation({
+      title: 'Clear this device?',
+      text: 'This removes all notes saved in this browser. Synced notes can be downloaded again; changes that have not synced will be lost.',
+      label: 'clear local notes',
+    }, async () => {
+      await this.flush();
+      this.resetSession();
+      await localforage.clear();
+      this.set({ hasData: false });
+    });
   }
 
   resetSession() {
@@ -125,7 +137,7 @@ class NotesStore {
 
   async navigate(mode, doc = this.state.doc, push = true) {
     await this.flush();
-    this.set({ mode, doc, showSearchBar: false, searchText: '', searchedText: '' });
+    this.set({ mode, doc, showSearchBar: false, searchText: '', searchedText: '', confirmation: null, notice: null });
     this.updateURL(push);
     window.scrollTo(0, 0);
   }
@@ -142,6 +154,7 @@ class NotesStore {
 
   restoreLocation = async (historyState) => {
     await this.flush();
+    this.cancelConfirmation();
     if (!this.password) return;
     const slug = location.pathname.slice(1);
     const doc = this.state.docs[historyState?.uuid] || Object.values(this.state.docs)
@@ -190,20 +203,37 @@ class NotesStore {
     this.checkTimer = setTimeout(() => this.set({ showCheck: false }), 500);
   }
 
-  async deleteDocument() {
-    if (!await confirmAction("You won't be able to revert this!", 'Yes, delete it!')) return;
-    this.edit({ title: 'deleted', markdown: '', rawHTML: '', published: false });
-    await this.navigate('list', null);
+  deleteDocument() {
+    const { doc } = this.state;
+    this.askConfirmation({
+      title: 'Erase this note?',
+      text: `“${doc.title || doc.uuid}” will be erased from your notes${doc.published ? ' and its public link removed' : ''}. This cannot be undone.`,
+      label: 'erase note',
+    }, async () => {
+      if (this.state.doc?.uuid !== doc.uuid) return;
+      this.edit({ title: 'deleted', markdown: '', rawHTML: '', published: false });
+      await this.navigate('list', null);
+    });
   }
 
-  async publishDocument() {
+  publishDocument() {
+    const { doc } = this.state;
+    if (doc.published) return this.publish(doc.uuid);
+    this.askConfirmation({
+      title: 'Publish this note?',
+      text: `A public copy of “${doc.title || doc.uuid}” will be available to anyone with the link.`,
+      label: 'publish note',
+    }, () => this.publish(doc.uuid));
+  }
+
+  async publish(uuid) {
     await this.flush();
     const { doc } = this.state;
-    if (!doc.published && !await confirmAction('This will publish a public version of this document that anyone can view.', 'Yes, publish.')) return;
+    if (doc?.uuid !== uuid) return;
     if (!this.send('update-publish', { [doc.uuid]: JSON.stringify({
       ID: doc.uuid, Title: doc.title, HTML: renderMarkdown(doc.markdown), Markdown: doc.markdown,
     }) })) {
-      await Swal.fire({ type: 'error', title: 'Unable to publish', text: 'Connect to the server to publish this document.' });
+      this.set({ notice: { title: 'Unable to publish.', text: 'Connect to the server, then try publishing again. Your note is still saved on this device.' } });
     }
   }
 

@@ -3,6 +3,7 @@ import { CircleCheck, Download, Eye, FilePlus, House, Link, LogIn, LogOut, Octag
 import { getHash } from './crypto.js';
 import { formatDate, isCode, renderMarkdown, searchDocuments, sortedDocuments } from './documents.js';
 import { notesStore as store } from './notes-store.js';
+import InlineFeedback from './InlineFeedback.jsx';
 
 function Action({ id, icon: Icon, children, onClick, href, ...props }) {
   const activate = event => Promise.resolve(onClick?.(event)).catch(store.report);
@@ -13,17 +14,22 @@ function Action({ id, icon: Icon, children, onClick, href, ...props }) {
     }} {...props}><Icon size={24} strokeWidth={2} />{children && <> {children}</>}</a>{' '}</>;
 }
 
-function LoginBar({ hasData, installed, chrome }) {
-  const [username, setUsername] = useState('');
+function LoginBar({ hasData, installed, chrome, loginUser, needsUnlock }) {
   const [password, setPassword] = useState('');
-  const login = () => store.login(username, password).catch(store.report);
+  const passwordInput = useRef(null);
+  useEffect(() => {
+    if (needsUnlock) passwordInput.current.focus();
+  }, [needsUnlock]);
+  const login = () => store.login(loginUser, password).catch(store.report);
   const enter = event => { if (event.key === 'Enter') login(); };
   return <span className="fl font">
-    <input id="loginUser" value={username} onChange={event => setUsername(event.target.value)} placeholder="username" aria-label="username" onKeyUp={enter} />{' '}
-    <input id="loginPass" type="password" value={password} onChange={event => setPassword(event.target.value)} placeholder="password" aria-label="password" onKeyUp={enter} />{' '}
+    <input id="loginUser" value={loginUser} onChange={event => store.set({ loginUser: event.target.value, needsUnlock: false, confirmation: null })}
+      placeholder="username" aria-label="username" autoComplete="username" onKeyUp={enter} />{' '}
+    <input ref={passwordInput} id="loginPass" type="password" value={password} onChange={event => setPassword(event.target.value)}
+      placeholder="password" aria-label="password" autoComplete="current-password" onKeyUp={enter} />{' '}
     <Action id="loginLink" icon={LogIn} aria-label="login" onClick={login} />
     {chrome && !installed && <Action id="installer" icon={Download} onClick={() => store.install()}>install (optional)</Action>}
-    {hasData && <Action id="clearlink" icon={OctagonX} onClick={() => store.clearAllData().catch(store.report)}>clear</Action>}
+    {hasData && <Action id="clearlink" icon={OctagonX} onClick={() => store.clearAllData()}>clear</Action>}
   </span>;
 }
 
@@ -31,17 +37,18 @@ function Toolbar({ state, chrome }) {
   const { mode, doc, username, showSearchBar } = state;
   const list = mode === 'list' || mode === 'search';
   return <div className="topbar">
-    {mode === 'intro' ? <LoginBar hasData={state.hasData} installed={state.installed} chrome={chrome} /> : <span className="fl">
+    {mode === 'intro' ? <LoginBar hasData={state.hasData} installed={state.installed} chrome={chrome}
+      loginUser={state.loginUser} needsUnlock={state.needsUnlock} /> : <span className="fl">
       {(!list || showSearchBar) && <Action id="listlink" icon={House} onClick={() => store.navigate('list', null)}>{username}</Action>}
       {list && <Action id="newlink" icon={FilePlus} onClick={store.makeNew}>new</Action>}
       {list && !showSearchBar && <Action id="searfhbarLink" icon={Search} onClick={() => store.set({ showSearchBar: true, searchText: '' })}>search</Action>}
       {list && <Action id="exportlink" icon={Save} onClick={() => store.exportDocuments()}>export</Action>}
-      {list && <Action id="logoutlink" icon={LogOut} onClick={() => store.logout().catch(store.report)}>logout</Action>}
+      {list && <Action id="logoutlink" icon={LogOut} onClick={() => store.logout()}>logout</Action>}
       {mode === 'edit' && <Action id="viewlink" icon={Eye} onClick={() => store.navigate('view')}>view</Action>}
-      {mode === 'edit' && <Action id="deletelink" icon={Trash2} onClick={() => store.deleteDocument().catch(store.report)}>erase</Action>}
+      {mode === 'edit' && <Action id="deletelink" icon={Trash2} onClick={() => store.deleteDocument()}>erase</Action>}
       {mode === 'view' && <Action id="editlink" icon={SquarePen} onClick={() => store.navigate('edit')}>edit</Action>}
       {mode === 'view' && doc.published && <Action id="publiclink" icon={Link} href={'/' + getHash(doc.uuid)} target="_blank" rel="noopener">/{getHash(doc.uuid)}</Action>}
-      {mode === 'view' && <Action id="publislink" icon={Send} onClick={() => store.publishDocument().catch(store.report)}>publish</Action>}
+      {mode === 'view' && <Action id="publislink" icon={Send} onClick={() => store.publishDocument()}>publish</Action>}
     </span>}
   </div>;
 }
@@ -135,12 +142,16 @@ export default function App() {
   return <>
     {state.showCheck && <div className="checkmark" role="status" aria-label="Saved"><CircleCheck size={24} strokeWidth={2} /></div>}
     <Toolbar state={state} chrome={chrome} />
+    <InlineFeedback confirmation={state.confirmation} notice={state.notice} />
     {showSearchBar && <p><input id="searchbar" autoComplete="off" value={searchText} placeholder="Search..." aria-label="Search notes"
       onChange={event => store.set({ searchText: event.target.value })} style={{ width: '100%' }} autoFocus /></p>}
     {mode === 'search' && <SearchResults docs={docs} text={searchedText} />}
     {mode === 'list' && <><div><p className="small">Welcome, {state.username} ({getHash(store.password)}).</p></div>
       <div className="list">{sortedDocuments(docs).map(doc => <NoteRow key={doc.uuid} doc={doc} />)}</div></>}
-    {mode === 'intro' && <Introduction chrome={chrome} hasData={state.hasData} />}
+    {mode === 'intro' && (state.needsUnlock ? <div>
+      <p>Welcome back, {state.loginUser}.</p>
+      <p>Enter your password above to unlock your notes, or use a different username to sign in.</p>
+    </div> : <Introduction chrome={chrome} hasData={state.hasData} />)}
     {mode === 'view' && doc && <Viewer doc={doc} />}
     {mode === 'edit' && doc && <Editor doc={doc} />}
   </>;

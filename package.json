@@ -22,8 +22,7 @@
     "moment": "2.30.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "showdown": "1.9.0",
-    "sweetalert2": "8.11.1"
+    "showdown": "1.9.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.0",
@@ -31,6 +30,8 @@
     "vite": "8.3.0"
   },
   "overrides": {
-    "showdown": { "yargs": "^17.7.2" }
+    "showdown": {
+      "yargs": "^17.7.2"
+    }
   }
 }

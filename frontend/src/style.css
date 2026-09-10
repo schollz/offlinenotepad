@@ -551,3 +551,56 @@ main {
 .checkmark {
     color: #5858f1;
 }
+
+.inline-feedback {
+    clear: both;
+    margin-bottom: 1.1em;
+    padding: 0.85em 0;
+    border-top: 1px solid #ddd;
+    border-bottom: 1px solid #ddd;
+    font-size: 90%;
+}
+
+.inline-feedback h2 {
+    margin: 0 0 0.4em;
+    font-size: 1em;
+    letter-spacing: normal;
+}
+
+.inline-feedback h2:focus {
+    outline: none;
+}
+
+.inline-feedback p {
+    margin-bottom: 0.65em;
+}
+
+.inline-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em 1.25em;
+}
+
+.text-action {
+    appearance: none;
+    background: none;
+    border: 0;
+    padding: 0;
+    color: #5858f1;
+    font: inherit;
+    line-height: 1.5;
+    cursor: pointer;
+}
+
+.text-action.secondary {
+    color: #666;
+}
+
+.text-action:hover {
+    text-decoration: underline;
+}
+
+.text-action:focus-visible {
+    outline: 1px solid #5858f1;
+    outline-offset: 3px;
+}

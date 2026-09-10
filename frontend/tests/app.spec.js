@@ -69,7 +69,7 @@ test('edits, previews, searches, exports, and deletes without losing pending cha
   await page.getByText('Migration sample', { exact: true }).click();
   await page.locator('#editlink').click();
   await page.locator('#deletelink').click();
-  await page.getByRole('button', { name: 'Yes, delete it!' }).click();
+  await page.getByRole('button', { name: 'erase note', exact: true }).click();
   await expect(page.locator('#newlink')).toBeVisible();
   await expect(page.getByText('Migration sample')).toHaveCount(0);
 });
@@ -84,7 +84,7 @@ test('code titles, history, and logout retain the existing behavior', async ({ p
   await expect(page.locator('main pre')).toBeVisible();
   await page.locator('#listlink').click();
   await page.locator('#logoutlink').click();
-  await page.getByRole('button', { name: 'Yes, log me out.' }).click();
+  await page.getByRole('button', { name: 'log out', exact: true }).click();
   await expect(page.locator('#loginUser')).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem('app.p'))).toBeNull();
   await page.reload();
@@ -101,7 +101,7 @@ test('syncs across devices, publishes React pages, and preserves raw links', asy
     await login(secondPage, username);
     await expect(secondPage.getByText('Published sample')).toBeVisible();
     await page.locator('#publislink').click();
-    await page.getByRole('button', { name: 'Yes, publish.' }).click();
+    await page.getByRole('button', { name: 'publish note', exact: true }).click();
     await expect(page.locator('#publiclink')).toBeVisible();
     const href = await page.locator('#publiclink').getAttribute('href');
     await secondPage.goto(href);
@@ -140,4 +140,79 @@ test('reloads and edits offline, then reconciles changes after reconnecting', as
     await secondPage.getByText('Offline sample').click();
     await expect(secondPage.getByText('Written offline')).toBeVisible({ timeout: 15000 });
   } finally { await other.close(); }
+});
+
+test('returning users unlock notes in the login bar', async ({ page }) => {
+  const username = await login(page);
+  await writeNote(page, 'Locked note', 'Only open after entering a password');
+  await page.addInitScript(() => sessionStorage.removeItem('app.p'));
+  await page.reload();
+  await expect(page.locator('#loginUser')).toHaveValue(username);
+  await expect(page.locator('#loginPass')).toBeFocused();
+  await expect(page.getByText(`Welcome back, ${username}.`)).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.locator('#loginPass').fill(password);
+  await page.locator('#loginPass').press('Enter');
+  await expect(page.getByText('Only open after entering a password')).toBeVisible();
+});
+
+test('inline confirmations cancel with Escape and never erase a different note', async ({ page }) => {
+  await login(page);
+  await writeNote(page, 'Keep this note', 'Still here');
+  await page.locator('#editlink').click();
+  await page.locator('#deletelink').click();
+  await expect(page.getByRole('region', { name: 'Erase this note?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Erase this note?' })).toBeFocused();
+  await expect(page.locator('#editable')).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.inline-feedback')).toHaveCount(0);
+  await expect(page.locator('#deletelink')).toBeFocused();
+  await page.locator('#deletelink').click();
+  await page.getByRole('button', { name: 'cancel', exact: true }).click();
+  await expect(page.locator('#deletelink')).toBeFocused();
+  await page.locator('#deletelink').click();
+  await page.locator('#listlink').click();
+  await expect(page.locator('.inline-feedback')).toHaveCount(0);
+  await expect(page.getByText('Keep this note', { exact: true })).toBeVisible();
+  await writeNote(page, 'Another note', 'Also still here');
+  await expect(page.getByRole('button', { name: 'erase note', exact: true })).toHaveCount(0);
+});
+
+test('logout and clearing local notes require explicit inline confirmation', async ({ page }) => {
+  await login(page);
+  await writeNote(page, 'Local note', 'Keep until confirmed');
+  await page.locator('#listlink').click();
+  await page.locator('#logoutlink').click();
+  await page.getByRole('button', { name: 'cancel', exact: true }).click();
+  await expect(page.getByText('Local note', { exact: true })).toBeVisible();
+  await page.locator('#logoutlink').click();
+  await page.getByRole('button', { name: 'log out', exact: true }).click();
+  await page.locator('#clearlink').click();
+  await expect(page.getByText(/changes that have not synced will be lost/)).toBeVisible();
+  await page.getByRole('button', { name: 'cancel', exact: true }).click();
+  expect(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('localforage/')).length)).toBe(1);
+  await page.locator('#clearlink').click();
+  await page.getByRole('button', { name: 'clear local notes', exact: true }).click();
+  await expect(page.locator('#clearlink')).toHaveCount(0);
+  expect(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('localforage/')).length)).toBe(0);
+});
+
+test('publishing can be cancelled and offline failures appear inline', async ({ page, context }) => {
+  await login(page);
+  await writeNote(page, 'Private note', 'Unpublished content');
+  await page.locator('#publislink').click();
+  await page.getByRole('button', { name: 'cancel', exact: true }).click();
+  await expect(page.locator('#publiclink')).toHaveCount(0);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+  await context.setOffline(true);
+  await page.reload();
+  await page.locator('#publislink').click();
+  await page.getByRole('button', { name: 'publish note', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Unable to publish.');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByText('Unpublished content')).toBeVisible();
+  await page.getByRole('button', { name: 'dismiss', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });

@@ -64,8 +64,11 @@ in development; the offline service worker runs only in production builds.
 For a different Go address, set `NOTEPAD_BACKEND`, for example
 `NOTEPAD_BACKEND=http://localhost:8254 npm run dev`.
 
-The existing Markdown renderer and dialog version are retained to preserve note
-rendering and appearance. The Showdown CLI's unused `yargs` dependency is overridden
+Confirmations and errors appear inline below the toolbar. Returning users unlock
+their notes in the usual login bar. No modal dialogs are used.
+
+The existing Markdown renderer is retained to preserve note rendering.
+The Showdown CLI's unused `yargs` dependency is overridden
 to remove its obsolete dependency tree; the browser renderer is unchanged.
 `npm audit` still reports one moderate issue for the retained Showdown dependency,
 which has no patched release available.
